@@ -9,14 +9,23 @@ datasource db {
 
 // FASE 1: INVENTARIO, UBICACIONES Y VENTAS
 
+// ENUM para tipos de movimiento de stock
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  INVENTARIO_INICIAL
+}
+
 model Usuario {
-  id        Int      @id @default(autoincrement())
-  nombre    String
-  email     String   @unique
-  password  String
-  rol       String   @default("ADMIN") // ADMIN, VENDEDOR
-  creadoEn  DateTime @default(now())
-  ventas    Venta[]
+  id          Int               @id @default(autoincrement())
+  nombre      String
+  email       String            @unique
+  password    String
+  rol         String            @default("ADMIN") // ADMIN, VENDEDOR
+  creadoEn    DateTime          @default(now())
+  ventas      Venta[]
+  movimientos MovimientoStock[] // Relación con movimientos de stock
 }
 
 model Categoria {
@@ -41,6 +50,7 @@ model Producto {
   precioCompra  Decimal  @db.Decimal(10, 2) // Vital para calcular ganancia real
   stockActual   Int      @default(0)
   stockMinimo   Int      @default(1) // Alerta cuando quede 1
+  esServicio    Boolean  @default(false) // Si es true, ignora stock y ubicación
   
   // Relaciones Básicas
   categoriaId   Int
@@ -79,11 +89,13 @@ model DetalleVenta {
 }
 
 model MovimientoStock {
-  id          Int      @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   productoId  Int
-  producto    Producto @relation(fields: [productoId], references: [id])
-  tipo        String   // ENTRADA, SALIDA, AJUSTE
-  cantidad    Int      // Positivo o negativo
-  fecha       DateTime @default(now())
-  motivo      String?  // Ej: "Compra", "Venta #123", "Pérdida"
+  producto    Producto        @relation(fields: [productoId], references: [id])
+  tipo        TipoMovimiento  // Relacion a ENUM
+  cantidad    Int             // Positivo o negativo
+  fecha       DateTime        @default(now())
+  motivo      String?         // Ej: "Compra", "Venta #123", "Pérdida"
+  usuarioId   Int?            // Usuario que realizó el movimiento (auditoría)
+  usuario     Usuario?        @relation(fields: [usuarioId], references: [id])
 }
