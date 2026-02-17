@@ -3,6 +3,7 @@ import cors from 'cors';
 import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import prisma from './config/database';
+import routes from './routes';
 
 const app = express();
 
@@ -20,7 +21,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// TODO: Montar rutas aquí
+// Montar rutas de la API
+app.use('/api', routes);
 
 // Manejo de errores
 app.use(notFoundHandler);
