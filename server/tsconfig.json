@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2016",             /* Compatible con la mayoría de Node.js */
+    "module": "commonjs",           /* El estándar clásico de Node (evita errores de import) */
+    "lib": ["es6"],                 /* Librerías base de JS */
+    "strict": true,                 /* Tipado estricto para que TypeScript te ayude de verdad */
+    "esModuleInterop": true,        /* Permite importar librerías antiguas */
+    "skipLibCheck": true,           /* Acelera la compilación ignorando chequeos profundos de librerías */
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",             /* Dónde se guardará el código compilado */
+    "rootDir": "./src"              /* Dónde está tu código fuente */
+  },
+  "include": ["src/**/*"],          /* Solo compila lo que está en src */
+  "exclude": ["node_modules"]       /* No toques las librerías instaladas */
+}
