@@ -1,9 +1,89 @@
 generator client {
   provider = "prisma-client-js"
-  // Eliminamos 'output' para que se guarde en node_modules (lo estándar)
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// FASE 1: INVENTARIO, UBICACIONES Y VENTAS
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  email     String   @unique
+  password  String
+  rol       String   @default("ADMIN") // ADMIN, VENDEDOR
+  creadoEn  DateTime @default(now())
+  ventas    Venta[]
+}
+
+model Categoria {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  productos Producto[]
+}
+
+model Ubicacion {
+  id          Int        @id @default(autoincrement())
+  nombre      String     // Ej: "Estante A", "Almacén Principal"
+  descripcion String?
+  productos   Producto[]
+}
+
+model Producto {
+  id            Int      @id @default(autoincrement())
+  codigo        String?  @unique // Código de barras opcional
+  nombre        String
+  descripcion   String?
+  precioVenta   Decimal  @db.Decimal(10, 2)
+  precioCompra  Decimal  @db.Decimal(10, 2) // Vital para calcular ganancia real
+  stockActual   Int      @default(0)
+  stockMinimo   Int      @default(1) // Alerta cuando quede 1
+  
+  // Relaciones Básicas
+  categoriaId   Int
+  categoria     Categoria @relation(fields: [categoriaId], references: [id])
+  ubicacionId   Int?      // Puede ser null si el producto está dentro de otro equipo
+  ubicacion     Ubicacion? @relation(fields: [ubicacionId], references: [id])
+  
+  // Recursividad (Producto dentro de otro)
+  // Esto resuelve: "Un cabezal de impresión está dentro de una impresora"
+  padreId       Int?      // ID del producto "contenedor" (Ej: La Impresora)
+  padre         Producto? @relation("Componentes", fields: [padreId], references: [id])
+  hijos         Producto[] @relation("Componentes")
+
+  detalleVentas DetalleVenta[]
+  movimientos   MovimientoStock[]
+}
+
+model Venta {
+  id          Int            @id @default(autoincrement())
+  fecha       DateTime       @default(now())
+  total       Decimal        @db.Decimal(10, 2)
+  usuarioId   Int
+  usuario     Usuario        @relation(fields: [usuarioId], references: [id])
+  detalles    DetalleVenta[]
+}
+
+model DetalleVenta {
+  id          Int      @id @default(autoincrement())
+  ventaId     Int
+  venta       Venta    @relation(fields: [ventaId], references: [id])
+  productoId  Int
+  producto    Producto @relation(fields: [productoId], references: [id])
+  cantidad    Int
+  precioUnit  Decimal  @db.Decimal(10, 2) // Precio al momento de la venta
+  subtotal    Decimal  @db.Decimal(10, 2)
+}
+
+model MovimientoStock {
+  id          Int      @id @default(autoincrement())
+  productoId  Int
+  producto    Producto @relation(fields: [productoId], references: [id])
+  tipo        String   // ENTRADA, SALIDA, AJUSTE
+  cantidad    Int      // Positivo o negativo
+  fecha       DateTime @default(now())
+  motivo      String?  // Ej: "Compra", "Venta #123", "Pérdida"
 }
