@@ -19,7 +19,7 @@ export class UbicacionController {
   // GET /api/ubicaciones/:id
   async obtenerPorId(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = Number.parseInt(req.params.id as string, 10);
+      const id = req.params.id as string;
       const ubicacion = await ubicacionService.obtenerPorId(id);
 
       if (!ubicacion) {
@@ -55,7 +55,7 @@ export class UbicacionController {
   // PUT /api/ubicaciones/:id
   async actualizar(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = Number.parseInt(req.params.id as string, 10);
+      const id = req.params.id as string;
       const ubicacion = await ubicacionService.actualizar(id, req.body);
       res.json({
         success: true,
@@ -70,7 +70,7 @@ export class UbicacionController {
   // DELETE /api/ubicaciones/:id
   async eliminar(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = Number.parseInt(req.params.id as string, 10);
+      const id = req.params.id as string;
       await ubicacionService.eliminar(id);
       res.json({
         success: true,

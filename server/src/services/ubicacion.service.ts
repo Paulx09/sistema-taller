@@ -2,19 +2,24 @@ import prisma from '../config/database';
 import { Ubicacion } from '@prisma/client';
 
 export class UbicacionService {
-  // Listar todas las ubicaciones
+  // Listar todas las ubicaciones (excluye eliminadas)
   async listarTodas(): Promise<Ubicacion[]> {
     return await prisma.ubicacion.findMany({
-      orderBy: { id: 'asc' }
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'asc' }
     });
   }
 
-  // Obtener una ubicación por ID
-  async obtenerPorId(id: number): Promise<Ubicacion | null> {
-    return await prisma.ubicacion.findUnique({
-      where: { id },
+  // Obtener una ubicación por ID (solo si no está eliminada)
+  async obtenerPorId(id: string): Promise<Ubicacion | null> {
+    return await prisma.ubicacion.findFirst({
+      where: { 
+        id,
+        deletedAt: null 
+      },
       include: {
         productos: {
+          where: { deletedAt: null },
           select: {
             id: true,
             nombre: true,
@@ -33,26 +38,37 @@ export class UbicacionService {
   }
 
   // Actualizar ubicación
-  async actualizar(id: number, data: { nombre?: string; descripcion?: string }): Promise<Ubicacion> {
+  async actualizar(id: string, data: { nombre?: string; descripcion?: string }): Promise<Ubicacion> {
     return await prisma.ubicacion.update({
       where: { id },
-      data
+      data: {
+        ...data,
+        updatedAt: new Date()
+      }
     });
   }
 
-  // Eliminar ubicación
-  async eliminar(id: number): Promise<Ubicacion> {
-    // Verificar si tiene productos asignados
+  // Eliminar ubicación (soft delete)
+  async eliminar(id: string): Promise<Ubicacion> {
+    // Verificar si tiene productos asignados activos
     const productosAsignados = await prisma.producto.count({
-      where: { ubicacionId: id }
+      where: { 
+        ubicacionId: id,
+        deletedAt: null
+      }
     });
 
     if (productosAsignados > 0) {
       throw new Error(`No se puede eliminar la ubicación porque tiene ${productosAsignados} producto(s) asignado(s)`);
     }
 
-    return await prisma.ubicacion.delete({
-      where: { id }
+    // Soft delete
+    return await prisma.ubicacion.update({
+      where: { id },
+      data: { 
+        deletedAt: new Date(),
+        updatedAt: new Date()
+      }
     });
   }
 }

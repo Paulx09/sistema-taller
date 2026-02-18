@@ -28,9 +28,9 @@ const actualizarUbicacionSchema = z.object({
   message: 'Debe proporcionar al menos un campo para actualizar'
 });
 
-// Esquema para validar ID de parámetro
+// Esquema para validar ID de parámetro (UUID)
 const idParamSchema = z.object({
-  id: z.string().regex(/^\d+$/, 'El ID debe ser un número válido')
+  id: z.uuid('El ID debe ser un UUID válido')
 });
 
 // Middleware de validación genérico
@@ -63,7 +63,7 @@ const validateId = (req: Request, res: Response, next: NextFunction) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         error: 'ID inválido',
-        mensaje: 'El ID debe ser un número válido'
+        mensaje: 'El ID debe ser un UUID válido'
       });
     }
     next(error);
