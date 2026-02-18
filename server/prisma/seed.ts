@@ -24,12 +24,12 @@ async function main() {
 }
 
 // Usar top-level await (mejor práctica)
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error: Error) => {
-    console.error('Error en el seed:', error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+try {
+  await main();
+  console.log('Seed ejecutado correctamente.');
+} catch (error: unknown) {
+  console.error('Error en el seed:', error);
+  process.exit(1);
+} finally {
+  await prisma.$disconnect();
+}
