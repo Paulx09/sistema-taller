@@ -7,19 +7,20 @@ async function main() {
 
   // Usuario Admin por defecto
   const admin = await prisma.usuario.upsert({
-    where: { email: 'admin@taller.com' },
+    where: { username: 'admin' },
     update: {},
     create: {
-      nombre: 'Administrador',
-      email: 'admin@taller.com',
-      password: 'admin123', // TODO: En producción usar bcrypt
+      username: 'admin',
+      passwordHash: 'admin123', // TODO: En producción usar bcrypt
+      nombreCompleto: 'Administrador del Sistema',
       rol: 'ADMIN'
     }
   });
 
   console.log('Usuario admin creado - ID:', admin.id);
-  console.log('Email:', admin.email);
+  console.log('Username:', admin.username);
   console.log('Password: admin123');
+  console.log('Nombre:', admin.nombreCompleto);
 }
 
 // Usar top-level await (mejor práctica)

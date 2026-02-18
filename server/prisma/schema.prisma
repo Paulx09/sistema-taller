@@ -18,84 +18,123 @@ enum TipoMovimiento {
 }
 
 model Usuario {
-  id          Int               @id @default(autoincrement())
-  nombre      String
-  email       String            @unique
-  password    String
-  rol         String            @default("ADMIN") // ADMIN, VENDEDOR
-  creadoEn    DateTime          @default(now())
-  ventas      Venta[]
-  movimientos MovimientoStock[] // Relación con movimientos de stock
+  id              String            @id @default(uuid())
+  username        String            @unique @db.VarChar(50)
+  passwordHash    String            @map("password_hash")
+  nombreCompleto  String            @map("nombre_completo") @db.VarChar(100)
+  rol             String            @default("ADMIN") @db.VarChar(20) // ADMIN, VENDEDOR
+  createdAt       DateTime          @default(now()) @map("created_at")
+  ventas          Venta[]
+  movimientos     MovimientoStock[]
+
+  @@map("usuarios")
 }
 
 model Categoria {
-  id        Int        @id @default(autoincrement())
-  nombre    String     @unique
-  productos Producto[]
+  id          String     @id @default(uuid())
+  nombre      String     @unique @db.VarChar(50)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  productos   Producto[]
+
+  @@map("categorias")
 }
 
 model Ubicacion {
-  id          Int        @id @default(autoincrement())
-  nombre      String     // Ej: "Estante A", "Almacén Principal"
-  descripcion String?
-  productos   Producto[]
+  id                  String       @id @default(uuid())
+  nombre              String       @db.VarChar(100)
+  ubicacionPadreId    String?      @map("ubicacion_padre_id")
+  ubicacionPadre      Ubicacion?   @relation("UbicacionHijos", fields: [ubicacionPadreId], references: [id])
+  hijas               Ubicacion[]  @relation("UbicacionHijos")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  deletedAt           DateTime?    @map("deleted_at")
+  productos           Producto[]
+
+  @@map("ubicaciones")
 }
 
 model Producto {
-  id            Int      @id @default(autoincrement())
-  codigo        String?  @unique // Código de barras opcional
-  nombre        String
-  descripcion   String?
-  precioVenta   Decimal  @db.Decimal(10, 2)
-  precioCompra  Decimal  @db.Decimal(10, 2) // Vital para calcular ganancia real
-  stockActual   Int      @default(0)
-  stockMinimo   Int      @default(1) // Alerta cuando quede 1
-  esServicio    Boolean  @default(false) // Si es true, ignora stock y ubicación
-  
-  // Relaciones Básicas
-  categoriaId   Int
-  categoria     Categoria @relation(fields: [categoriaId], references: [id])
-  ubicacionId   Int?      // Puede ser null si el producto está dentro de otro equipo
-  ubicacion     Ubicacion? @relation(fields: [ubicacionId], references: [id])
+  id              String            @id @default(uuid())
+  nombre          String            @db.VarChar(150)
+  marca           String?           @db.VarChar(50)
+  modelo          String?           @db.VarChar(50)
+  sku             String?           @unique @db.VarChar(50)
+  codigoBarras    String?           @unique @map("codigo_barras") @db.VarChar(50)
+  descripcion     String?
+  categoriaId     String            @map("categoria_id")
+  categoria       Categoria         @relation(fields: [categoriaId], references: [id])
+  ubicacionId     String?           @map("ubicacion_id")
+  ubicacion       Ubicacion?        @relation(fields: [ubicacionId], references: [id])
+  precioCompra    Decimal           @map("precio_compra") @db.Decimal(10, 2)
+  precioVenta     Decimal           @map("precio_venta") @db.Decimal(10, 2)
+  stockActual     Int               @default(0) @map("stock_actual")
+  stockMinimo     Int               @default(1) @map("stock_minimo")
+  imagenUrl       String?           @map("imagen_url")
+  specs           Json?             // JSONB para especificaciones flexibles
+  esServicio      Boolean           @default(false) @map("es_servicio")
+  esSegundaMano   Boolean           @default(false) @map("es_segunda_mano")
   
   // Recursividad (Producto dentro de otro)
-  // Esto resuelve: "Un cabezal de impresión está dentro de una impresora"
-  padreId       Int?      // ID del producto "contenedor" (Ej: La Impresora)
-  padre         Producto? @relation("Componentes", fields: [padreId], references: [id])
-  hijos         Producto[] @relation("Componentes")
+  padreId         String?           @map("padre_id")
+  padre           Producto?         @relation("Componentes", fields: [padreId], references: [id])
+  hijos           Producto[]        @relation("Componentes")
+  
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+  
+  detalleVentas   DetalleVenta[]
+  movimientos     MovimientoStock[]
 
-  detalleVentas DetalleVenta[]
-  movimientos   MovimientoStock[]
+  @@map("productos")
 }
 
 model Venta {
-  id          Int            @id @default(autoincrement())
-  fecha       DateTime       @default(now())
-  total       Decimal        @db.Decimal(10, 2)
-  usuarioId   Int
-  usuario     Usuario        @relation(fields: [usuarioId], references: [id])
-  detalles    DetalleVenta[]
+  id                  String         @id @default(uuid())
+  codigoCorrelativo   Int            @default(autoincrement()) @map("codigo_correlativo")
+  fecha               DateTime       @default(now())
+  usuarioId           String         @map("usuario_id")
+  usuario             Usuario        @relation(fields: [usuarioId], references: [id])
+  clienteNombre       String?        @map("cliente_nombre") @db.VarChar(100)
+  metodoPago          String?        @map("metodo_pago") @db.VarChar(20)
+  total               Decimal        @db.Decimal(10, 2)
+  gananciaTotal       Decimal        @map("ganancia_total") @db.Decimal(10, 2)
+  estado              String         @default("COMPLETADA") @db.VarChar(20)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  deletedAt           DateTime?      @map("deleted_at")
+  detalles            DetalleVenta[]
+
+  @@map("ventas")
 }
 
 model DetalleVenta {
-  id          Int      @id @default(autoincrement())
-  ventaId     Int
-  venta       Venta    @relation(fields: [ventaId], references: [id])
-  productoId  Int
-  producto    Producto @relation(fields: [productoId], references: [id])
-  cantidad    Int
-  precioUnit  Decimal  @db.Decimal(10, 2) // Precio al momento de la venta
-  subtotal    Decimal  @db.Decimal(10, 2)
+  id                      String   @id @default(uuid())
+  ventaId                 String   @map("venta_id")
+  venta                   Venta    @relation(fields: [ventaId], references: [id])
+  productoId              String   @map("producto_id")
+  producto                Producto @relation(fields: [productoId], references: [id])
+  cantidad                Int
+  precioUnitario          Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  costoUnitarioSnapshot   Decimal  @map("costo_unitario_snapshot") @db.Decimal(10, 2)
+  subtotal                Decimal  @db.Decimal(10, 2)
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@map("detalle_ventas")
 }
 
 model MovimientoStock {
-  id          Int             @id @default(autoincrement())
-  productoId  Int
-  producto    Producto        @relation(fields: [productoId], references: [id])
-  tipo        TipoMovimiento  // Relacion a ENUM
-  cantidad    Int             // Positivo o negativo
-  fecha       DateTime        @default(now())
-  motivo      String?         // Ej: "Compra", "Venta #123", "Pérdida"
-  usuarioId   Int?            // Usuario que realizó el movimiento (auditoría)
+  id          String          @id @default(uuid())
+  usuarioId   String?         @map("usuario_id")
   usuario     Usuario?        @relation(fields: [usuarioId], references: [id])
+  productoId  String          @map("producto_id")
+  producto    Producto        @relation(fields: [productoId], references: [id])
+  tipo        TipoMovimiento
+  cantidad    Int
+  motivo      String?         @db.VarChar(100)
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@map("movimientos_stock")
 }
