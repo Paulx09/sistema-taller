@@ -44,6 +44,7 @@ model Categoria {
 model Ubicacion {
   id                  String       @id @default(uuid())
   nombre              String       @db.VarChar(100)
+  descripcion         String?      @db.VarChar(255)
   ubicacionPadreId    String?      @map("ubicacion_padre_id")
   ubicacionPadre      Ubicacion?   @relation("UbicacionHijos", fields: [ubicacionPadreId], references: [id])
   hijas               Ubicacion[]  @relation("UbicacionHijos")
@@ -62,7 +63,7 @@ model Producto {
   modelo          String?           @db.VarChar(50)
   sku             String?           @unique @db.VarChar(50)
   codigoBarras    String?           @unique @map("codigo_barras") @db.VarChar(50)
-  descripcion     String?
+  descripcion     String?           @db.VarChar(255)
   categoriaId     String            @map("categoria_id")
   categoria       Categoria         @relation(fields: [categoriaId], references: [id])
   ubicacionId     String?           @map("ubicacion_id")
