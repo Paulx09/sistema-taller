@@ -1,9 +1,141 @@
 generator client {
   provider = "prisma-client-js"
-  // Eliminamos 'output' para que se guarde en node_modules (lo estándar)
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// FASE 1: INVENTARIO, UBICACIONES Y VENTAS
+
+// ENUM para tipos de movimiento de stock
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  INVENTARIO_INICIAL
+}
+
+model Usuario {
+  id              String            @id @default(uuid())
+  username        String            @unique @db.VarChar(50)
+  passwordHash    String            @map("password_hash")
+  nombreCompleto  String            @map("nombre_completo") @db.VarChar(100)
+  rol             String            @default("ADMIN") @db.VarChar(20) // ADMIN, VENDEDOR
+  createdAt       DateTime          @default(now()) @map("created_at")
+  ventas          Venta[]
+  movimientos     MovimientoStock[]
+
+  @@map("usuarios")
+}
+
+model Categoria {
+  id          String     @id @default(uuid())
+  nombre      String     @unique @db.VarChar(50)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  productos   Producto[]
+
+  @@map("categorias")
+}
+
+model Ubicacion {
+  id                  String       @id @default(uuid())
+  nombre              String       @db.VarChar(100)
+  descripcion         String?      @db.VarChar(255)
+  ubicacionPadreId    String?      @map("ubicacion_padre_id")
+  ubicacionPadre      Ubicacion?   @relation("UbicacionHijos", fields: [ubicacionPadreId], references: [id])
+  hijas               Ubicacion[]  @relation("UbicacionHijos")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  deletedAt           DateTime?    @map("deleted_at")
+  productos           Producto[]
+
+  @@map("ubicaciones")
+}
+
+model Producto {
+  id              String            @id @default(uuid())
+  nombre          String            @db.VarChar(150)
+  marca           String?           @db.VarChar(50)
+  modelo          String?           @db.VarChar(50)
+  sku             String?           @unique @db.VarChar(50)
+  codigoBarras    String?           @unique @map("codigo_barras") @db.VarChar(50)
+  descripcion     String?           @db.VarChar(255)
+  categoriaId     String            @map("categoria_id")
+  categoria       Categoria         @relation(fields: [categoriaId], references: [id])
+  ubicacionId     String?           @map("ubicacion_id")
+  ubicacion       Ubicacion?        @relation(fields: [ubicacionId], references: [id])
+  precioCompra    Decimal           @map("precio_compra") @db.Decimal(10, 2)
+  precioVenta     Decimal           @map("precio_venta") @db.Decimal(10, 2)
+  stockActual     Int               @default(0) @map("stock_actual")
+  stockMinimo     Int               @default(1) @map("stock_minimo")
+  imagenUrl       String?           @map("imagen_url")
+  specs           Json?             // JSONB para especificaciones flexibles
+  esServicio      Boolean           @default(false) @map("es_servicio")
+  esSegundaMano   Boolean           @default(false) @map("es_segunda_mano")
+  
+  // Recursividad (Producto dentro de otro)
+  padreId         String?           @map("padre_id")
+  padre           Producto?         @relation("Componentes", fields: [padreId], references: [id])
+  hijos           Producto[]        @relation("Componentes")
+  
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+  
+  detalleVentas   DetalleVenta[]
+  movimientos     MovimientoStock[]
+
+  @@map("productos")
+}
+
+model Venta {
+  id                  String         @id @default(uuid())
+  codigoCorrelativo   Int            @default(autoincrement()) @map("codigo_correlativo")
+  fecha               DateTime       @default(now())
+  usuarioId           String         @map("usuario_id")
+  usuario             Usuario        @relation(fields: [usuarioId], references: [id])
+  clienteNombre       String?        @map("cliente_nombre") @db.VarChar(100)
+  metodoPago          String?        @map("metodo_pago") @db.VarChar(20)
+  total               Decimal        @db.Decimal(10, 2)
+  gananciaTotal       Decimal        @map("ganancia_total") @db.Decimal(10, 2)
+  estado              String         @default("COMPLETADA") @db.VarChar(20)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  deletedAt           DateTime?      @map("deleted_at")
+  detalles            DetalleVenta[]
+
+  @@map("ventas")
+}
+
+model DetalleVenta {
+  id                      String   @id @default(uuid())
+  ventaId                 String   @map("venta_id")
+  venta                   Venta    @relation(fields: [ventaId], references: [id])
+  productoId              String   @map("producto_id")
+  producto                Producto @relation(fields: [productoId], references: [id])
+  cantidad                Int
+  precioUnitario          Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  costoUnitarioSnapshot   Decimal  @map("costo_unitario_snapshot") @db.Decimal(10, 2)
+  subtotal                Decimal  @db.Decimal(10, 2)
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@map("detalle_ventas")
+}
+
+model MovimientoStock {
+  id          String          @id @default(uuid())
+  usuarioId   String?         @map("usuario_id")
+  usuario     Usuario?        @relation(fields: [usuarioId], references: [id])
+  productoId  String          @map("producto_id")
+  producto    Producto        @relation(fields: [productoId], references: [id])
+  tipo        TipoMovimiento
+  cantidad    Int
+  motivo      String?         @db.VarChar(100)
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@map("movimientos_stock")
 }
