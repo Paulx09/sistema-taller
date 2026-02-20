@@ -131,7 +131,7 @@ export class ProductoService {
     const fechaLimite = new Date();
     fechaLimite.setDate(fechaLimite.getDate() - dias);
 
-    return await prisma.producto.findMany({
+    const productos = await prisma.producto.findMany({
       where: {
         deletedAt: null,
         detalleVentas: {
@@ -142,9 +142,35 @@ export class ProductoService {
       },
       include: {
         categoria: { select: { nombre: true } },
+        detalleVentas: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // Calcular días sin movimiento para cada producto y filtrar por el criterio
+    const hoy = new Date();
+    const productosConDias = productos.map((producto) => {
+      const ultimaVenta = producto.detalleVentas[0]?.createdAt || producto.createdAt;
+      const diasSinMovimiento = Math.floor(
+        (hoy.getTime() - new Date(ultimaVenta).getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      return {
+        id: producto.id,
+        nombre: producto.nombre,
+        stockActual: producto.stockActual,
+        categoria: producto.categoria,
+        ultimaVenta: producto.detalleVentas[0]?.createdAt || null,
+        diasSinMovimiento,
+      };
+    });
+
+    // Filtrar solo productos con días >= criterio seleccionado
+    return productosConDias.filter((p) => p.diasSinMovimiento >= dias);
   }
 
   // Obtener por ID
