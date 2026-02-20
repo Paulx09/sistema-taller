@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Form,
   FormControl,
@@ -57,6 +59,8 @@ export function AjustarStockDialog({
   producto,
   onSuccess,
 }: Readonly<AjustarStockDialogProps>) {
+  const [error, setError] = useState<string | null>(null);
+  
   const form = useForm<AjustarStockFormValues>({
     resolver: zodResolver(ajustarStockSchema),
     defaultValues: {
@@ -66,7 +70,16 @@ export function AjustarStockDialog({
     },
   });
 
+  // Limpiar error cuando se abre/cierra el diálogo
+  useEffect(() => {
+    if (!open) {
+      setError(null);
+      form.reset();
+    }
+  }, [open, form]);
+
   const onSubmit = async (data: AjustarStockFormValues) => {
+    setError(null);
     try {
       const payload: AjustarStockDto = {
         tipo: data.tipo,
@@ -77,8 +90,20 @@ export function AjustarStockDialog({
       await productoService.ajustarStock(producto.id, payload);
       onSuccess();
       form.reset();
-    } catch (error) {
-      console.error('Error al ajustar stock:', error);
+    } catch (err: unknown) {
+      console.error('Error al ajustar stock:', err);
+      
+      // Extraer mensaje de error del servidor
+      const error = err as { response?: { data?: { error?: string; details?: Array<{ campo: string; mensaje: string }> } } };
+      
+      if (error.response?.data?.details && Array.isArray(error.response.data.details)) {
+        const mensajes = error.response.data.details.map((d) => d.mensaje).join(', ');
+        setError(mensajes);
+      } else if (error.response?.data?.error) {
+        setError(error.response.data.error);
+      } else {
+        setError('Error al ajustar el stock. Por favor, intente nuevamente.');
+      }
     }
   };
 
@@ -115,6 +140,12 @@ export function AjustarStockDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -148,7 +179,7 @@ export function AjustarStockDialog({
                   <FormLabel>Cantidad *</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
+                      type="string"
                       placeholder="0"
                       {...field}
                       onChange={(e) => field.onChange(Number.parseInt(e.target.value, 10) || 0)}
@@ -167,7 +198,7 @@ export function AjustarStockDialog({
               name="motivo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Motivo (opcional)</FormLabel>
+                  <FormLabel>Motivo</FormLabel>
                   <FormControl>
                     <Input placeholder="Ej: Compra de nuevo inventario" {...field} />
                   </FormControl>
