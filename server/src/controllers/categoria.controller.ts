@@ -5,11 +5,14 @@ export class CategoriaController {
   // GET /api/categorias
   async listarTodas(req: Request, res: Response, next: NextFunction) {
     try {
-      const categorias = await categoriaService.listarTodas();
+      const skip = req.query.skip ? Number(req.query.skip) : undefined;
+      const take = req.query.take ? Number(req.query.take) : undefined;
+
+      const { categorias, total } = await categoriaService.listarTodas({ skip, take });
       res.json({
         success: true,
         data: categorias,
-        total: categorias.length
+        total
       });
     } catch (error) {
       next(error);
