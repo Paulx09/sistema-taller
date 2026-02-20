@@ -1,13 +1,29 @@
 import prisma from '../config/database';
 import { Ubicacion } from '@prisma/client';
 
+interface FiltrosUbicaciones {
+  skip?: number;
+  take?: number;
+}
+
 export class UbicacionService {
-  // Listar todas las ubicaciones (excluye eliminadas)
-  async listarTodas(): Promise<Ubicacion[]> {
-    return await prisma.ubicacion.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: 'asc' }
-    });
+  // Listar todas las ubicaciones (excluye eliminadas) con paginación
+  async listarTodas(filtros: FiltrosUbicaciones = {}) {
+    const { skip = 0, take = 50 } = filtros;
+
+    const [ubicaciones, total] = await Promise.all([
+      prisma.ubicacion.findMany({
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take
+      }),
+      prisma.ubicacion.count({
+        where: { deletedAt: null }
+      })
+    ]);
+
+    return { ubicaciones, total };
   }
 
   // Obtener una ubicación por ID (solo si no está eliminada)

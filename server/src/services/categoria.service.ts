@@ -1,13 +1,29 @@
 import prisma from '../config/database';
 import { Categoria } from '@prisma/client';
 
+interface FiltrosCategorias {
+  skip?: number;
+  take?: number;
+}
+
 export class CategoriaService {
-  // Listar todas las categorías (excluye eliminadas)
-  async listarTodas(): Promise<Categoria[]> {
-    return await prisma.categoria.findMany({
-      where: { deletedAt: null },
-      orderBy: { nombre: 'asc' }
-    });
+  // Listar todas las categorías (excluye eliminadas) con paginación
+  async listarTodas(filtros: FiltrosCategorias = {}) {
+    const { skip = 0, take = 50 } = filtros;
+
+    const [categorias, total] = await Promise.all([
+      prisma.categoria.findMany({
+        where: { deletedAt: null },
+        orderBy: { nombre: 'asc' },
+        skip,
+        take
+      }),
+      prisma.categoria.count({
+        where: { deletedAt: null }
+      })
+    ]);
+
+    return { categorias, total };
   }
 
   // Obtener una categoría por ID (solo si no está eliminada)

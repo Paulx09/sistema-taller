@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import fs from 'node:fs';
 import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import prisma from './config/database';
@@ -7,10 +9,20 @@ import routes from './routes';
 
 const app = express();
 
+// Crear carpeta uploads si no existe
+const uploadsDir = path.join(process.cwd(), 'uploads', 'productos');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('Carpeta uploads/productos creada');
+}
+
 // Middlewares globales
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Servir archivos estáticos desde /uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Ruta de salud (health check)
 app.get('/health', (req, res) => {

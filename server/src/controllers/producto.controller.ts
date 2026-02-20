@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import productoService from '../services/producto.service';
+import { deleteOldProductImage } from '../middlewares/upload.middleware';
 
 export class ProductoController {
   // GET /api/productos
@@ -140,6 +141,15 @@ export class ProductoController {
   async actualizar(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+      
+      // Si hay nueva imagen, eliminar la anterior
+      if (req.body.imagenUrl) {
+        const productoActual = await productoService.obtenerPorId(id);
+        if (productoActual?.imagenUrl) {
+          deleteOldProductImage(productoActual.imagenUrl);
+        }
+      }
+      
       const producto = await productoService.actualizar(id, req.body);
 
       res.json({
@@ -177,7 +187,17 @@ export class ProductoController {
   async eliminar(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+      
+      // Obtener producto para eliminar su imagen
+      const producto = await productoService.obtenerPorId(id);
+      
+      // Eliminar producto (soft delete)
       await productoService.eliminar(id);
+      
+      // Eliminar imagen físicamente
+      if (producto?.imagenUrl) {
+        deleteOldProductImage(producto.imagenUrl);
+      }
 
       res.json({
         success: true,

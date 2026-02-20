@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import productoController from '../controllers/producto.controller';
 import { productoValidator } from '../middlewares/validators/producto.validator';
+import { upload, optimizeProductImage, parseFormData } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -12,8 +13,23 @@ router.get('/sin-movimiento', productoController.obtenerSinMovimiento);
 // Rutas CRUD principales
 router.get('/', productoController.listar);
 router.get('/:id', productoValidator.validarId, productoController.obtenerPorId);
-router.post('/', productoValidator.crear, productoController.crear);
-router.put('/:id', productoValidator.validarId, productoValidator.actualizar, productoController.actualizar);
+router.post(
+  '/',
+  upload.single('imagen'),
+  optimizeProductImage,
+  parseFormData,
+  productoValidator.crear,
+  productoController.crear
+);
+router.put(
+  '/:id',
+  productoValidator.validarId,
+  upload.single('imagen'),
+  optimizeProductImage,
+  parseFormData,
+  productoValidator.actualizar,
+  productoController.actualizar
+);
 router.patch('/:id/stock', productoValidator.validarId, productoValidator.ajustarStock, productoController.ajustarStock);
 router.delete('/:id', productoValidator.validarId, productoController.eliminar);
 

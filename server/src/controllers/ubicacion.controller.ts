@@ -5,11 +5,14 @@ export class UbicacionController {
   // GET /api/ubicaciones
   async listarTodas(req: Request, res: Response, next: NextFunction) {
     try {
-      const ubicaciones = await ubicacionService.listarTodas();
+      const skip = req.query.skip ? Number(req.query.skip) : undefined;
+      const take = req.query.take ? Number(req.query.take) : undefined;
+
+      const { ubicaciones, total } = await ubicacionService.listarTodas({ skip, take });
       res.json({
         success: true,
         data: ubicaciones,
-        total: ubicaciones.length
+        total
       });
     } catch (error) {
       next(error);
