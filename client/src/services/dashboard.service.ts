@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/api'; // TODO: Usar variable de entorno
+// API URL - En producción usar variable de entorno
+const API_URL = 'http://localhost:3000/api';
 
 export interface DashboardMetrics {
   ventasHoy: number;
@@ -12,57 +13,58 @@ export interface DashboardMetrics {
 export interface ProductoBajoStock {
   id: string;
   nombre: string;
-  sku: string;
+  sku: string | null;
+  marca: string | null;
+  modelo: string | null;
   stockActual: number;
   stockMinimo: number;
   ubicacion: { nombre: string } | null;
 }
 
 export interface ProductoSinMovimiento {
-    id: string;
-    nombre: string;
-    ultimaVenta?: string; // Fecha
-    diasSinMovimiento: number;
+  id: string;
+  nombre: string;
+  stockActual: number;
+  categoria: { nombre: string } | null;
+  ultimaVenta: string | null; // Fecha
+  diasSinMovimiento: number;
 }
 
 
 export const dashboardService = {
   getMetrics: async (): Promise<DashboardMetrics> => {
-    // Por ahora mockeamos lo que no existe en backend o si falla
     try {
-        const response = await axios.get(`${API_URL}/dashboard/metricas`);
-        return response.data;
+      const response = await axios.get(`${API_URL}/dashboard/metricas`);
+      return response.data.data;
     } catch (error) {
-        console.warn("Dashboard metrics endpoint not ready, using mock/partial data");
-        // Fallback or partial data fetching if strict endpoint doesn't exist yet
-        // We can fetch products to calc stock low count at least
-        const productsResponse = await axios.get(`${API_URL}/productos/bajo-stock`);
-        return {
-            ventasHoy: 0,
-            gananciaHoy: 0,
-            productosStockBajo: productsResponse.data.length,
-            productosSinMovimiento: 0
-        };
+      console.error('Error fetching dashboard metrics:', error);
+      // Fallback en caso de error
+      return {
+        ventasHoy: 0,
+        gananciaHoy: 0,
+        productosStockBajo: 0,
+        productosSinMovimiento: 0,
+      };
     }
   },
 
   getProductosBajoStock: async (): Promise<ProductoBajoStock[]> => {
-      try {
-        const response = await axios.get(`${API_URL}/productos/bajo-stock`);
-        return Array.isArray(response.data) ? response.data : [];
-      } catch (error) {
-        console.error("Error fetching low stock products:", error);
-        return [];
-      }
+    try {
+      const response = await axios.get(`${API_URL}/productos/bajo-stock`);
+      return Array.isArray(response.data.data) ? response.data.data : [];
+    } catch (error) {
+      console.error('Error fetching low stock products:', error);
+      return [];
+    }
   },
-  
-  getProductosSinMovimiento: async (): Promise<ProductoSinMovimiento[]> => {
-      // Endpoint puede no existir aun, retornamos vacio por seguridad
-      try {
-        const response = await axios.get(`${API_URL}/productos/sin-movimiento`);
-        return Array.isArray(response.data) ? response.data : [];
-      } catch {
-          return [];
-      }
-  }
+
+  getProductosSinMovimiento: async (dias: number = 90): Promise<ProductoSinMovimiento[]> => {
+    try {
+      const response = await axios.get(`${API_URL}/productos/sin-movimiento?dias=${dias}`);
+      return Array.isArray(response.data.data) ? response.data.data : [];
+    } catch (error) {
+      console.error('Error fetching stagnant products:', error);
+      return [];
+    }
+  },
 };

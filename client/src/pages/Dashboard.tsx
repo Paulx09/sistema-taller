@@ -1,10 +1,52 @@
+import { useState } from 'react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+import { Pagination } from '@/components/Pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { AjustarStockDialog } from '@/components/AjustarStockDialog';
+import type { Producto } from '@/types';
+import type { ProductoBajoStock } from '@/services/dashboard.service';
 
 export function Dashboard() {
-  const { metrics, bajoStock, sinMovimiento, loading } = useDashboard();
+  const { 
+    metrics, 
+    bajoStock, 
+    sinMovimiento, 
+    loading, 
+    diasSinMovimiento, 
+    setDiasSinMovimiento,
+    refetch,
+  } = useDashboard();
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Paginación para Stock Crítico
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = bajoStock.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleAjustarStock = (producto: ProductoBajoStock) => {
+    setProductoSeleccionado(producto as Producto);
+    setDialogOpen(true);
+  };
+
+  const handleStockSuccess = () => {
+    setDialogOpen(false);
+    setProductoSeleccionado(null);
+    refetch();
+  };
 
   if (loading) {
     return (
@@ -44,9 +86,9 @@ export function Dashboard() {
             <div className="flex items-center text-xs text-muted-foreground">
                <span className="text-success font-medium flex items-center mr-1">
                  <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                 +0%
+                 {' '}+0%
                </span>
-               vs. ayer
+               {' '}vs. ayer
             </div>
           </div>
         </div>
@@ -63,9 +105,9 @@ export function Dashboard() {
              <div className="flex items-center text-xs text-muted-foreground">
                <span className="text-success font-medium flex items-center mr-1">
                  <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                 +0%
+                 {' '}+0%
                </span>
-               margen neto
+               {' '}margen neto
             </div>
           </div>
         </div>
@@ -81,9 +123,9 @@ export function Dashboard() {
             <div className="flex items-center text-xs text-muted-foreground">
                <span className="text-warning font-medium flex items-center mr-1">
                  <span className="material-symbols-outlined text-[14px]">schedule</span>
-                 0 urgentes
+                 {' '}0 urgentes
                </span>
-               en cola
+               {' '}en cola
             </div>
           </div>
         </div>
@@ -99,9 +141,9 @@ export function Dashboard() {
             <div className="flex items-center text-xs text-muted-foreground">
                <span className="text-destructive font-medium flex items-center mr-1">
                  <span className="material-symbols-outlined text-[14px]">warning</span>
-                 Crítico
+                 {' '}Crítico
                </span>
-               reponer pronto
+               {' '}reponer pronto
             </div>
           </div>
         </div>
@@ -118,7 +160,7 @@ export function Dashboard() {
                 <span className="bg-destructive/10 text-destructive text-xs font-semibold px-2.5 py-0.5 rounded-full border border-destructive/20">Bajo Stock</span>
              </div>
              <Link to="/productos" className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors">
-                Ver Todo <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                Ver Productos <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
              </Link>
            </div>
            
@@ -127,20 +169,21 @@ export function Dashboard() {
                <thead>
                  <tr className="bg-muted/40 border-b border-border">
                     <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Producto</th>
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">SKU</th>
-                     <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Cant.</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Marca/Modelo</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Cant.</th>
                     <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ubicación</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">Acción</th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-border">
-                 {Array.isArray(bajoStock) && bajoStock.length === 0 ? (
+                 {currentItems.length === 0 ? (
                     <tr>
-                        <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                        <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">
                             Todo en orden. No hay productos con stock bajo.
                         </td>
                     </tr>
                  ) : (
-                    Array.isArray(bajoStock) && bajoStock.slice(0, 5).map((prod) => (
+                    currentItems.map((prod) => (
                         <tr key={prod.id} className="group hover:bg-muted/50 transition-colors">
                            <td className="px-6 py-4">
                              <div className="flex items-center gap-3">
@@ -150,7 +193,11 @@ export function Dashboard() {
                                <span className="font-medium text-sm text-foreground">{prod.nombre}</span>
                              </div>
                            </td>
-                           <td className="px-6 py-4 text-xs text-muted-foreground font-mono">{prod.sku || '-'}</td>
+                           <td className="px-6 py-4 text-sm text-muted-foreground">
+                             {prod.marca && prod.modelo 
+                               ? `${prod.marca} ${prod.modelo}`
+                               : prod.marca || prod.modelo || '-'}
+                           </td>
                            <td className="px-6 py-4 text-center">
                               <span className={cn(
                                 "inline-flex items-center justify-center h-6 px-2 rounded-md text-xs font-bold border",
@@ -167,24 +214,64 @@ export function Dashboard() {
                                <span>{prod.ubicacion?.nombre || 'Sin ubicación'}</span>
                              </div>
                            </td>
+                           <td className="px-6 py-4 text-right">
+                             <Button
+                               size="sm"
+                               variant="outline"
+                               onClick={() => handleAjustarStock(prod)}
+                               className="opacity-0 group-hover:opacity-100 transition-opacity"
+                             >
+                               <span className="material-symbols-outlined text-[16px] mr-1">add</span>
+                               {' '}Stock
+                             </Button>
+                           </td>
                         </tr>
                     ))
                  )}
                </tbody>
              </table>
            </div>
+           
+           {bajoStock.length > itemsPerPage && (
+             <div className="px-6 py-4 border-t border-border bg-muted/20">
+               <Pagination
+                 currentPage={currentPage}
+                 totalItems={bajoStock.length}
+                 itemsPerPage={itemsPerPage}
+                 onPageChange={setCurrentPage}
+                 onItemsPerPageChange={setItemsPerPage}
+               />
+             </div>
+           )}
         </div>
 
         {/* Lista Productos Estancados */}
         <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col h-full">
-           <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-card sticky top-0 z-10">
-             <h3 className="font-semibold text-foreground text-lg flex items-center gap-2">
-               <span className="material-symbols-outlined text-warning">history</span>
-               Productos Estancados
-             </h3>
-             <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
-                &gt; 90 Días
-             </span>
+           <div className="px-6 py-4 border-b border-border bg-card sticky top-0 z-10">
+             <div className="flex justify-between items-start mb-3">
+               <h3 className="font-semibold text-foreground text-lg flex items-center gap-2">
+                 <span className="material-symbols-outlined text-warning">history</span>
+                 {' '}Productos Estancados
+               </h3>
+             </div>
+             <div className="flex items-center gap-2">
+               <span className="text-xs text-muted-foreground">Sin movimiento hace:</span>
+               <Select
+                 value={diasSinMovimiento.toString()}
+                 onValueChange={(value) => setDiasSinMovimiento(Number(value))}
+               >
+                 <SelectTrigger className="w-[130px] h-8 text-xs">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="30">30 días</SelectItem>
+                   <SelectItem value="60">60 días</SelectItem>
+                   <SelectItem value="90">90 días</SelectItem>
+                   <SelectItem value="120">120 días</SelectItem>
+                   <SelectItem value="180">180 días</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
            </div>
            
            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[400px]">
@@ -194,7 +281,7 @@ export function Dashboard() {
                 </div>
              ) : (
                 <div className="flex flex-col gap-3">
-                    {sinMovimiento.slice(0, 5).map((prod) => (
+                    {sinMovimiento.slice(0, 10).map((prod) => (
                         <div key={prod.id} className="flex items-start p-3 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border cursor-pointer group">
                              <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 flex items-center justify-center text-muted-foreground border border-border group-hover:bg-background group-hover:border-border">
                                 <span className="material-symbols-outlined text-[20px]">inventory_2</span>
@@ -206,22 +293,36 @@ export function Dashboard() {
                                     {prod.diasSinMovimiento}d
                                  </span>
                                </div>
-                               <p className="text-xs text-muted-foreground mt-0.5">Sin movimientos recientes</p>
+                               <div className="flex items-center gap-2 mt-0.5">
+                                 {prod.categoria && (
+                                   <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
+                                     {prod.categoria.nombre}
+                                   </span>
+                                 )}
+                                 <span className="text-xs text-muted-foreground">
+                                   Stock: {prod.stockActual}
+                                 </span>
+                               </div>
                              </div>
                         </div>
                     ))}
                 </div>
              )}
              
-             {sinMovimiento.length > 0 && (
-                 <button className="w-full mt-2 py-2 text-sm font-medium text-muted-foreground border border-dashed border-border rounded-md hover:bg-muted hover:text-foreground transition-colors">
-                    Ver Reporte Completo
-                 </button>
-             )}
            </div>
         </div>
 
       </div>
+
+      {/* Dialog para ajustar stock */}
+      {productoSeleccionado && (
+        <AjustarStockDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          producto={productoSeleccionado}
+          onSuccess={handleStockSuccess}
+        />
+      )}
     </div>
   );
 }
