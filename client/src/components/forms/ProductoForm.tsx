@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
 import { Button } from '@/components/ui/button';
 import {
@@ -147,6 +147,27 @@ export function ProductoForm({
       imagenUrl: producto?.imagenUrl || '',
     },
   });
+
+  // Limpiar campos cuando se marca como servicio
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'esServicio' && value.esServicio) {
+        // Resetear campos que no aplican para servicios
+        form.setValue('marca', '');
+        form.setValue('modelo', '');
+        form.setValue('ubicacionId', '');
+        form.setValue('stockActual', '0');
+        form.setValue('stockMinimo', '0');
+        form.setValue('precioCompra', '0');
+        if (FEATURES.ENABLE_PRODUCT_SKU) form.setValue('sku', '');
+        if (FEATURES.ENABLE_PRODUCT_BARCODE) form.setValue('codigoBarras', '');
+        setEsServicio(true);
+      } else if (name === 'esServicio' && !value.esServicio) {
+        setEsServicio(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const onSubmit = async (data: ProductoFormValues) => {
     try {
