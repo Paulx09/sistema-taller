@@ -134,6 +134,7 @@ export class ProductoService {
     const productos = await prisma.producto.findMany({
       where: {
         deletedAt: null,
+        esServicio: false, // Excluir servicios, solo productos físicos
         detalleVentas: {
           none: {
             createdAt: { gte: fechaLimite },
