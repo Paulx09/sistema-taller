@@ -11,14 +11,13 @@ const api = axios.create({
   },
 });
 
-// Interceptor para requests (agregar token JWT en el futuro)
+// Interceptor para requests (agregar token JWT)
 api.interceptors.request.use(
   (config) => {
-    // TODO: Agregar token de autenticación cuando se implemente
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -32,11 +31,11 @@ api.interceptors.response.use(
       // El servidor respondió con un código de error
       console.error('Error del servidor:', error.response.data);
       
-      // TODO: Manejar errores específicos (401 logout, 403 forbidden, etc.)
-      // if (error.response.status === 401) {
-      //   localStorage.removeItem('token');
-      //   window.location.href = '/login';
-      // }
+      // Manejar token expirado o inválido
+      if (error.response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     } else if (error.request) {
       // La petición fue hecha pero no hubo respuesta
       console.error('Error de red:', error.request);

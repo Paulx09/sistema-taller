@@ -1,9 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/layouts/MainLayout';
 import { Dashboard } from '@/pages/Dashboard';
 import { UbicacionesPage } from '@/pages/UbicacionesPage';
 import { CategoriasPage } from '@/pages/CategoriasPage';
 import { ProductosPage } from '@/pages/ProductosPage';
+import { LoginPage } from '@/pages/LoginPage';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
 import './App.css';
 
@@ -12,13 +14,26 @@ function App() {
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<MainLayout />}>
+          {/* Ruta pública de login */}
+          <Route path="/login" element={<LoginPage />} />
+          
+          {/* Rutas protegidas */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Dashboard />} />
             <Route path="ubicaciones" element={<UbicacionesPage />} />
             <Route path="categorias" element={<CategoriasPage />} />
             <Route path="productos" element={<ProductosPage />} />
-            {/* TODO: Agregar ruta para Ventas */}
           </Route>
+
+          {/* Ruta por defecto - redirige al dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
