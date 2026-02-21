@@ -2,19 +2,21 @@ import { Router } from 'express';
 import productoController from '../controllers/producto.controller';
 import { productoValidator } from '../middlewares/validators/producto.validator';
 import { upload, optimizeProductImage, parseFormData } from '../middlewares/upload.middleware';
+import { requireAuth } from '../middlewares/auth.middleware';
 
 const router = Router();
 
 // Rutas especiales (deben ir ANTES de /:id para evitar conflictos)
-router.get('/buscar', productoValidator.validarBusqueda, productoController.buscarParaCombobox);
-router.get('/bajo-stock', productoController.obtenerBajoStock);
-router.get('/sin-movimiento', productoController.obtenerSinMovimiento);
+router.get('/buscar', requireAuth, productoValidator.validarBusqueda, productoController.buscarParaCombobox);
+router.get('/bajo-stock', requireAuth, productoController.obtenerBajoStock);
+router.get('/sin-movimiento', requireAuth, productoController.obtenerSinMovimiento);
 
 // Rutas CRUD principales
-router.get('/', productoController.listar);
-router.get('/:id', productoValidator.validarId, productoController.obtenerPorId);
+router.get('/', requireAuth, productoController.listar);
+router.get('/:id', requireAuth, productoValidator.validarId, productoController.obtenerPorId);
 router.post(
   '/',
+  requireAuth,
   upload.single('imagen'),
   optimizeProductImage,
   parseFormData,
@@ -23,6 +25,7 @@ router.post(
 );
 router.put(
   '/:id',
+  requireAuth,
   productoValidator.validarId,
   upload.single('imagen'),
   optimizeProductImage,
@@ -30,7 +33,7 @@ router.put(
   productoValidator.actualizar,
   productoController.actualizar
 );
-router.patch('/:id/stock', productoValidator.validarId, productoValidator.ajustarStock, productoController.ajustarStock);
-router.delete('/:id', productoValidator.validarId, productoController.eliminar);
+router.patch('/:id/stock', requireAuth, productoValidator.validarId, productoValidator.ajustarStock, productoController.ajustarStock);
+router.delete('/:id', requireAuth, productoValidator.validarId, productoController.eliminar);
 
 export default router;
