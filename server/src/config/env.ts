@@ -9,6 +9,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL es requerida'),
   PORT: z.string().default('3000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  JWT_SECRET: z.string().default('sistema-taller-secret-key-change-in-production'),
 });
 
 // Validar y parsear
@@ -25,4 +26,5 @@ export const env = {
   DATABASE_URL: parsedEnv.data.DATABASE_URL,
   PORT: Number.parseInt(parsedEnv.data.PORT, 10),
   NODE_ENV: parsedEnv.data.NODE_ENV,
+  JWT_SECRET: parsedEnv.data.JWT_SECRET,
 };

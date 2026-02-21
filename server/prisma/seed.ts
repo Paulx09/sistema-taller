@@ -1,17 +1,25 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Iniciando seed de la base de datos...');
 
+  // Encriptar contraseña
+  const passwordHash = await bcrypt.hash('admin123', 10);
+
   // Usuario Admin por defecto
   const admin = await prisma.usuario.upsert({
     where: { username: 'admin' },
-    update: {},
+    update: {
+      passwordHash,
+      nombreCompleto: 'Administrador del Sistema',
+      rol: 'ADMIN'
+    },
     create: {
       username: 'admin',
-      passwordHash: 'admin123', // TODO: En producción usar bcrypt
+      passwordHash,
       nombreCompleto: 'Administrador del Sistema',
       rol: 'ADMIN'
     }
@@ -23,13 +31,15 @@ async function main() {
   console.log('Nombre:', admin.nombreCompleto);
 }
 
-// Usar top-level await (mejor práctica)
-try {
-  await main();
-  console.log('Seed ejecutado correctamente.');
-} catch (error: unknown) {
-  console.error('Error en el seed:', error);
-  process.exit(1);
-} finally {
-  await prisma.$disconnect();
-}
+// Ejecutar seed
+main()
+  .then(() => {
+    console.log('Seed ejecutado correctamente.');
+  })
+  .catch((error: unknown) => {
+    console.error('Error en el seed:', error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
