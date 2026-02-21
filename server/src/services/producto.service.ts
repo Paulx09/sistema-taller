@@ -202,23 +202,26 @@ export class ProductoService {
 
   // AJUSTE CRÍTICO: Crear con MovimientoStock automático
   async crear(data: CrearProductoData, usuarioId: string): Promise<Producto> {
+    // Si es servicio, forzar valores por defecto en campos que no aplican
+    const esServicio = data.esServicio ?? false;
+    
     const producto = await prisma.producto.create({
       data: {
         nombre: data.nombre,
-        marca: data.marca,
-        modelo: data.modelo,
-        sku: data.sku,
-        codigoBarras: data.codigoBarras,
+        marca: esServicio ? null : data.marca,
+        modelo: esServicio ? null : data.modelo,
+        sku: esServicio ? null : data.sku,
+        codigoBarras: esServicio ? null : data.codigoBarras,
         descripcion: data.descripcion,
         categoriaId: data.categoriaId,
-        ubicacionId: data.ubicacionId,
-        precioCompra: new Prisma.Decimal(data.precioCompra),
+        ubicacionId: esServicio ? null : data.ubicacionId,
+        precioCompra: esServicio ? new Prisma.Decimal(0) : new Prisma.Decimal(data.precioCompra),
         precioVenta: new Prisma.Decimal(data.precioVenta),
-        stockActual: data.stockActual ?? 0,
-        stockMinimo: data.stockMinimo ?? 1,
+        stockActual: esServicio ? 0 : (data.stockActual ?? 0),
+        stockMinimo: esServicio ? 0 : (data.stockMinimo ?? 1),
         imagenUrl: data.imagenUrl,
         specs: data.specs,
-        esServicio: data.esServicio ?? false,
+        esServicio,
         esSegundaMano: data.esSegundaMano ?? false,
         padreId: data.padreId,
       },
@@ -242,12 +245,25 @@ export class ProductoService {
 
   // Actualizar producto
   async actualizar(id: string, data: ActualizarProductoData): Promise<Producto> {
+    // Si se está marcando como servicio, limpiar campos que no aplican
+    const updateData: any = { ...data };
+    
+    if (data.esServicio === true) {
+      updateData.marca = null;
+      updateData.modelo = null;
+      updateData.sku = null;
+      updateData.codigoBarras = null;
+      updateData.ubicacionId = null;
+      updateData.precioCompra = new Prisma.Decimal(0);
+      updateData.stockMinimo = 0;
+    }
+    
     return await prisma.producto.update({
       where: { id },
       data: {
-        ...data,
-        ...(data.precioCompra && { precioCompra: new Prisma.Decimal(data.precioCompra) }),
-        ...(data.precioVenta && { precioVenta: new Prisma.Decimal(data.precioVenta) }),
+        ...updateData,
+        ...(updateData.precioCompra && { precioCompra: new Prisma.Decimal(updateData.precioCompra) }),
+        ...(updateData.precioVenta && { precioVenta: new Prisma.Decimal(updateData.precioVenta) }),
         updatedAt: new Date(),
       },
     });
