@@ -10,9 +10,23 @@ class VentaController {
       const skip = page ? (Number(page) - 1) * (Number(limit) || 50) : 0;
       const take = Number(limit) || 50;
 
+      // Crear fechas en hora local (no UTC) para evitar problemas de zona horaria
+      let fechaDesde: Date | undefined = undefined;
+      if (desde) {
+        const [year, month, day] = (desde as string).split('-').map(Number);
+        fechaDesde = new Date(year, month - 1, day, 0, 0, 0, 0);
+      }
+
+      let fechaHasta: Date | undefined = undefined;
+      if (hasta) {
+        const [year, month, day] = (hasta as string).split('-').map(Number);
+        // Agregar 1 día para incluir todo el día seleccionado
+        fechaHasta = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+      }
+
       const filtros = {
-        desde: desde ? new Date(desde as string) : undefined,
-        hasta: hasta ? new Date(hasta as string) : undefined,
+        desde: fechaDesde,
+        hasta: fechaHasta,
         skip,
         take,
       };
