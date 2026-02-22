@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { crearVenta, listarVentasHoy, listarVentas } from '@/services/venta.service';
 import api from '@/services/api';
 import type { Producto, Venta, DetalleVenta } from '@/types';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // Inline mini-toast
 type ToastMsg = { id: number; title: string; description?: string; variant?: 'default' | 'destructive' };
@@ -73,8 +77,8 @@ export function VentasPage() {
   const [ventasHistorial, setVentasHistorial] = useState<Venta[]>([]);
   const [totalVentas, setTotalVentas] = useState(0);
   const [paginaActual, setPaginaActual] = useState(1);
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
+  const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
@@ -126,8 +130,8 @@ export function VentasPage() {
     setCargandoHistorial(true);
     try {
       const params: any = { page: paginaActual, limit: 20 };
-      if (fechaDesde) params.desde = fechaDesde;
-      if (fechaHasta) params.hasta = fechaHasta;
+      if (fechaDesde) params.desde = format(fechaDesde, 'yyyy-MM-dd');
+      if (fechaHasta) params.hasta = format(fechaHasta, 'yyyy-MM-dd');
       
       const response = await listarVentas(params);
       let ventas = response.data as Venta[];
@@ -776,21 +780,53 @@ export function VentasPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha Desde</label>
-                <Input
-                  type="date"
-                  value={fechaDesde}
-                  onChange={(e) => { setFechaDesde(e.target.value); setPaginaActual(1); }}
-                  className="h-9 text-sm"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'w-full h-9 justify-start text-left font-normal text-sm',
+                        !fechaDesde && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {fechaDesde ? format(fechaDesde, 'PPP', { locale: es }) : 'Seleccionar fecha'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaDesde}
+                      onSelect={(date) => { setFechaDesde(date); setPaginaActual(1); }}
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha Hasta</label>
-                <Input
-                  type="date"
-                  value={fechaHasta}
-                  onChange={(e) => { setFechaHasta(e.target.value); setPaginaActual(1); }}
-                  className="h-9 text-sm"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'w-full h-9 justify-start text-left font-normal text-sm',
+                        !fechaHasta && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {fechaHasta ? format(fechaHasta, 'PPP', { locale: es }) : 'Seleccionar fecha'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaHasta}
+                      onSelect={(date) => { setFechaHasta(date); setPaginaActual(1); }}
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Buscar Cliente / Código</label>
@@ -808,8 +844,8 @@ export function VentasPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setFechaDesde('');
-                    setFechaHasta('');
+                    setFechaDesde(undefined);
+                    setFechaHasta(undefined);
                     setBusquedaCliente('');
                     setPaginaActual(1);
                   }}
