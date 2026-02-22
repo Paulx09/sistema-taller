@@ -32,7 +32,7 @@ class VentaService {
         ? {
             fecha: {
               ...(desde ? { gte: desde } : {}),
-              ...(hasta ? { lte: hasta } : {}),
+              ...(hasta ? { lt: hasta } : {}), // lt (less than) porque ya sumamos 1 día
             },
           }
         : {}),
