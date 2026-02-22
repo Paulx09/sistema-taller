@@ -799,6 +799,7 @@ export function VentasPage() {
                       selected={fechaDesde}
                       onSelect={(date) => { setFechaDesde(date); setPaginaActual(1); }}
                       locale={es}
+                      disabled={(date) => date > new Date()}
                     />
                   </PopoverContent>
                 </Popover>
@@ -824,6 +825,11 @@ export function VentasPage() {
                       selected={fechaHasta}
                       onSelect={(date) => { setFechaHasta(date); setPaginaActual(1); }}
                       locale={es}
+                      disabled={(date) => {
+                        // Solo validar que no sea anterior a fechaDesde
+                        if (fechaDesde && date < fechaDesde) return true;
+                        return false;
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
