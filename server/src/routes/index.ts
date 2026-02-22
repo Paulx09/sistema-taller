@@ -4,6 +4,7 @@ import categoriaRoutes from './categoria.routes';
 import productoRoutes from './producto.routes';
 import dashboardRoutes from './dashboard.routes';
 import authRoutes from './auth.routes';
+import ventaRoutes from './venta.routes';
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use('/ubicaciones', ubicacionRoutes);
 router.use('/categorias', categoriaRoutes);
 router.use('/productos', productoRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/ventas', ventaRoutes);
 
 export default router;

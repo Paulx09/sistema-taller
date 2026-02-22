@@ -33,9 +33,26 @@ class DashboardService {
       },
     });
 
-    // Ventas y ganancias: Se implementarán con el módulo de Ventas
-    const ventasHoy = 0;
-    const gananciaHoy = 0;
+    // Ventas y ganancias de hoy
+    const ventasDelDia = await prisma.venta.findMany({
+      where: {
+        fecha: {
+          gte: hoy,
+          lt: manana,
+        },
+        estado: 'COMPLETADA',
+      },
+      select: {
+        total: true,
+        gananciaTotal: true,
+      },
+    });
+
+    const ventasHoy = ventasDelDia.length;
+    const gananciaHoy = ventasDelDia.reduce(
+      (sum, venta) => sum + Number.parseFloat(venta.gananciaTotal.toString()),
+      0
+    );
 
     return {
       ventasHoy,
