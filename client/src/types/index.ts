@@ -178,3 +178,17 @@ export interface ApiError {
     mensaje: string;
   }>;
 }
+
+// Ventas DTOs
+export interface CrearDetalleVentaDto {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
+export interface CrearVentaDto {
+  clienteNombre?: string;
+  metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
+  detalles: CrearDetalleVentaDto[];
+}
+

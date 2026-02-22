@@ -57,6 +57,10 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">dashboard</span>
             Dashboard
           </NavLink>
+          <NavLink to="/ventas" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
+            Ventas
+          </NavLink>
           <NavLink to="/productos" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">inventory_2</span>
             Inventario
@@ -64,10 +68,6 @@ export function MainLayout() {
           <NavLink to="/categorias" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">category</span>
             Categorías
-          </NavLink>
-          <NavLink to="/ventas" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
-            Ventas
           </NavLink>
           <NavLink to="/ubicaciones" className={navLinkClass}>
              <span className="material-symbols-outlined text-[20px]">shelves</span>
@@ -141,7 +141,12 @@ export function MainLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <div className={cn(
+          "flex-1",
+          location.pathname.startsWith('/ventas')
+            ? "overflow-hidden"
+            : "overflow-y-auto p-6 md:p-8 custom-scrollbar"
+        )}>
            <Outlet />
         </div>
       </main>

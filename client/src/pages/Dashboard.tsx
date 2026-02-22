@@ -82,7 +82,7 @@ export function Dashboard() {
             <span className="material-symbols-outlined text-muted-foreground text-[20px]">payments</span>
           </div>
           <div className="flex flex-col gap-1">
-            <h3 className="text-2xl font-bold text-foreground">S/ {metrics.ventasHoy.toFixed(2)}</h3>
+            <h3 className="text-2xl font-bold text-foreground">{metrics.ventasHoy}</h3>
             <div className="flex items-center text-xs text-muted-foreground">
                <span className="text-success font-medium flex items-center mr-1">
                  <span className="material-symbols-outlined text-[14px]">trending_up</span>

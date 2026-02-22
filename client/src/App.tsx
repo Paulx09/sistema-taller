@@ -4,6 +4,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { UbicacionesPage } from '@/pages/UbicacionesPage';
 import { CategoriasPage } from '@/pages/CategoriasPage';
 import { ProductosPage } from '@/pages/ProductosPage';
+import { VentasPage } from '@/pages/VentasPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
@@ -30,6 +31,7 @@ function App() {
             <Route path="ubicaciones" element={<UbicacionesPage />} />
             <Route path="categorias" element={<CategoriasPage />} />
             <Route path="productos" element={<ProductosPage />} />
+            <Route path="ventas" element={<VentasPage />} />
           </Route>
 
           {/* Ruta por defecto - redirige al dashboard */}
