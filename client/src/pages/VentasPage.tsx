@@ -17,8 +17,10 @@ type ToastMsg = { id: number; title: string; description?: string; variant?: 'de
 
 function useToast() {
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  // Usamos un contador en ref
+  const counter = useRef(0);
   const toast = useCallback((msg: Omit<ToastMsg, 'id'>) => {
-    const id = Date.now();
+    const id = ++counter.current;
     setToasts((p) => [...p, { ...msg, id }]);
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
   }, []);
@@ -158,28 +160,46 @@ export function VentasPage() {
     }
   }, [vista, cargarHistorialCompleto]);
 
+  // Ref que espeja el carrito — permite leer el estado actual sincrónicamente
+  const carritoRef = useRef<ItemCarrito[]>([]);
+
+  // Sincronizar ref con el estado
+  const setCarritoSync = useCallback((updater: (prev: ItemCarrito[]) => ItemCarrito[]) => {
+    setCarrito((prev) => {
+      const next = updater(prev);
+      carritoRef.current = next;
+      return next;
+    });
+  }, []);
+
   // Carrito: agregar
   const agregarAlCarrito = (p: Producto) => {
     if (!p.esServicio && p.stockActual === 0) return;
-    setCarrito((prev) => {
-      const existente = prev.find((i) => i.producto.id === p.id);
-      if (existente) {
-        const maxStock = p.esServicio ? Infinity : p.stockActual;
-        if (existente.cantidad >= maxStock) {
-          toast({ title: 'Stock máximo alcanzado', variant: 'destructive' });
-          return prev;
-        }
-        return prev.map((i) =>
-          i.producto.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i
-        );
+
+    const prevCarrito = carritoRef.current;
+    const existente = prevCarrito.find((i) => i.producto.id === p.id);
+    const maxStock = p.esServicio ? Infinity : p.stockActual;
+
+    if (existente && existente.cantidad >= maxStock) {
+      toast({ title: 'Stock máximo alcanzado', variant: 'destructive' });
+      return; // No hacemos nada más
+    }
+
+    setCarritoSync((prev) => {
+      const item = prev.find((i) => i.producto.id === p.id);
+      if (!item) {
+        return [...prev, { producto: p, cantidad: 1, precioUnitario: p.precioVenta }];
       }
-      return [...prev, { producto: p, cantidad: 1, precioUnitario: p.precioVenta }];
+      return prev.map((i) =>
+        i.producto.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i
+      );
     });
   };
 
+
   // Carrito: cambiar cantidad
   const cambiarCantidad = (productoId: string, delta: number) => {
-    setCarrito((prev) =>
+    setCarritoSync((prev) =>
       prev
         .map((i) => {
           if (i.producto.id !== productoId) return i;
@@ -195,7 +215,7 @@ export function VentasPage() {
   const setCantidad = (productoId: string, val: string) => {
     const n = parseInt(val, 10);
     if (isNaN(n) || n < 0) return;
-    setCarrito((prev) =>
+    setCarritoSync((prev) =>
       prev
         .map((i) => {
           if (i.producto.id !== productoId) return i;
@@ -207,9 +227,12 @@ export function VentasPage() {
   };
 
   const quitarItem = (productoId: string) =>
-    setCarrito((prev) => prev.filter((i) => i.producto.id !== productoId));
+    setCarritoSync((prev) => prev.filter((i) => i.producto.id !== productoId));
 
-  const vaciarCarrito = () => setCarrito([]);
+  const vaciarCarrito = () => {
+    carritoRef.current = [];
+    setCarrito([]);
+  };
 
   // Cálculos
   // El precio de venta ya incluye IGV. Subtotal = total / 1.18
@@ -1021,12 +1044,12 @@ export function VentasPage() {
       )}
 
       {/* Toast Overlay */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
             className={cn(
-              'pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg text-sm w-80 transition-all',
+              'pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg text-sm w-80 animate-in slide-in-from-right-full fade-in duration-300',
               t.variant === 'destructive'
                 ? 'bg-destructive text-destructive-foreground border-destructive/30'
                 : 'bg-background border-border text-foreground'
@@ -1036,7 +1059,11 @@ export function VentasPage() {
               <p className="font-semibold">{t.title}</p>
               {t.description && <p className="text-xs opacity-80 mt-0.5">{t.description}</p>}
             </div>
-            <button onClick={() => dismiss(t.id)} className="opacity-60 hover:opacity-100 mt-0.5">
+            <button 
+              onClick={() => dismiss(t.id)} 
+              className="flex-shrink-0 rounded-md p-1 hover:bg-white/20 transition-colors"
+              aria-label="Cerrar notificación"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
