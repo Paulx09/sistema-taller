@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { ModeToggle } from '@/components/mode-toggle';
+import { authService } from '@/services/auth.service';
+import { Button } from '@/components/ui/button';
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    authService.removeToken();
+    navigate('/login');
+  };
 
   // Helper para verificar rutas activas y aplicar estilos
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -49,6 +57,10 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">dashboard</span>
             Dashboard
           </NavLink>
+          <NavLink to="/ventas" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
+            Ventas
+          </NavLink>
           <NavLink to="/productos" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">inventory_2</span>
             Inventario
@@ -56,10 +68,6 @@ export function MainLayout() {
           <NavLink to="/categorias" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">category</span>
             Categorías
-          </NavLink>
-          <NavLink to="/ventas" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
-            Ventas
           </NavLink>
           <NavLink to="/ubicaciones" className={navLinkClass}>
              <span className="material-symbols-outlined text-[20px]">shelves</span>
@@ -76,14 +84,15 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">settings</span>
             Configuración
           </NavLink>
-          <div className="mt-2 flex items-center gap-3 px-3 pt-2">
-            <div className="h-8 w-8 rounded-full bg-muted overflow-hidden border border-border flex items-center justify-center">
-               <span className="material-symbols-outlined text-muted-foreground">person</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium leading-none">Carlos R.</span>
-              <span className="text-xs text-muted-foreground mt-0.5">Administrador</span>
-            </div>
+          <div className="mt-2">
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              className="w-full justify-start gap-2 px-3 text-muted-foreground hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+              <span>Cerrar Sesión</span>
+            </Button>
           </div>
         </div>
       </aside>
@@ -132,7 +141,12 @@ export function MainLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <div className={cn(
+          "flex-1",
+          location.pathname.startsWith('/ventas')
+            ? "overflow-hidden"
+            : "overflow-y-auto p-6 md:p-8 custom-scrollbar"
+        )}>
            <Outlet />
         </div>
       </main>

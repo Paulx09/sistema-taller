@@ -1,7 +1,4 @@
-import axios from 'axios';
-
-// API URL - En producción usar variable de entorno
-const API_URL = 'http://localhost:3000/api';
+import api from './api';
 
 export interface DashboardMetrics {
   ventasHoy: number;
@@ -34,7 +31,7 @@ export interface ProductoSinMovimiento {
 export const dashboardService = {
   getMetrics: async (): Promise<DashboardMetrics> => {
     try {
-      const response = await axios.get(`${API_URL}/dashboard/metricas`);
+      const response = await api.get('/dashboard/metricas');
       return response.data.data;
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error);
@@ -50,7 +47,7 @@ export const dashboardService = {
 
   getProductosBajoStock: async (): Promise<ProductoBajoStock[]> => {
     try {
-      const response = await axios.get(`${API_URL}/productos/bajo-stock`);
+      const response = await api.get('/productos/bajo-stock');
       return Array.isArray(response.data.data) ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching low stock products:', error);
@@ -60,7 +57,7 @@ export const dashboardService = {
 
   getProductosSinMovimiento: async (dias: number = 90): Promise<ProductoSinMovimiento[]> => {
     try {
-      const response = await axios.get(`${API_URL}/productos/sin-movimiento?dias=${dias}`);
+      const response = await api.get(`/productos/sin-movimiento?dias=${dias}`);
       return Array.isArray(response.data.data) ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching stagnant products:', error);
