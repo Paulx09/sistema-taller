@@ -26,6 +26,7 @@ model Usuario {
   createdAt       DateTime          @default(now()) @map("created_at")
   ventas          Venta[]
   movimientos     MovimientoStock[]
+  compras         Compra[]          // FASE 2: Compras registradas por este usuario
 
   @@map("usuarios")
 }
@@ -88,6 +89,8 @@ model Producto {
   
   detalleVentas   DetalleVenta[]
   movimientos     MovimientoStock[]
+  detalleCompras  DetalleCompra[]   // FASE 2: Compras de este producto
+  historialCostos HistorialCosto[]  // FASE 2: Historial de precios
 
   @@map("productos")
 }
@@ -135,7 +138,68 @@ model MovimientoStock {
   tipo        TipoMovimiento
   cantidad    Int
   motivo      String?         @db.VarChar(100)
+  compraId    String?         @map("compra_id") // FASE 2: Rastreabilidad a la compra
+  compra      Compra?         @relation(fields: [compraId], references: [id])
   createdAt   DateTime        @default(now()) @map("created_at")
 
   @@map("movimientos_stock")
+}
+
+// FASE 2: PROVEEDORES Y COMPRAS
+
+model Proveedor {
+  id              String    @id @default(uuid())
+  nombreEmpresa   String    @map("nombre_empresa") @db.VarChar(100)
+  ruc             String?   @unique @db.VarChar(11)
+  contactoNombre  String?   @map("contacto_nombre") @db.VarChar(100)
+  telefono        String?   @db.VarChar(20)
+  email           String?   @db.VarChar(100)
+  direccion       String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  compras         Compra[]
+
+  @@map("proveedores")
+}
+
+model Compra {
+  id              String          @id @default(uuid())
+  proveedorId     String          @map("proveedor_id")
+  proveedor       Proveedor       @relation(fields: [proveedorId], references: [id])
+  usuarioId       String          @map("usuario_id")
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
+  numeroFactura   String          @map("numero_factura") @db.VarChar(50)
+  fechaCompra     DateTime        @map("fecha_compra") @default(now())
+  totalCompra     Decimal         @map("total_compra") @db.Decimal(10, 2)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  detalles        DetalleCompra[]
+  movimientos     MovimientoStock[]
+
+  @@unique([proveedorId, numeroFactura], name: "unique_factura_proveedor")
+  @@map("compras")
+}
+
+model DetalleCompra {
+  id              String   @id @default(uuid())
+  compraId        String   @map("compra_id")
+  compra          Compra   @relation(fields: [compraId], references: [id])
+  productoId      String   @map("producto_id")
+  producto        Producto @relation(fields: [productoId], references: [id])
+  cantidad        Int
+  costoUnitario   Decimal  @map("costo_unitario") @db.Decimal(10, 2)
+  subtotal        Decimal  @db.Decimal(10, 2)
+
+  @@map("detalle_compras")
+}
+
+model HistorialCosto {
+  id              String   @id @default(uuid())
+  productoId      String   @map("producto_id")
+  producto        Producto @relation(fields: [productoId], references: [id])
+  costo           Decimal  @db.Decimal(10, 2)
+  fechaRegistro   DateTime @default(now()) @map("fecha_registro")
+
+  @@map("historial_costos")
 }
