@@ -83,10 +83,10 @@ const productoSchema = z.object({
     const precioV = Number.parseFloat(data.precioVenta || '0');
     const precioC = Number.parseFloat(data.precioCompra || '0');
 
-    if (stockMin < 1) {
+    if (stockMin < 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "El stock mínimo debe ser al menos 1",
+        message: "El stock mínimo no puede ser negativo",
         path: ["stockMinimo"],
       });
     }

@@ -110,11 +110,11 @@ export const useProductos = (params?: UseProductosParams) => {
     }
   };
 
-  const deleteProducto = async (id: string): Promise<void> => {
+  const deleteProducto = async (id: string, force: boolean = false): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      await productoService.delete(id);
+      await productoService.delete(id, force);
       setProductos((prev) => prev.filter((p) => p.id !== id));
       setTotal((prev) => prev - 1);
     } catch (err) {

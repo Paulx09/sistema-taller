@@ -22,6 +22,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -83,6 +91,15 @@ export function ProductosPage() {
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
   const [viewingProducto, setViewingProducto] = useState<Producto | null>(null); // Nuevo estado
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
+    isOpen: boolean;
+    productoId: string | null;
+    mensaje: string;
+  }>({
+    isOpen: false,
+    productoId: null,
+    mensaje: '',
+  });
 
   const handleCreate = () => {
     setEditingProducto(null);
@@ -102,12 +119,29 @@ export function ProductosPage() {
     setSheetOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, force: boolean = false) => {
     try {
-      await deleteProducto(id);
+      await deleteProducto(id, force);
       setDeleteConfirmId(null);
-    } catch (err) {
+      setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
+    } catch (err: any) {
       console.error('Error al eliminar:', err);
+      
+      // Detectar si es un error 409 que requiere confirmación
+      if (err.response?.status === 409 && err.response?.data?.requiereConfirmacion) {
+        setDeleteWarningDialog({
+          isOpen: true,
+          productoId: id,
+          mensaje: err.response.data.mensaje,
+        });
+        setDeleteConfirmId(null);
+      }
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (deleteWarningDialog.productoId) {
+      await handleDelete(deleteWarningDialog.productoId, true);
     }
   };
 
@@ -376,6 +410,47 @@ export function ProductosPage() {
             />
          </div>
       </div>
+
+      {/* Dialog de advertencia para eliminación con historial */}
+      <Dialog 
+        open={deleteWarningDialog.isOpen} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>⚠️ Confirmación Requerida</DialogTitle>
+            <DialogDescription>
+              {deleteWarningDialog.mensaje}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Alert variant="destructive">
+              <AlertDescription>
+                <strong>Nota:</strong> Esta acción ocultará el producto del sistema pero conservará el historial.
+                Los reportes históricos mantendrán la información.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' })}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleForceDelete}
+            >
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

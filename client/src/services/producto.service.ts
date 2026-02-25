@@ -113,7 +113,15 @@ export const productoService = {
   },
 
   // DELETE /api/productos/:id
-  async delete(id: string): Promise<void> {
-    await api.delete(`/productos/${id}`);
+  async delete(id: string, force: boolean = false): Promise<void> {
+    await api.delete(`/productos/${id}`, {
+      params: { force: force.toString() },
+    });
+  },
+
+  // PUT /api/productos/:id/restaurar
+  async restaurar(id: string): Promise<Producto> {
+    const response = await api.put<ApiResponse<ProductoRaw>>(`/productos/${id}/restaurar`);
+    return transformProducto(response.data.data);
   },
 };
