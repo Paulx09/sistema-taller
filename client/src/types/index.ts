@@ -192,3 +192,107 @@ export interface CrearVentaDto {
   detalles: CrearDetalleVentaDto[];
 }
 
+export interface Proveedor {
+  id: string;
+  nombreEmpresa: string;
+  ruc: string | null;
+  contactoNombre: string | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  compras?: Compra[];
+  _count?: {
+    compras: number;
+  };
+}
+
+export interface Compra {
+  id: string;
+  proveedorId: string;
+  usuarioId: string;
+  numeroFactura: string;
+  fechaCompra: string;
+  totalCompra: string;
+  createdAt: string;
+  deletedAt: string | null;
+  proveedor?: {
+    id: string;
+    nombreEmpresa: string;
+    ruc: string | null;
+    contactoNombre?: string | null;
+    telefono?: string | null;
+  };
+  usuario?: {
+    id: string;
+    username: string;
+    nombreCompleto: string;
+  };
+  detalles?: DetalleCompra[];
+  movimientos?: MovimientoStock[];
+  _count?: {
+    detalles: number;
+  };
+}
+
+export interface DetalleCompra {
+  id: string;
+  compraId: string;
+  productoId: string;
+  cantidad: number;
+  costoUnitario: string;
+  subtotal: string;
+  producto?: {
+    id: string;
+    nombre: string;
+    marca: string | null;
+    modelo: string | null;
+    sku: string | null;
+    esServicio: boolean;
+    categoria?: { nombre: string };
+  };
+}
+
+export interface HistorialCosto {
+  id: string;
+  productoId: string;
+  costo: string;
+  fechaRegistro: string;
+  producto?: Producto;
+}
+
+// Proveedores DTOs
+export interface CrearProveedorDto {
+  nombreEmpresa: string;
+  ruc?: string;
+  contactoNombre?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+}
+
+export interface ActualizarProveedorDto {
+  nombreEmpresa?: string;
+  ruc?: string;
+  contactoNombre?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+}
+
+// Compras DTOs
+export interface CrearDetalleCompraDto {
+  productoId: string;
+  cantidad: number;
+  costoUnitario: number;
+}
+
+export interface CrearCompraDto {
+  proveedorId: string;
+  numeroFactura: string;
+  fechaCompra?: string;
+  detalles: CrearDetalleCompraDto[];
+  totalCompra?: number; // Para validación de cuadre
+}

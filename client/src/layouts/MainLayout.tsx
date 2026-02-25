@@ -30,6 +30,8 @@ export function MainLayout() {
       if (location.pathname.startsWith('/categorias')) return 'Gestión de Categorías';
       if (location.pathname.startsWith('/ventas')) return 'Punto de Venta';
       if (location.pathname.startsWith('/ubicaciones')) return 'Gestión de Ubicaciones';
+      if (location.pathname.startsWith('/proveedores')) return 'Gestión de Proveedores';
+      if (location.pathname.startsWith('/compras')) return 'Compras e Inventario';
       return 'Sistema Taller';
   }
 
@@ -61,9 +63,17 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
             Ventas
           </NavLink>
+          <NavLink to="/compras" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+            Compras
+          </NavLink>
           <NavLink to="/productos" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">inventory_2</span>
             Inventario
+          </NavLink>
+          <NavLink to="/proveedores" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">local_shipping</span>
+            Proveedores
           </NavLink>
           <NavLink to="/categorias" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">category</span>
