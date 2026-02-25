@@ -187,12 +187,13 @@ export class ProductoController {
   async eliminar(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+      const forzar = req.query.force === 'true';
       
       // Obtener producto para eliminar su imagen
       const producto = await productoService.obtenerPorId(id);
       
-      // Eliminar producto (soft delete)
-      await productoService.eliminar(id);
+      // Eliminar producto (soft delete) con validaciones
+      await productoService.eliminar(id, forzar);
       
       // Eliminar imagen físicamente
       if (producto?.imagenUrl) {
@@ -202,6 +203,31 @@ export class ProductoController {
       res.json({
         success: true,
         mensaje: 'Producto eliminado exitosamente',
+      });
+    } catch (error: any) {
+      // Detectar si es advertencia que requiere confirmación
+      if (error.message?.includes('|CONFIRMAR_REQUERIDO')) {
+        const mensaje = error.message.split('|')[0];
+        return res.status(409).json({
+          error: 'Confirmación requerida',
+          mensaje,
+          requiereConfirmacion: true,
+        });
+      }
+      next(error);
+    }
+  }
+
+  // PUT /api/productos/:id/restaurar
+  async restaurar(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const producto = await productoService.restaurar(id);
+
+      res.json({
+        success: true,
+        mensaje: 'Producto restaurado exitosamente',
+        data: producto,
       });
     } catch (error) {
       next(error);

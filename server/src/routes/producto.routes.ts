@@ -10,6 +10,7 @@ const router = Router();
 router.get('/buscar', requireAuth, productoValidator.validarBusqueda, productoController.buscarParaCombobox);
 router.get('/bajo-stock', requireAuth, productoController.obtenerBajoStock);
 router.get('/sin-movimiento', requireAuth, productoController.obtenerSinMovimiento);
+router.put('/:id/restaurar', requireAuth, productoValidator.validarId, productoController.restaurar);
 
 // Rutas CRUD principales
 router.get('/', requireAuth, productoController.listar);

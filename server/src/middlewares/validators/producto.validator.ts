@@ -41,7 +41,7 @@ const crearProductoSchema = z
     stockMinimo: z
       .number({ message: 'El stock mínimo debe ser un número' })
       .int('El stock mínimo debe ser un número entero')
-      .min(1, 'El stock mínimo debe ser al menos 1')
+      .min(0, 'El stock mínimo no puede ser negativo')
       .default(1)
       .optional(),
     imagenUrl: z.string().optional().or(z.literal('')),
@@ -96,7 +96,7 @@ const actualizarProductoSchema = z
     stockMinimo: z
       .number({ message: 'El stock mínimo debe ser un número' })
       .int('El stock mínimo debe ser un número entero')
-      .min(1, 'El stock mínimo debe ser al menos 1')
+      .min(0, 'El stock mínimo no puede ser negativo')
       .optional(),
     imagenUrl: z.string().optional().or(z.literal('')),
     specs: z.record(z.string(), z.any()).optional(),

@@ -62,6 +62,18 @@ class CompraService {
               nombreCompleto: true,
             },
           },
+          detalles: {
+            include: {
+              producto: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  marca: true,
+                  modelo: true,
+                },
+              },
+            },
+          },
           _count: {
             select: { detalles: true },
           },
@@ -260,15 +272,26 @@ class CompraService {
   // DELETE /api/compras/:id (SoftDelete sin reverso de stock)
   async eliminar(id: string) {
     // Verificar que existe
-    await this.obtenerPorId(id);
+    const compra = await this.obtenerPorId(id);
 
-    // Solo marcar como eliminada, NO revertir stock ni movimientos
+    // Modificar el número de factura para liberar el constraint único
+    // Agregar sufijo -ANULADA-{timestamp} para permitir reingreso del número original
+    const timestamp = Date.now();
+    const nuevoNumeroFactura = `${compra.numeroFactura}-ANULADA-${timestamp}`;
+
+    // Marcar como eliminada Y modificar número de factura
     await prisma.compra.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {
+        deletedAt: new Date(),
+        numeroFactura: nuevoNumeroFactura,
+      },
     });
 
-    return { mensaje: 'Compra anulada correctamente. El stock no se revierte automáticamente.' };
+    return {
+      mensaje: 'Compra anulada correctamente. El stock no se revierte automáticamente.',
+      info: 'El número de factura original ahora está disponible para reingreso.',
+    };
   }
 }
 
