@@ -321,9 +321,29 @@ export class ProductoService {
     return productoActualizado;
   }
 
-  // Soft delete
-  async eliminar(id: string): Promise<Producto> {
-    // Verificar si tiene hijos asignados
+  // Soft delete con validaciones
+  async eliminar(id: string, forzar: boolean = false): Promise<Producto> {
+    const producto = await prisma.producto.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            detalleVentas: true,
+            detalleCompras: true,
+          },
+        },
+      },
+    });
+
+    if (!producto) {
+      throw new Error('Producto no encontrado');
+    }
+
+    if (producto.deletedAt !== null) {
+      throw new Error('El producto ya está eliminado');
+    }
+
+    // 1. BLOQUEO: Productos con hijos asignados
     const hijos = await prisma.producto.count({
       where: { padreId: id, deletedAt: null },
     });
@@ -332,11 +352,57 @@ export class ProductoService {
       throw new Error(`No se puede eliminar el producto porque tiene ${hijos} componente(s) asignado(s)`);
     }
 
+    // 2. BLOQUEO: Productos con stock actual > 0
+    if (producto.stockActual > 0 && !producto.esServicio) {
+      throw new Error(
+        `No se puede eliminar el producto porque tiene stock actual de ${producto.stockActual} unidades. ` +
+        `Debe ajustar el stock a 0 antes de eliminar.`
+      );
+    }
+
+    // 3. ADVERTENCIA: Productos con historial de ventas/compras (requiere confirmación)
+    const tieneVentas = producto._count.detalleVentas > 0;
+    const tieneCompras = producto._count.detalleCompras > 0;
+
+    if ((tieneVentas || tieneCompras) && !forzar) {
+      const mensajes = [];
+      if (tieneVentas) mensajes.push(`${producto._count.detalleVentas} venta(s) registrada(s)`);
+      if (tieneCompras) mensajes.push(`${producto._count.detalleCompras} compra(s) registrada(s)`);
+      
+      throw new Error(
+        `ADVERTENCIA: Este producto tiene ${mensajes.join(' y ')}. ` +
+        `Eliminar afectará el historial. ¿Confirmar eliminación?|CONFIRMAR_REQUERIDO`
+      );
+    }
+
     // Soft delete
     return await prisma.producto.update({
       where: { id },
       data: {
         deletedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  // Restaurar producto eliminado
+  async restaurar(id: string): Promise<Producto> {
+    const producto = await prisma.producto.findUnique({
+      where: { id },
+    });
+
+    if (!producto) {
+      throw new Error('Producto no encontrado');
+    }
+
+    if (producto.deletedAt === null) {
+      throw new Error('El producto no está eliminado');
+    }
+
+    return await prisma.producto.update({
+      where: { id },
+      data: {
+        deletedAt: null,
         updatedAt: new Date(),
       },
     });
