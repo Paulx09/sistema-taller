@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination } from '@/components/Pagination';
+import { SeriesDetalleModal } from '@/components/SeriesDetalleModal';
 
 // Helper para construir URL completa de imagen
 const getImageUrl = (imagenUrl: string | null): string | null => {
@@ -48,7 +49,7 @@ const getImageUrl = (imagenUrl: string | null): string | null => {
   const baseUrl = API_URL.replace('/api', ''); // Eliminar /api si existe
   return `${baseUrl}${imagenUrl}`;
 };
-import { Plus, Pencil, Trash2, Loader2, Filter, Eye} from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Filter, Eye, History } from 'lucide-react';
 import { ProductoForm } from '@/components/forms/ProductoForm';
 import { ProductoDetalle } from '@/components/ProductoDetalle';
 import type { Producto } from '@/types';
@@ -100,6 +101,11 @@ export function ProductosPage() {
     productoId: null,
     mensaje: '',
   });
+  
+  // Estado para modal de series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [productoSeriesId, setProductoSeriesId] = useState<string | null>(null);
+  const [productoSeriesNombre, setProductoSeriesNombre] = useState<string>('');
 
   const handleCreate = () => {
     setEditingProducto(null);
@@ -117,6 +123,12 @@ export function ProductosPage() {
     setViewingProducto(producto);
     setEditingProducto(null);
     setSheetOpen(true);
+  };
+  
+  const handleVerSeries = (productoId: string, productoNombre: string) => {
+    setProductoSeriesId(productoId);
+    setProductoSeriesNombre(productoNombre);
+    setSeriesModalOpen(true);
   };
 
   const handleDelete = async (id: string, force: boolean = false) => {
@@ -362,6 +374,17 @@ export function ProductosPage() {
                               </TableCell>
                               <TableCell className="text-right py-2">
                                   <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                      {producto.requiereSerie && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                                          onClick={() => handleVerSeries(producto.id, producto.nombre)}
+                                          title="Ver historial de series"
+                                        >
+                                           <History className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleVerDetalle(producto)}>
                                          <Eye className="h-4 w-4" />
                                       </Button>
@@ -451,6 +474,20 @@ export function ProductosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Modal de historial de series */}
+      {productoSeriesId && (
+        <SeriesDetalleModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            setProductoSeriesId(null);
+            setProductoSeriesNombre('');
+          }}
+          productoId={productoSeriesId}
+          productoNombre={productoSeriesNombre}
+        />
+      )}
     </div>
   );
 }

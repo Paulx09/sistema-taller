@@ -71,6 +71,9 @@ const productoSchema = z.object({
   stockMinimo: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   esServicio: z.boolean().optional(),
   esSegundaMano: z.boolean().optional(),
+  requiereSerie: z.boolean().optional(),
+  garantiaProveedorMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
+  garantiaClienteMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   padreId: z
     .string()
     .uuid('ID de producto padre inválido')
@@ -143,6 +146,9 @@ export function ProductoForm({
       stockMinimo: producto?.stockMinimo?.toString() || '',
       esServicio: producto?.esServicio || false,
       esSegundaMano: producto?.esSegundaMano || false,
+      requiereSerie: producto?.requiereSerie || false,
+      garantiaProveedorMeses: producto?.garantiaProveedorMeses?.toString() || '0',
+      garantiaClienteMeses: producto?.garantiaClienteMeses?.toString() || '0',
       padreId: producto?.padreId || '',
       imagenUrl: producto?.imagenUrl || '',
     },
@@ -197,6 +203,9 @@ export function ProductoForm({
       
       formData.append('esServicio', data.esServicio ? 'true' : 'false');
       formData.append('esSegundaMano', data.esSegundaMano ? 'true' : 'false');
+      formData.append('requiereSerie', data.requiereSerie ? 'true' : 'false');
+      formData.append('garantiaProveedorMeses', data.garantiaProveedorMeses || '0');
+      formData.append('garantiaClienteMeses', data.garantiaClienteMeses || '0');
       if (data.padreId) formData.append('padreId', data.padreId);
       
       // Agregar archivo si existe (solo si la funcionalidad está habilitada)
@@ -593,6 +602,103 @@ export function ProductoForm({
                </div>
            )}
         </section>
+
+        {/* Sección: Atributos y Configuración (FASE 3: Series y Garantías) */}
+        {!esServicio && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-2">
+              <span className="material-symbols-outlined text-primary text-[20px]">settings</span>
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Atributos y Configuración</h3>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Switch: Requiere Número de Serie */}
+              <FormField
+                control={form.control}
+                name="requiereSerie"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between bg-muted/40 p-4 rounded-lg border border-border">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium text-foreground block">
+                        ¿Requiere Número de Serie?
+                      </FormLabel>
+                      <FormDescription className="text-xs text-muted-foreground">
+                        Activar para productos que necesitan seguimiento individual (laptops, celulares, equipos).
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Garantías */}
+              <div className="bg-muted/40 p-4 rounded-lg border border-border space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-primary text-[16px]">verified_user</span>
+                  <h4 className="text-sm font-medium text-foreground">Garantías</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="garantiaProveedorMeses"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Garantía Proveedor (Meses)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            {...field}
+                            className="bg-background border-border"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                field.onChange(value);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Garantía que ofrece el proveedor
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="garantiaClienteMeses"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Garantía Cliente (Meses)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            {...field}
+                            className="bg-background border-border"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                field.onChange(value);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Garantía que ofreces a tus clientes
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         
         {/* Feature: Imagen - Controlado por config/features.ts */}
         {FEATURES.ENABLE_PRODUCT_IMAGES && (

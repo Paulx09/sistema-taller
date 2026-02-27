@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ShoppingBag, Trash2, Search, Loader2, Plus, Receipt, History, Calendar as CalendarIcon, Building2, FileText, ChevronDown, ChevronUp, PackagePlus } from 'lucide-react';
+import { ShoppingBag, Trash2, Search, Loader2, Plus, Receipt, History, Calendar as CalendarIcon, Building2, FileText, ChevronDown, ChevronUp, PackagePlus, QrCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ import api from '@/services/api';
 import type { Producto, Proveedor, Compra, CrearDetalleCompraDto } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
 
 // Toast helper
 type ToastMsg = { id: number; title: string; description?: string; variant?: 'default' | 'destructive' };
@@ -54,6 +55,7 @@ interface ItemCompra {
   producto: Producto;
   cantidad: number;
   costoUnitario: number;
+  numerosSerie?: string[]; // Para productos que requieren serie
 }
 
 type Vista = 'nueva' | 'historial';
@@ -105,7 +107,14 @@ export function ComprasPage() {
     precioCompra: '',
     precioVenta: '',
     stockMinimo: '1',
+    requiereSerie: false,
+    garantiaProveedorMeses: '',
+    garantiaClienteMeses: '',
   });
+
+  // Modal escaneo de series (FASE 3)
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [productoSerieActual, setProductoSerieActual] = useState<ItemCompra | null>(null);
 
   // Cargar categorías y ubicaciones
   useEffect(() => {
@@ -183,20 +192,28 @@ export function ComprasPage() {
   const agregarProducto = (p: Producto) => {
     const existente = detalles.find((d) => d.producto.id === p.id);
     if (existente) {
+      // Si ya existe, aumentar cantidad
+      const nuevoItem = { ...existente, cantidad: existente.cantidad + 1 };
       setDetalles(detalles.map((d) =>
-        d.producto.id === p.id ? { ...d, cantidad: d.cantidad + 1 } : d
+        d.producto.id === p.id ? nuevoItem : d
       ));
     } else {
-      setDetalles([
-        ...detalles,
-        {
-          producto: p,
-          cantidad: 1,
-          costoUnitario: Number.parseFloat(p.precioCompra.toString()) || 0,
-        },
-      ]);
+      // Nuevo producto
+      const nuevoItem: ItemCompra = {
+        producto: p,
+        cantidad: 1,
+        costoUnitario: Number.parseFloat(p.precioCompra.toString()) || 0,
+        numerosSerie: [],
+      };
+      setDetalles([...detalles, nuevoItem]);
     }
     setBusquedaProducto('');
+  };
+
+  // Abrir modal de series manualmente
+  const abrirModalSeries = (item: ItemCompra) => {
+    setProductoSerieActual(item);
+    setSeriesModalOpen(true);
   };
 
   // Actualizar cantidad
@@ -204,9 +221,19 @@ export function ComprasPage() {
     if (cantidad <= 0) {
       setDetalles(detalles.filter((d) => d.producto.id !== productoId));
     } else {
-      setDetalles(detalles.map((d) =>
-        d.producto.id === productoId ? { ...d, cantidad } : d
-      ));
+      const item = detalles.find((d) => d.producto.id === productoId);
+      if (item) {
+        const nuevoItem = { ...item, cantidad };
+        setDetalles(detalles.map((d) =>
+          d.producto.id === productoId ? nuevoItem : d
+        ));
+        
+        // Si requiere serie y se aumentó la cantidad, abrir modal
+        if (item.producto.requiereSerie && cantidad > (item.numerosSerie?.length || 0)) {
+          setProductoSerieActual(nuevoItem);
+          setSeriesModalOpen(true);
+        }
+      }
     }
   };
 
@@ -225,6 +252,19 @@ export function ComprasPage() {
   // Calcular total
   const calcularTotal = () => {
     return detalles.reduce((sum, d) => sum + d.cantidad * d.costoUnitario, 0);
+  };
+
+  // Manejar series completas (FASE 3)
+  const handleSeriesCompletas = (series: string[]) => {
+    if (productoSerieActual) {
+      setDetalles(detalles.map((d) =>
+        d.producto.id === productoSerieActual.producto.id
+          ? { ...d, numerosSerie: series }
+          : d
+      ));
+    }
+    setSeriesModalOpen(false);
+    setProductoSerieActual(null);
   };
 
   // Finalizar compra
@@ -255,6 +295,15 @@ export function ComprasPage() {
         setError(`Costo unitario inválido para ${d.producto.nombre}`);
         return;
       }
+      // FASE 3: Validar que productos con serie tengan sus números escaneados
+      if (d.producto.requiereSerie) {
+        if (!d.numerosSerie || d.numerosSerie.length !== d.cantidad) {
+          setError(
+            `Debe escanear ${d.cantidad} número(s) de serie para ${d.producto.nombre} (escaneados: ${d.numerosSerie?.length || 0})`
+          );
+          return;
+        }
+      }
     }
 
     setProcesando(true);
@@ -271,6 +320,7 @@ export function ComprasPage() {
           productoId: d.producto.id,
           cantidad: d.cantidad,
           costoUnitario: d.costoUnitario,
+          numerosSerie: d.numerosSerie, // FASE 3: Incluir números de serie
         })),
         totalCompra: calcularTotal(),
       };
@@ -331,6 +381,8 @@ export function ComprasPage() {
     const precioCompra = Number.parseFloat(nuevoProducto.precioCompra || '0');
     const precioVenta = Number.parseFloat(nuevoProducto.precioVenta || '0');
     const stockMinimo = Number.parseInt(nuevoProducto.stockMinimo || '1');
+    const garantiaProveedor = nuevoProducto.garantiaProveedorMeses ? Number.parseInt(nuevoProducto.garantiaProveedorMeses) : undefined;
+    const garantiaCliente = nuevoProducto.garantiaClienteMeses ? Number.parseInt(nuevoProducto.garantiaClienteMeses) : undefined;
 
     if (precioCompra <= 0) {
       toast({ title: 'El precio de compra debe ser mayor a 0', variant: 'destructive' });
@@ -354,6 +406,9 @@ export function ComprasPage() {
         stockActual: 0, // Stock inicial en 0 porque se añadirá con la compra
         stockMinimo,
         esServicio: false,
+        requiereSerie: nuevoProducto.requiereSerie,
+        garantiaProveedorMeses: garantiaProveedor,
+        garantiaClienteMeses: garantiaCliente,
       });
 
       const productoCreado = response.data.data;
@@ -382,6 +437,9 @@ export function ComprasPage() {
         precioCompra: '',
         precioVenta: '',
         stockMinimo: '1',
+        requiereSerie: false,
+        garantiaProveedorMeses: '',
+        garantiaClienteMeses: '',
       });
       setCrearProductoDialogOpen(false);
 
@@ -557,22 +615,42 @@ export function ComprasPage() {
                 </div>
               ) : (
                 <div className="space-y-2 flex-1 overflow-auto pr-2">
-                  {detalles.map((d) => (
-                    <div key={d.producto.id} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{d.producto.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[d.producto.marca, d.producto.modelo].filter(Boolean).join(' · ')|| '—'}</div>
+                  {detalles.map((d) => {
+                    const seriesCompletas = d.producto.requiereSerie && d.numerosSerie && d.numerosSerie.length === d.cantidad;
+                    const seriesFaltantes = d.producto.requiereSerie ? d.cantidad - (d.numerosSerie?.length || 0) : 0;
+                    
+                    return (
+                      <div key={d.producto.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium text-sm">{d.producto.nombre}</div>
+                              {d.producto.requiereSerie && (
+                                seriesCompletas ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ✓ Series OK
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => abrirModalSeries(d)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors"
+                                  >
+                                    ⚠ Faltan {seriesFaltantes} {seriesFaltantes === 1 ? 'serie' : 'series'}
+                                  </button>
+                                )
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{[d.producto.marca, d.producto.modelo].filter(Boolean).join(' · ')|| '—'}</div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => eliminarProducto(d.producto.id)}
+                            className="h-6 w-6 p-0 flex-shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => eliminarProducto(d.producto.id)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs text-muted-foreground">Cantidad</label>
@@ -605,11 +683,34 @@ export function ComprasPage() {
                           />
                         </div>
                       </div>
-                      <div className="text-right text-sm font-semibold text-primary">
-                        Subtotal: {fmt(d.cantidad * d.costoUnitario)}
+                        <div className="text-right text-sm font-semibold text-primary">
+                          Subtotal: {fmt(d.cantidad * d.costoUnitario)}
+                        </div>
+                        
+                        {/* Indicador de series faltantes */}
+                        {d.producto.requiereSerie && (
+                          <div className="mt-2 pt-2 border-t flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={(d.numerosSerie?.length ?? 0) === d.cantidad ? "default" : "destructive"} className="text-xs">
+                                {(d.numerosSerie?.length ?? 0) === d.cantidad
+                                  ? "✓ Series completas"
+                                  : `⚠ Faltan ${d.cantidad - (d.numerosSerie?.length ?? 0)} series`}
+                              </Badge>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => abrirModalSeries(d)}
+                              className="h-7 text-xs"
+                            >
+                              <QrCode className="h-3 w-3 mr-1" />
+                              Escanear Series
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1041,6 +1142,53 @@ export function ComprasPage() {
                 placeholder="1"
               />
             </div>
+            
+            {/* Campos de series y garantía */}
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="requiereSerie"
+                  checked={nuevoProducto.requiereSerie}
+                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, requiereSerie: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <label htmlFor="requiereSerie" className="text-sm font-medium cursor-pointer">
+                  ¿Requiere Número de Serie?
+                </label>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Garantía Proveedor (meses)</label>
+                  <Input
+                    type="text"
+                    value={nuevoProducto.garantiaProveedorMeses}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d*$/.test(value) || value === '') {
+                        setNuevoProducto({ ...nuevoProducto, garantiaProveedorMeses: value });
+                      }
+                    }}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Garantía Cliente (meses)</label>
+                  <Input
+                    type="text"
+                    value={nuevoProducto.garantiaClienteMeses}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d*$/.test(value) || value === '') {
+                        setNuevoProducto({ ...nuevoProducto, garantiaClienteMeses: value });
+                      }
+                    }}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
 
             <Alert>
               <AlertDescription className="text-xs">
@@ -1064,6 +1212,21 @@ export function ComprasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Escaneo de Series (FASE 3) */}
+      {productoSerieActual && (
+        <SeriesEscanerModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            setProductoSerieActual(null);
+          }}
+          productoNombre={`${productoSerieActual.producto.nombre}${productoSerieActual.producto.marca ? ` - ${productoSerieActual.producto.marca}` : ''}`}
+          cantidad={productoSerieActual.cantidad}
+          onSeriesCompletas={handleSeriesCompletas}
+          modo="compra"
+        />
+      )}
     </div>
   );
 }
