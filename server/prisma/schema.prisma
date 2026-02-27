@@ -78,6 +78,11 @@ model Producto {
   esServicio      Boolean           @default(false) @map("es_servicio")
   esSegundaMano   Boolean           @default(false) @map("es_segunda_mano")
   
+  // FASE 3: Números de Serie y Garantías
+  requiereSerie           Boolean   @default(false) @map("requiere_serie")
+  garantiaProveedorMeses  Int       @default(0) @map("garantia_proveedor_meses")
+  garantiaClienteMeses    Int       @default(0) @map("garantia_cliente_meses")
+  
   // Recursividad (Producto dentro de otro)
   padreId         String?           @map("padre_id")
   padre           Producto?         @relation("Componentes", fields: [padreId], references: [id])
@@ -91,6 +96,7 @@ model Producto {
   movimientos     MovimientoStock[]
   detalleCompras  DetalleCompra[]   // FASE 2: Compras de este producto
   historialCostos HistorialCosto[]  // FASE 2: Historial de precios
+  series          ProductoSerie[]   // FASE 3: Números de serie individuales
 
   @@map("productos")
 }
@@ -110,6 +116,7 @@ model Venta {
   updatedAt           DateTime       @updatedAt @map("updated_at")
   deletedAt           DateTime?      @map("deleted_at")
   detalles            DetalleVenta[]
+  series              ProductoSerie[] // FASE 3: Series vendidas en esta venta
 
   @@map("ventas")
 }
@@ -176,6 +183,7 @@ model Compra {
   deletedAt       DateTime?       @map("deleted_at")
   detalles        DetalleCompra[]
   movimientos     MovimientoStock[]
+  series          ProductoSerie[]   // FASE 3: Series registradas en esta compra
 
   @@unique([proveedorId, numeroFactura], name: "unique_factura_proveedor")
   @@map("compras")
@@ -202,4 +210,35 @@ model HistorialCosto {
   fechaRegistro   DateTime @default(now()) @map("fecha_registro")
 
   @@map("historial_costos")
+}
+
+// FASE 3: NÚMEROS DE SERIE Y GARANTÍAS
+
+enum EstadoSerie {
+  DISPONIBLE
+  VENDIDO
+  GARANTIA
+  DEVUELTO
+}
+
+model ProductoSerie {
+  id           String       @id @default(uuid())
+  productoId   String       @map("producto_id")
+  producto     Producto     @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  numeroSerie  String       @unique @map("numero_serie") @db.VarChar(100)
+  estado       EstadoSerie  @default(DISPONIBLE)
+  
+  // Rastreabilidad: ¿De qué compra viene? ¿A qué venta se asoció?
+  compraId     String?      @map("compra_id")
+  compra       Compra?      @relation(fields: [compraId], references: [id], onDelete: SetNull)
+  ventaId      String?      @map("venta_id")
+  venta        Venta?       @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  
+  @@index([productoId])
+  @@index([estado])
+  @@index([numeroSerie])
+  @@map("producto_series")
 }
