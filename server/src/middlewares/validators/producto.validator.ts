@@ -155,6 +155,7 @@ const ajustarStockSchema = z.object({
     .min(3, 'El motivo debe tener al menos 3 caracteres')
     .max(100, 'El motivo no puede exceder 100 caracteres')
     .trim(),
+  numerosSerie: z.array(z.string()).optional(),
 });
 
 const idParamSchema = z.object({

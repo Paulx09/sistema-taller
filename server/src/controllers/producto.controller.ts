@@ -166,12 +166,19 @@ export class ProductoController {
   async ajustarStock(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const { cantidad, tipo, motivo } = req.body;
+      const { cantidad, tipo, motivo, numerosSerie } = req.body;
 
       // TODO: Obtener usuarioId del JWT cuando se implemente autenticación
       const usuarioId = '78de9010-8b8b-4f6e-b3a7-40b4ff746404';
 
-      const producto = await productoService.ajustarStock(id, cantidad, tipo, motivo, usuarioId);
+      const producto = await productoService.ajustarStock(
+        id,
+        cantidad,
+        tipo,
+        motivo,
+        usuarioId,
+        numerosSerie
+      );
 
       res.json({
         success: true,

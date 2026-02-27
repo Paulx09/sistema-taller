@@ -284,7 +284,8 @@ export class ProductoService {
     cantidad: number,
     tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE',
     motivo: string,
-    usuarioId: string
+    usuarioId: string,
+    numerosSerie?: string[]
   ): Promise<Producto> {
     const producto = await prisma.producto.findUnique({ where: { id } });
 
@@ -294,6 +295,48 @@ export class ProductoService {
 
     if (producto.esServicio) {
       throw new Error('No se puede ajustar stock de un servicio');
+    }
+
+    // Validar series si el producto requiere número de serie
+    if (producto.requiereSerie) {
+      if (tipo === 'ENTRADA') {
+        if (!numerosSerie || numerosSerie.length === 0) {
+          throw new Error('Este producto requiere números de serie. Debe proporcionar las series.');
+        }
+        if (numerosSerie.length !== cantidad) {
+          throw new Error(
+            `La cantidad de series (${numerosSerie.length}) no coincide con la cantidad a agregar (${cantidad})`
+          );
+        }
+      } else if (tipo === 'SALIDA') {
+        if (!numerosSerie || numerosSerie.length === 0) {
+          throw new Error('Este producto requiere números de serie. Debe seleccionar las series a retirar.');
+        }
+        if (numerosSerie.length !== cantidad) {
+          throw new Error(
+            `La cantidad de series (${numerosSerie.length}) no coincide con la cantidad a retirar (${cantidad})`
+          );
+        }
+        
+        // Validar que todas las series existen y están DISPONIBLES
+        const seriesExistentes = await prisma.productoSerie.findMany({
+          where: {
+            productoId: id,
+            numeroSerie: { in: numerosSerie },
+          },
+        });
+        
+        if (seriesExistentes.length !== numerosSerie.length) {
+          throw new Error('Algunas series seleccionadas no existen para este producto');
+        }
+        
+        const seriesNoDisponibles = seriesExistentes.filter((s) => s.estado !== 'DISPONIBLE');
+        if (seriesNoDisponibles.length > 0) {
+          throw new Error(
+            `Las siguientes series no están disponibles: ${seriesNoDisponibles.map((s) => s.numeroSerie).join(', ')}`
+          );
+        }
+      }
     }
 
     // Calcular nuevo stock según tipo de movimiento
@@ -310,8 +353,8 @@ export class ProductoService {
       throw new Error('Stock no puede ser negativo');
     }
 
-    // Actualizar stock y registrar movimiento en transacción
-    const [productoActualizado] = await prisma.$transaction([
+    // Preparar operaciones de transacción
+    const transactionOperations: any[] = [
       prisma.producto.update({
         where: { id },
         data: { stockActual: nuevoStock, updatedAt: new Date() },
@@ -325,7 +368,41 @@ export class ProductoService {
           motivo,
         },
       }),
-    ]);
+    ];
+
+    // Si hay series, agregarlas o actualizarlas según el tipo
+    if (numerosSerie && numerosSerie.length > 0) {
+      if (tipo === 'ENTRADA') {
+        // Crear nuevas series con estado DISPONIBLE
+        const seriesData = numerosSerie.map((numeroSerie) => ({
+          productoId: id,
+          numeroSerie,
+          estado: 'DISPONIBLE' as const,
+        }));
+        
+        transactionOperations.push(
+          prisma.productoSerie.createMany({
+            data: seriesData,
+          })
+        );
+      } else if (tipo === 'SALIDA') {
+        // Marcar series como DEVUELTO
+        transactionOperations.push(
+          prisma.productoSerie.updateMany({
+            where: {
+              productoId: id,
+              numeroSerie: { in: numerosSerie },
+            },
+            data: {
+              estado: 'DEVUELTO' as const,
+            },
+          })
+        );
+      }
+    }
+
+    // Actualizar stock, registrar movimiento y crear series en transacción
+    const [productoActualizado] = await prisma.$transaction(transactionOperations);
 
     return productoActualizado;
   }
