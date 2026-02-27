@@ -32,6 +32,7 @@ export function MainLayout() {
       if (location.pathname.startsWith('/ubicaciones')) return 'Gestión de Ubicaciones';
       if (location.pathname.startsWith('/proveedores')) return 'Gestión de Proveedores';
       if (location.pathname.startsWith('/compras')) return 'Compras e Inventario';
+      if (location.pathname.startsWith('/verificar-garantia')) return 'Verificar Garantía';
       return 'Sistema Taller';
   }
 
@@ -82,6 +83,10 @@ export function MainLayout() {
           <NavLink to="/ubicaciones" className={navLinkClass}>
              <span className="material-symbols-outlined text-[20px]">shelves</span>
              Ubicaciones
+          </NavLink>
+          <NavLink to="/verificar-garantia" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">verified</span>
+            Verificar Garantía
           </NavLink>
           <NavLink to="/reportes" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">bar_chart</span>

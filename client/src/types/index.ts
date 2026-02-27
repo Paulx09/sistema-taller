@@ -44,6 +44,10 @@ export interface Producto {
   specs: Record<string, unknown> | null;
   esServicio: boolean;
   esSegundaMano: boolean;
+  
+  requiereSerie: boolean;
+  garantiaProveedorMeses: number;
+  garantiaClienteMeses: number;
   padreId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +57,7 @@ export interface Producto {
   padre?: Producto;
   hijos?: Producto[];
   movimientos?: MovimientoStock[];
+  series?: ProductoSerie[];
 }
 
 export interface MovimientoStock {
@@ -133,6 +138,9 @@ export interface CrearProductoDto {
   specs?: Record<string, unknown>;
   esServicio?: boolean;
   esSegundaMano?: boolean;
+  requiereSerie?: boolean;
+  garantiaProveedorMeses?: number;
+  garantiaClienteMeses?: number;
   padreId?: string;
 }
 
@@ -152,6 +160,9 @@ export interface ActualizarProductoDto {
   specs?: Record<string, unknown>;
   esServicio?: boolean;
   esSegundaMano?: boolean;
+  requiereSerie?: boolean;
+  garantiaProveedorMeses?: number;
+  garantiaClienteMeses?: number;
   padreId?: string;
 }
 
@@ -184,6 +195,7 @@ export interface CrearDetalleVentaDto {
   productoId: string;
   cantidad: number;
   precioUnitario: number;
+  numerosSerie?: string[]; // Para productos que requieren serie
 }
 
 export interface CrearVentaDto {
@@ -287,6 +299,7 @@ export interface CrearDetalleCompraDto {
   productoId: string;
   cantidad: number;
   costoUnitario: number;
+  numerosSerie?: string[]; // Números de serie para productos que lo requieran
 }
 
 export interface CrearCompraDto {
@@ -295,4 +308,59 @@ export interface CrearCompraDto {
   fechaCompra?: string;
   detalles: CrearDetalleCompraDto[];
   totalCompra?: number; // Para validación de cuadre
+}
+
+// NÚMEROS DE SERIE Y GARANTÍAS
+
+export type EstadoSerie = 'DISPONIBLE' | 'VENDIDO' | 'GARANTIA' | 'DEVUELTO';
+
+export interface ProductoSerie {
+  id: string;
+  productoId: string;
+  numeroSerie: string;
+  estado: EstadoSerie;
+  compraId: string | null;
+  ventaId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  producto?: Producto;
+  compra?: Compra;
+  venta?: Venta;
+}
+
+export interface VerificarGarantiaResponse {
+  encontrado: boolean;
+  mensaje?: string;
+  numeroSerie?: string;
+  estado?: EstadoSerie;
+  producto?: {
+    nombre: string;
+    marca: string | null;
+    modelo: string | null;
+    garantiaClienteMeses: number;
+    garantiaProveedorMeses: number;
+  };
+  garantiaCliente?: {
+    vigente: boolean;
+    mesesGarantia: number;
+    fechaVenta: string;
+    fechaVencimiento: string;
+    diasRestantes: number;
+    clienteNombre: string;
+  } | null;
+  garantiaProveedor?: {
+    vigente: boolean;
+    mesesGarantia: number;
+    fechaCompra: string;
+    fechaVencimiento: string;
+    diasRestantes: number;
+    proveedorNombre: string;
+  } | null;
+}
+
+export interface SerieEstadisticas {
+  DISPONIBLE: number;
+  VENDIDO: number;
+  GARANTIA: number;
+  DEVUELTO: number;
 }

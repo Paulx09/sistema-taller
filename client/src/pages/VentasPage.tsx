@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon, QrCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import type { Producto, Venta, DetalleVenta } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
 
 // Inline mini-toast
 type ToastMsg = { id: number; title: string; description?: string; variant?: 'default' | 'destructive' };
@@ -32,6 +33,7 @@ interface ItemCarrito {
   producto: Producto;
   cantidad: number;
   precioUnitario: number;
+  numerosSerie?: string[]; // Para productos que requieren serie
 }
 
 type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
@@ -69,6 +71,13 @@ export function VentasPage() {
   const [clienteNombre, setClienteNombre] = useState('');
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
   const [procesando, setProcesando] = useState(false);
+
+  // Estados para series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [productoSerieActual, setProductoSerieActual] = useState<{
+    producto: Producto;
+    cantidadRequerida: number;
+  } | null>(null);
 
   // Historial state
   const [ventasHoy, setVentasHoy] = useState<Venta[]>([]);
@@ -182,9 +191,10 @@ export function VentasPage() {
 
     if (existente && existente.cantidad >= maxStock) {
       toast({ title: 'Stock máximo alcanzado', variant: 'destructive' });
-      return; // No hacemos nada más
+      return;
     }
 
+    // Agregar al carrito normalmente (sin abrir modal)
     setCarritoSync((prev) => {
       const item = prev.find((i) => i.producto.id === p.id);
       if (!item) {
@@ -196,17 +206,31 @@ export function VentasPage() {
     });
   };
 
+  // Abrir modal de series manualmente
+  const abrirModalSeries = (item: ItemCarrito) => {
+    setProductoSerieActual({
+      producto: item.producto,
+      cantidadRequerida: item.cantidad,
+    });
+    setSeriesModalOpen(true);
+  };
+
 
   // Carrito: cambiar cantidad
   const cambiarCantidad = (productoId: string, delta: number) => {
+    const itemActual = carritoRef.current.find((i) => i.producto.id === productoId);
+    if (!itemActual) return;
+
+    const nuevaCantidad = itemActual.cantidad + delta;
+    const maxStock = itemActual.producto.esServicio ? Infinity : itemActual.producto.stockActual;
+    const cantidadFinal = Math.min(Math.max(nuevaCantidad, 0), maxStock);
+
+    // Actualizar cantidad normalmente
     setCarritoSync((prev) =>
       prev
         .map((i) => {
           if (i.producto.id !== productoId) return i;
-          const nueva = i.cantidad + delta;
-          const maxStock = i.producto.esServicio ? Infinity : i.producto.stockActual;
-          const clamped = Math.min(Math.max(nueva, 0), maxStock);
-          return { ...i, cantidad: clamped };
+          return { ...i, cantidad: cantidadFinal };
         })
         .filter((i) => i.cantidad > 0)
     );
@@ -234,6 +258,40 @@ export function VentasPage() {
     setCarrito([]);
   };
 
+  // Handler para cuando se completan las series en el modal
+  const handleSeriesCompletas = (series: string[]) => {
+    if (!productoSerieActual) return;
+
+    const { producto, cantidadRequerida } = productoSerieActual;
+
+    setCarritoSync((prev) => {
+      const existente = prev.find((i) => i.producto.id === producto.id);
+      if (existente) {
+        // Actualizar item existente con las nuevas series
+        return prev.map((i) =>
+          i.producto.id === producto.id
+            ? { ...i, cantidad: cantidadRequerida, numerosSerie: series }
+            : i
+        );
+      } else {
+        // Agregar nuevo item con las series
+        return [
+          ...prev,
+          {
+            producto,
+            cantidad: cantidadRequerida,
+            precioUnitario: producto.precioVenta,
+            numerosSerie: series,
+          },
+        ];
+      }
+    });
+
+    // Cerrar modal y limpiar estado
+    setSeriesModalOpen(false);
+    setProductoSerieActual(null);
+  };
+
   // Cálculos
   // El precio de venta ya incluye IGV. Subtotal = total / 1.18
   const totalConIgv = carrito.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
@@ -246,6 +304,24 @@ export function VentasPage() {
   // Finalizar venta
   const finalizarVenta = async () => {
     if (carrito.length === 0) return;
+
+    // Validar que productos con requiereSerie tengan todas sus series
+    const faltanSeries = carrito.filter(
+      (item) =>
+        item.producto.requiereSerie &&
+        (!item.numerosSerie || item.numerosSerie.length !== item.cantidad)
+    );
+
+    if (faltanSeries.length > 0) {
+      const nombres = faltanSeries.map((i) => i.producto.nombre).join(', ');
+      toast({
+        title: 'Faltan números de serie',
+        description: `Los siguientes productos requieren números de serie: ${nombres}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setProcesando(true);
     try {
       const resultado = await crearVenta({
@@ -255,6 +331,7 @@ export function VentasPage() {
           productoId: i.producto.id,
           cantidad: Number(i.cantidad),
           precioUnitario: Number(i.precioUnitario),
+          numerosSerie: i.numerosSerie, // Incluir series en el payload
         })),
       });
 
@@ -456,7 +533,7 @@ export function VentasPage() {
           </section>
 
           {/* Columna derecha: Carrito + Checkout */}
-          <section className="flex flex-col w-full max-w-sm xl:max-w-md bg-background flex-shrink-0">
+          <section className="flex flex-col w-full max-w-md xl:max-w-lg bg-background flex-shrink-0">
             {/* Header carrito */}
             <div className="px-5 py-4 border-b border-border flex justify-between items-center flex-shrink-0">
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -490,10 +567,11 @@ export function VentasPage() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-muted/40 sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[38%]">Producto</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[24%]">Cant.</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[18%]">P.Unit</th>
-                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">Total</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[30%]">Producto</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[18%]">Cant.</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[14%]">P.Unit</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[14%]">Total</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[20%]">Series</th>
                       <th className="py-2.5 pr-3 w-8" />
                     </tr>
                   </thead>
@@ -533,6 +611,30 @@ export function VentasPage() {
                         </td>
                         <td className="px-4 py-3 text-right text-sm font-bold">
                           {fmt(item.precioUnitario * item.cantidad)}
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          {item.producto.requiereSerie ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge
+                                variant={(item.numerosSerie?.length ?? 0) === item.cantidad ? "default" : "destructive"}
+                                className="text-xs whitespace-nowrap"
+                              >
+                                {(item.numerosSerie?.length ?? 0) === item.cantidad
+                                  ? "✓ Completo"
+                                  : `⚠ ${item.cantidad - (item.numerosSerie?.length ?? 0)}`}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => abrirModalSeries(item)}
+                                className="h-6 text-xs px-2"
+                              >
+                                <QrCode className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="py-3 pr-3 text-right">
                           <button
@@ -1069,6 +1171,22 @@ export function VentasPage() {
           </div>
         ))}
       </div>
+
+      {/* Modal de series */}
+      {productoSerieActual && (
+        <SeriesEscanerModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            setProductoSerieActual(null);
+          }}
+          modo="venta"
+          productoNombre={productoSerieActual.producto.nombre}
+          productoId={productoSerieActual.producto.id}
+          cantidad={productoSerieActual.cantidadRequerida}
+          onSeriesCompletas={handleSeriesCompletas}
+        />
+      )}
     </div>
   );
 }
