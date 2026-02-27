@@ -170,6 +170,7 @@ export interface AjustarStockDto {
   cantidad: number;
   tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
   motivo: string;
+  numerosSerie?: string[];
 }
 
 // Response genérico del API
