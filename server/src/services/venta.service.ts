@@ -5,6 +5,7 @@ interface DetalleVentaInput {
   productoId: string;
   cantidad: number;
   precioUnitario: number;
+  numerosSerie?: string[]; // Opcional, para productos que requieren serie
 }
 
 interface CrearVentaData {
@@ -132,6 +133,51 @@ class VentaService {
           `Stock insuficiente para "${producto.nombre}". Stock disponible: ${producto.stockActual}, solicitado: ${detalle.cantidad}`
         );
       }
+
+      // Validar series para productos que las requieren
+      if (producto.requiereSerie) {
+        const { numerosSerie } = detalle;
+
+        // Validar que se hayan enviado las series
+        if (!numerosSerie || numerosSerie.length === 0) {
+          throw new Error(`El producto "${producto.nombre}" requiere números de serie`);
+        }
+
+        // Validar que la cantidad de series coincida con la cantidad de productos
+        if (numerosSerie.length !== detalle.cantidad) {
+          throw new Error(
+            `El producto "${producto.nombre}" requiere ${detalle.cantidad} series, pero se proporcionaron ${numerosSerie.length}`
+          );
+        }
+
+        // Validar que no haya series duplicadas en el array
+        const seriesUnicas = new Set(numerosSerie);
+        if (seriesUnicas.size !== numerosSerie.length) {
+          throw new Error(`Se encontraron números de serie duplicados para "${producto.nombre}"`);
+        }
+
+        // Validar que todas las series existan y estén DISPONIBLES
+        for (const numeroSerie of numerosSerie) {
+          const serie = await prisma.productoSerie.findFirst({
+            where: {
+              numeroSerie,
+              productoId: producto.id,
+            },
+          });
+
+          if (!serie) {
+            throw new Error(
+              `El número de serie "${numeroSerie}" no existe para el producto "${producto.nombre}"`
+            );
+          }
+
+          if (serie.estado !== 'DISPONIBLE') {
+            throw new Error(
+              `El número de serie "${numeroSerie}" no está disponible (estado actual: ${serie.estado})`
+            );
+          }
+        }
+      }
     }
 
     // 2. Transacción ACID: todo o nada
@@ -189,6 +235,23 @@ class VentaService {
             subtotal,
           },
         });
+
+        // Marcar series como VENDIDO si el producto las requiere
+        if (detalle.numerosSerie && detalle.numerosSerie.length > 0) {
+          for (const numeroSerie of detalle.numerosSerie) {
+            await tx.productoSerie.updateMany({
+              where: {
+                numeroSerie,
+                productoId: detalle.productoId,
+                estado: 'DISPONIBLE', // Solo actualizar si está disponible
+              },
+              data: {
+                estado: 'VENDIDO',
+                ventaId: nuevaVenta.id,
+              },
+            });
+          }
+        }
 
         // Solo descontar stock y registrar movimiento para productos físicos
         if (!producto.esServicio) {

@@ -19,6 +19,9 @@ interface CrearProductoData {
   esServicio?: boolean;
   esSegundaMano?: boolean;
   padreId?: string;
+  requiereSerie?: boolean;
+  garantiaProveedorMeses?: number;
+  garantiaClienteMeses?: number;
 }
 
 interface ActualizarProductoData {
@@ -38,6 +41,9 @@ interface ActualizarProductoData {
   esServicio?: boolean;
   esSegundaMano?: boolean;
   padreId?: string;
+  requiereSerie?: boolean;
+  garantiaProveedorMeses?: number;
+  garantiaClienteMeses?: number;
 }
 
 interface FiltrosProducto {
@@ -224,6 +230,9 @@ export class ProductoService {
         esServicio,
         esSegundaMano: data.esSegundaMano ?? false,
         padreId: data.padreId,
+        requiereSerie: data.requiereSerie ?? false,
+        garantiaProveedorMeses: data.garantiaProveedorMeses,
+        garantiaClienteMeses: data.garantiaClienteMeses,
       },
     });
 

@@ -96,6 +96,12 @@ export const parseFormData = (req: Request, res: Response, next: NextFunction): 
   if (req.body.stockMinimo) {
     req.body.stockMinimo = Number.parseInt(req.body.stockMinimo, 10);
   }
+  if (req.body.garantiaProveedorMeses) {
+    req.body.garantiaProveedorMeses = Number.parseInt(req.body.garantiaProveedorMeses, 10);
+  }
+  if (req.body.garantiaClienteMeses) {
+    req.body.garantiaClienteMeses = Number.parseInt(req.body.garantiaClienteMeses, 10);
+  }
 
   // Convertir campos booleanos
   if (req.body.esServicio !== undefined) {
@@ -103,6 +109,9 @@ export const parseFormData = (req: Request, res: Response, next: NextFunction): 
   }
   if (req.body.esSegundaMano !== undefined) {
     req.body.esSegundaMano = req.body.esSegundaMano === 'true' || req.body.esSegundaMano === true;
+  }
+  if (req.body.requiereSerie !== undefined) {
+    req.body.requiereSerie = req.body.requiereSerie === 'true' || req.body.requiereSerie === true;
   }
 
   // Convertir strings vacíos a undefined

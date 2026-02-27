@@ -5,6 +5,7 @@ interface DetalleCompraInput {
   productoId: string;
   cantidad: number;
   costoUnitario: number;
+  numerosSerie?: string[]; // FASE 3: Números de serie para productos que lo requieren
 }
 
 interface CrearCompraData {
@@ -260,6 +261,50 @@ class CompraService {
             fechaRegistro: fechaCompra || new Date(),
           },
         });
+
+        // v. FASE 3: Registrar números de serie si el producto lo requiere
+        if (detalle.numerosSerie && detalle.numerosSerie.length > 0) {
+          // Validar que la cantidad de series coincida con la cantidad comprada
+          if (detalle.numerosSerie.length !== detalle.cantidad) {
+            throw new Error(
+              `El producto ${productoActual.nombre} requiere ${detalle.cantidad} número(s) de serie, pero se proporcionaron ${detalle.numerosSerie.length}`
+            );
+          }
+
+          // Validar duplicados en el array
+          const duplicados = detalle.numerosSerie.filter(
+            (item, index) => detalle.numerosSerie!.indexOf(item) !== index
+          );
+          if (duplicados.length > 0) {
+            throw new Error(
+              `Números de serie duplicados: ${duplicados.join(', ')}`
+            );
+          }
+
+          // Validar que no existan en la BD
+          const existentes = await tx.productoSerie.findMany({
+            where: {
+              numeroSerie: { in: detalle.numerosSerie },
+            },
+            select: { numeroSerie: true },
+          });
+
+          if (existentes.length > 0) {
+            throw new Error(
+              `Los siguientes números de serie ya existen: ${existentes.map((s) => s.numeroSerie).join(', ')}`
+            );
+          }
+
+          // Registrar cada número de serie
+          await tx.productoSerie.createMany({
+            data: detalle.numerosSerie.map((ns) => ({
+              productoId: detalle.productoId,
+              compraId: nuevaCompra.id,
+              numeroSerie: ns.trim().toUpperCase(),
+              estado: 'DISPONIBLE' as const,
+            })),
+          });
+        }
       }
 
       return nuevaCompra;

@@ -49,6 +49,19 @@ const crearProductoSchema = z
     esServicio: z.boolean().default(false).optional(), // Si esServicio = true, ubicación no es obligatoria
     esSegundaMano: z.boolean().default(false).optional(),
     padreId: z.string().min(1).optional(),
+    requiereSerie: z.boolean().default(false).optional(),
+    garantiaProveedorMeses: z
+      .number({ message: 'La garantía del proveedor debe ser un número' })
+      .int('La garantía del proveedor debe ser un número entero')
+      .min(0, 'La garantía del proveedor no puede ser negativa')
+      .default(0)
+      .optional(),
+    garantiaClienteMeses: z
+      .number({ message: 'La garantía del cliente debe ser un número' })
+      .int('La garantía del cliente debe ser un número entero')
+      .min(0, 'La garantía del cliente no puede ser negativa')
+      .default(0)
+      .optional(),
   })
   .refine((data) => data.precioVenta > data.precioCompra, {
     message: 'El precio de venta debe ser mayor al precio de compra (no se puede vender a pérdida)',
@@ -103,6 +116,17 @@ const actualizarProductoSchema = z
     esServicio: z.boolean().optional(),
     esSegundaMano: z.boolean().optional(),
     padreId: z.string().min(1).optional(),
+    requiereSerie: z.boolean().optional(),
+    garantiaProveedorMeses: z
+      .number({ message: 'La garantía del proveedor debe ser un número' })
+      .int('La garantía del proveedor debe ser un número entero')
+      .min(0, 'La garantía del proveedor no puede ser negativa')
+      .optional(),
+    garantiaClienteMeses: z
+      .number({ message: 'La garantía del cliente debe ser un número' })
+      .int('La garantía del cliente debe ser un número entero')
+      .min(0, 'La garantía del cliente no puede ser negativa')
+      .optional(),
   })
   .strict() // Rechaza campos no definidos
   .refine(
