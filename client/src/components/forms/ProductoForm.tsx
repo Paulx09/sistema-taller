@@ -614,6 +614,7 @@ export function ProductoForm({
                         />
                       </FormControl>
                       <FormMessage />
+                      <FormDescription>CPP - Costo Promedio</FormDescription>
                     </FormItem>
                   )}
                 />
