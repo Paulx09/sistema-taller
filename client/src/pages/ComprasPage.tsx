@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { ShoppingBag, Trash2, Search, Loader2, Plus, Receipt, History, Calendar as CalendarIcon, Building2, FileText, ChevronDown, ChevronUp, PackagePlus, QrCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,8 +31,10 @@ import {
 } from '@/components/ui/table';
 import { crearCompra, listarCompras, anularCompra } from '@/services/compra.service';
 import { listarProveedores } from '@/services/proveedor.service';
+import { productoService } from '@/services/producto.service';
+import { SugerenciasPrecioModal } from '@/components/SugerenciasPrecioModal';
 import api from '@/services/api';
-import type { Producto, Proveedor, Compra, CrearDetalleCompraDto } from '@/types';
+import type { Producto, Proveedor, Compra, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
@@ -77,6 +79,8 @@ export function ComprasPage() {
   const [cargandoProductos, setCargandoProductos] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sugerenciasPrecio, setSugerenciasPrecio] = useState<SugerenciaPrecio[]>([]);
+  const [modalSugerenciasOpen, setModalSugerenciasOpen] = useState(false);
 
   // Historial state
   const [compras, setCompras] = useState<Compra[]>([]);
@@ -104,8 +108,6 @@ export function ComprasPage() {
     ubicacionId: '',
     marca: '',
     modelo: '',
-    precioCompra: '',
-    precioVenta: '',
     stockMinimo: '1',
     requiereSerie: false,
     garantiaProveedorMeses: '',
@@ -325,7 +327,13 @@ export function ComprasPage() {
         totalCompra: calcularTotal(),
       };
 
-      await crearCompra(dto);
+      const resultado = await crearCompra(dto);
+      
+      // Verificar si hay sugerencias de precio
+      if (resultado.sugerenciasPrecio && resultado.sugerenciasPrecio.length > 0) {
+        setSugerenciasPrecio(resultado.sugerenciasPrecio);
+        setModalSugerenciasOpen(true);
+      }
       
       toast({
         title: 'Compra registrada',
@@ -377,32 +385,21 @@ export function ComprasPage() {
       return;
     }
 
-    // Validar precios
-    const precioCompra = Number.parseFloat(nuevoProducto.precioCompra || '0');
-    const precioVenta = Number.parseFloat(nuevoProducto.precioVenta || '0');
+    // Usar valores mínimos temporales (se actualizarán con la compra)
     const stockMinimo = Number.parseInt(nuevoProducto.stockMinimo || '1');
     const garantiaProveedor = nuevoProducto.garantiaProveedorMeses ? Number.parseInt(nuevoProducto.garantiaProveedorMeses) : undefined;
     const garantiaCliente = nuevoProducto.garantiaClienteMeses ? Number.parseInt(nuevoProducto.garantiaClienteMeses) : undefined;
 
-    if (precioCompra <= 0) {
-      toast({ title: 'El precio de compra debe ser mayor a 0', variant: 'destructive' });
-      return;
-    }
-    if (precioVenta <= 0) {
-      toast({ title: 'El precio de venta debe ser mayor a 0', variant: 'destructive' });
-      return;
-    }
-
     setCreandoProducto(true);
     try {
-      const response = await api.post('/productos', {
+      const productoCreado = await productoService.createRapido({
         nombre: nuevoProducto.nombre,
         categoriaId: nuevoProducto.categoriaId,
         ubicacionId: nuevoProducto.ubicacionId,
         marca: nuevoProducto.marca || undefined,
         modelo: nuevoProducto.modelo || undefined,
-        precioCompra,
-        precioVenta,
+        precioCompra: 0, // Se definirá con la compra
+        precioVenta: 0, // Se calculará automáticamente en la primera compra
         stockActual: 0, // Stock inicial en 0 porque se añadirá con la compra
         stockMinimo,
         esServicio: false,
@@ -411,19 +408,18 @@ export function ComprasPage() {
         garantiaClienteMeses: garantiaCliente,
       });
 
-      const productoCreado = response.data.data;
       toast({
         title: 'Producto creado',
-        description: `${productoCreado.nombre} se agregó exitosamente`,
+        description: `${productoCreado.nombre} se agregó exitosamente. Defina los precios en Inventario después.`,
       });
 
-      // Agregar directamente al carrito de compra
+      // Agregar directamente al carrito de compra con costo por defecto
       setDetalles([
         ...detalles,
         {
           producto: productoCreado,
           cantidad: 1,
-          costoUnitario: precioCompra,
+          costoUnitario: 0, // El usuario deberá ingresar el costo en el detalle
         },
       ]);
 
@@ -434,8 +430,6 @@ export function ComprasPage() {
         ubicacionId: ubicacionSinClasificar,
         marca: '',
         modelo: '',
-        precioCompra: '',
-        precioVenta: '',
         stockMinimo: '1',
         requiereSerie: false,
         garantiaProveedorMeses: '',
@@ -781,6 +775,13 @@ export function ComprasPage() {
                   selected={fechaDesde}
                   onSelect={setFechaDesde}
                   locale={es}
+                  disabled={(date) => {
+                    // No puede ser fecha futura
+                    if (date > new Date()) return true;
+                    // No puede ser posterior a fechaHasta
+                    if (fechaHasta && date > fechaHasta) return true;
+                    return false;
+                  }}
                 />
               </PopoverContent>
             </Popover>
@@ -798,6 +799,13 @@ export function ComprasPage() {
                   selected={fechaHasta}
                   onSelect={setFechaHasta}
                   locale={es}
+                  disabled={(date) => {
+                    // No puede ser fecha futura
+                    if (date > new Date()) return true;
+                    // No puede ser anterior a fechaDesde
+                    if (fechaDesde && date < fechaDesde) return true;
+                    return false;
+                  }}
                 />
               </PopoverContent>
             </Popover>
@@ -838,8 +846,8 @@ export function ComprasPage() {
                 </TableHeader>
                 <TableBody>
                   {compras.map((compra) => (
-                    <>
-                      <TableRow key={compra.id} className={compra.deletedAt !== null ? 'opacity-50' : ''}>
+                    <Fragment key={compra.id}>
+                      <TableRow className={compra.deletedAt !== null ? 'opacity-50' : ''}>
                         <TableCell className="text-sm">
                           {format(new Date(compra.createdAt), 'dd/MM/yyyy HH:mm')}
                         </TableCell>
@@ -934,7 +942,7 @@ export function ComprasPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -1017,7 +1025,7 @@ export function ComprasPage() {
           <DialogHeader>
             <DialogTitle>Crear Producto Rápido</DialogTitle>
             <DialogDescription>
-              Cree un producto nuevo con stock inicial en 0. Se agregará automáticamente a la compra.
+              Cree un producto con datos básicos. Los precios se definirán al registrar la compra.
             </DialogDescription>
           </DialogHeader>
 
@@ -1094,39 +1102,6 @@ export function ComprasPage() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Precio Compra <span className="text-destructive">*</span></label>
-                <Input
-                  type="text"
-                  value={nuevoProducto.precioCompra}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    // Permitir solo números y un punto decimal con máximo 2 decimales
-                    if (/^\d*\.?\d{0,2}$/.test(value) || value === '') {
-                      setNuevoProducto({ ...nuevoProducto, precioCompra: value });
-                    }
-                  }}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Precio Venta <span className="text-destructive">*</span></label>
-                <Input
-                  type="text"
-                  value={nuevoProducto.precioVenta}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    // Permitir solo números y un punto decimal con máximo 2 decimales
-                    if (/^\d*\.?\d{0,2}$/.test(value) || value === '') {
-                      setNuevoProducto({ ...nuevoProducto, precioVenta: value });
-                    }
-                  }}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Stock Mínimo</label>
               <Input
@@ -1192,7 +1167,7 @@ export function ComprasPage() {
 
             <Alert>
               <AlertDescription className="text-xs">
-                <strong>Nota:</strong> El stock inicial será 0. Al guardar la compra, se actualizará automáticamente.
+                <strong>Nota:</strong> El producto se agregará al detalle de compra con stock 0. Ingrese el costo unitario y cantidad después de crearlo. Los precios se pueden ajustar luego en Inventario.
               </AlertDescription>
             </Alert>
           </div>
@@ -1227,6 +1202,34 @@ export function ComprasPage() {
           modo="compra"
         />
       )}
+
+      {/* Modal de Sugerencias de Precios */}
+      <SugerenciasPrecioModal
+        open={modalSugerenciasOpen}
+        onOpenChange={setModalSugerenciasOpen}
+        sugerencias={sugerenciasPrecio}
+        onAplicar={async (sugerenciasSeleccionadas) => {
+          try {
+            const actualizaciones = sugerenciasSeleccionadas.map(s => ({
+              id: s.productoId,
+              precioVenta: s.precioEditado || s.precioSugerido,
+            }));
+            
+            await productoService.actualizarPreciosMasivo(actualizaciones);
+            
+            toast({
+              title: 'Precios actualizados',
+              description: `${actualizaciones.length} producto(s) actualizado(s) exitosamente`,
+            });
+          } catch (error) {
+            toast({
+              title: 'Error al actualizar precios',
+              description: 'Ocurrió un error al aplicar los cambios',
+              variant: 'destructive',
+            });
+          }
+        }}
+      />
     </div>
   );
 }

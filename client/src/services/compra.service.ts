@@ -1,5 +1,5 @@
 import api from './api';
-import type { Compra, CrearCompraDto, ApiResponse } from '@/types';
+import type { Compra, CrearCompraDto, ApiResponse, SugerenciaPrecio } from '@/types';
 
 interface ListarComprasParams {
   proveedorId?: string;
@@ -7,6 +7,11 @@ interface ListarComprasParams {
   hasta?: string;
   page?: number;
   limit?: number;
+}
+
+interface CrearCompraResponse {
+  compra: Compra;
+  sugerenciasPrecio: SugerenciaPrecio[];
 }
 
 export const listarCompras = async (params?: ListarComprasParams) => {
@@ -19,9 +24,9 @@ export const obtenerCompra = async (id: string) => {
   return response.data;
 };
 
-export const crearCompra = async (data: CrearCompraDto) => {
-  const response = await api.post<ApiResponse<Compra>>('/compras', data);
-  return response.data;
+export const crearCompra = async (data: CrearCompraDto): Promise<CrearCompraResponse> => {
+  const response = await api.post<ApiResponse<CrearCompraResponse>>('/compras', data);
+  return response.data.data;
 };
 
 export const anularCompra = async (id: string) => {

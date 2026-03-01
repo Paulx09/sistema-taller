@@ -110,7 +110,9 @@ export function VentasPage() {
       if (q) params.busqueda = q;
       if (catId) params.categoriaId = catId;
       const r = await api.get('/productos', { params });
-      setProductos(r.data.data || []);
+      // Filtrar productos sin precio de venta definido (precios pendientes)
+      const productosFiltrados = (r.data.data || []).filter((p: any) => Number(p.precioVenta) > 0);
+      setProductos(productosFiltrados);
     } finally {
       setCargandoProductos(false);
     }
@@ -924,7 +926,13 @@ export function VentasPage() {
                       selected={fechaDesde}
                       onSelect={(date) => { setFechaDesde(date); setPaginaActual(1); }}
                       locale={es}
-                      disabled={(date) => date > new Date()}
+                      disabled={(date) => {
+                        // No puede ser fecha futura
+                        if (date > new Date()) return true;
+                        // No puede ser posterior a fechaHasta
+                        if (fechaHasta && date > fechaHasta) return true;
+                        return false;
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
@@ -951,7 +959,9 @@ export function VentasPage() {
                       onSelect={(date) => { setFechaHasta(date); setPaginaActual(1); }}
                       locale={es}
                       disabled={(date) => {
-                        // Solo validar que no sea anterior a fechaDesde
+                        // No puede ser fecha futura
+                        if (date > new Date()) return true;
+                        // No puede ser anterior a fechaDesde
                         if (fechaDesde && date < fechaDesde) return true;
                         return false;
                       }}
