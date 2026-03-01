@@ -71,12 +71,14 @@ model Producto {
   ubicacion       Ubicacion?        @relation(fields: [ubicacionId], references: [id])
   precioCompra    Decimal           @map("precio_compra") @db.Decimal(10, 2)
   precioVenta     Decimal           @map("precio_venta") @db.Decimal(10, 2)
+  margenReferencia Decimal?         @map("margen_referencia") @db.Decimal(5, 2)
   stockActual     Int               @default(0) @map("stock_actual")
   stockMinimo     Int               @default(1) @map("stock_minimo")
   imagenUrl       String?           @map("imagen_url")
   specs           Json?             // JSONB para especificaciones flexibles
   esServicio      Boolean           @default(false) @map("es_servicio")
   esSegundaMano   Boolean           @default(false) @map("es_segunda_mano")
+  preciosPendientes Boolean         @default(false) @map("precios_pendientes") // Marca productos sin precio definido
   
   // FASE 3: Números de Serie y Garantías
   requiereSerie           Boolean   @default(false) @map("requiere_serie")
@@ -211,8 +213,6 @@ model HistorialCosto {
 
   @@map("historial_costos")
 }
-
-// FASE 3: NÚMEROS DE SERIE Y GARANTÍAS
 
 enum EstadoSerie {
   DISPONIBLE
