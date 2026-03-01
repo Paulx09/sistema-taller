@@ -90,6 +90,9 @@ export const parseFormData = (req: Request, res: Response, next: NextFunction): 
   if (req.body.precioVenta) {
     req.body.precioVenta = Number.parseFloat(req.body.precioVenta);
   }
+  if (req.body.margenReferencia) {
+    req.body.margenReferencia = Number.parseFloat(req.body.margenReferencia);
+  }
   if (req.body.stockActual) {
     req.body.stockActual = Number.parseInt(req.body.stockActual, 10);
   }
@@ -112,6 +115,16 @@ export const parseFormData = (req: Request, res: Response, next: NextFunction): 
   }
   if (req.body.requiereSerie !== undefined) {
     req.body.requiereSerie = req.body.requiereSerie === 'true' || req.body.requiereSerie === true;
+  }
+
+  // Convertir seriesRetroactivas de JSON string a array
+  if (req.body.seriesRetroactivas && typeof req.body.seriesRetroactivas === 'string') {
+    try {
+      req.body.seriesRetroactivas = JSON.parse(req.body.seriesRetroactivas);
+    } catch (error) {
+      console.error('Error al parsear seriesRetroactivas:', error);
+      req.body.seriesRetroactivas = undefined;
+    }
   }
 
   // Convertir strings vacíos a undefined

@@ -24,6 +24,17 @@ interface FiltrosCompra {
   take?: number;
 }
 
+interface SugerenciaPrecio {
+  productoId: string;
+  productoNombre: string;
+  cppAnterior: number;
+  cppNuevo: number;
+  margenReferencia: number | null;
+  precioActual: number;
+  precioSugerido: number;
+  variacionCPP: number;
+}
+
 class CompraService {
   // GET /api/compras - Lista con filtros
   async listar(filtros: FiltrosCompra = {}) {
@@ -160,6 +171,7 @@ class CompraService {
     }
 
     // 2. Transacción ACID
+    const sugerenciasPrecio: SugerenciaPrecio[] = [];
     const compra = await prisma.$transaction(async (tx) => {
       // Calcular total de la compra
       let totalCompra = new Prisma.Decimal(0);
@@ -192,6 +204,8 @@ class CompraService {
             esServicio: true,
             stockActual: true,
             precioCompra: true,
+            precioVenta: true,
+            margenReferencia: true,
           },
         });
 
@@ -246,12 +260,82 @@ class CompraService {
                 .add(costoNuevo.mul(cantidadNueva))
                 .div(stockTotal);
 
+        // Recalcular margenReferencia basado en el nuevo CPP para mantener consistencia
+        const precioVentaActual = Number(productoActual.precioVenta);
+        const nuevoCPP = Number(nuevoPrecioCompra);
+        let nuevoMargenReferencia: Prisma.Decimal | null = null;
+        
+        // Solo recalcular si tiene precio de venta real (>= 1)
+        if (precioVentaActual >= 1) {
+          const margenCalculado = ((precioVentaActual - nuevoCPP) / nuevoCPP) * 100;
+          nuevoMargenReferencia = new Prisma.Decimal(margenCalculado);
+        }
+
         await tx.producto.update({
           where: { id: detalle.productoId },
           data: {
             precioCompra: nuevoPrecioCompra,
+            ...(nuevoMargenReferencia !== null && { margenReferencia: nuevoMargenReferencia }),
           },
         });
+
+        // Si el precioVenta es temporal (< 1), establecer precio real con margen
+        if (Number(productoActual.precioVenta) < 1) {
+          const margenDefault = productoActual.margenReferencia 
+            ? Number(productoActual.margenReferencia) 
+            : 25; // Default 25%
+          
+          const precioVentaCalculado = new Prisma.Decimal(Number(nuevoPrecioCompra) * (1 + margenDefault / 100));
+          
+          await tx.producto.update({
+            where: { id: detalle.productoId },
+            data: {
+              precioVenta: precioVentaCalculado,
+              margenReferencia: new Prisma.Decimal(margenDefault), // Guardar el margen usado
+              preciosPendientes: false, // Marcar como completo
+            },
+          });
+        }
+
+        // NUEVA LÓGICA: Sugerencias basadas en VALOR DE REPOSICIÓN (última compra)
+        // Estrategia: CPP sube → Ajustar precio al nuevo costo | CPP baja → Mantener precio
+        const costoAnterior = Number(precioAnterior);
+        const costoReposicion = Number(costoNuevo); // Costo de ESTA compra (reposición)
+        const variacionCosto = ((costoReposicion - costoAnterior) / costoAnterior) * 100;
+
+        // Solo sugerir si:
+        // 1. El costo de reposición SUBIÓ
+        // 2. El costo anterior NO es un valor temporal (>= 1)
+        if (costoReposicion > costoAnterior && costoAnterior >= 1) {
+          // Obtener producto completo para margenReferencia y precioVenta
+          const productoCompleto = await tx.producto.findUniqueOrThrow({
+            where: { id: detalle.productoId },
+            select: {
+              id: true,
+              nombre: true,
+              precioVenta: true,
+              margenReferencia: true,
+            },
+          });
+
+          const margenRef = productoCompleto.margenReferencia 
+            ? Number(productoCompleto.margenReferencia) 
+            : 25; // Default 25%
+
+          // Precio sugerido basado en costo de REPOSICIÓN, no promedio
+          const precioSugerido = costoReposicion * (1 + margenRef / 100);
+
+          sugerenciasPrecio.push({
+            productoId: productoCompleto.id,
+            productoNombre: productoCompleto.nombre,
+            cppAnterior: costoAnterior,
+            cppNuevo: costoReposicion, // Mostrar costo de reposición en modal
+            margenReferencia: productoCompleto.margenReferencia ? Number(productoCompleto.margenReferencia) : null,
+            precioActual: Number(productoCompleto.precioVenta),
+            precioSugerido,
+            variacionCPP: variacionCosto,
+          });
+        }
 
         // iv. Registrar en HistorialCosto (trazabilidad total)
         await tx.historialCosto.create({
@@ -310,8 +394,13 @@ class CompraService {
       return nuevaCompra;
     });
 
-    // 3. Retornar compra completa
-    return this.obtenerPorId(compra.id);
+    // 3. Retornar compra completa con sugerencias
+    const compraCompleta = await this.obtenerPorId(compra.id);
+    
+    return {
+      compra: compraCompleta,
+      sugerenciasPrecio,
+    };
   }
 
   // DELETE /api/compras/:id (SoftDelete sin reverso de stock)

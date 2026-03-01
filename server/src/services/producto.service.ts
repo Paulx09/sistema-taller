@@ -12,12 +12,14 @@ interface CrearProductoData {
   ubicacionId?: string;
   precioCompra: number;
   precioVenta: number;
+  margenReferencia?: number;
   stockActual?: number;
   stockMinimo?: number;
   imagenUrl?: string;
   specs?: Record<string, any>;
   esServicio?: boolean;
   esSegundaMano?: boolean;
+  preciosPendientes?: boolean;
   padreId?: string;
   requiereSerie?: boolean;
   garantiaProveedorMeses?: number;
@@ -35,6 +37,7 @@ interface ActualizarProductoData {
   ubicacionId?: string;
   precioCompra?: number;
   precioVenta?: number;
+  margenReferencia?: number;
   stockMinimo?: number;
   imagenUrl?: string;
   specs?: Record<string, any>;
@@ -51,6 +54,7 @@ interface FiltrosProducto {
   categoriaId?: string;
   esServicio?: boolean;
   bajoStock?: boolean;
+  preciosPendientes?: boolean;
   skip?: number;
   take?: number;
 }
@@ -58,7 +62,7 @@ interface FiltrosProducto {
 export class ProductoService {
   // Listar productos con filtros y paginación
   async listar(filtros: FiltrosProducto = {}) {
-    const { busqueda, categoriaId, esServicio, bajoStock, skip = 0, take = 50 } = filtros;
+    const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
 
     const where: Prisma.ProductoWhereInput = {
       deletedAt: null,
@@ -74,6 +78,12 @@ export class ProductoService {
       ...(esServicio !== undefined && { esServicio }),
       ...(bajoStock && {
         stockActual: { lte: prisma.producto.fields.stockMinimo },
+      }),
+      ...(preciosPendientes && {
+        OR: [
+          { precioCompra: { equals: 0 } },
+          { precioVenta: { equals: 0 } },
+        ],
       }),
     };
 
@@ -202,6 +212,10 @@ export class ProductoService {
           orderBy: { createdAt: 'desc' },
           take: 10,
         },
+        historialCostos: {
+          orderBy: { fechaRegistro: 'desc' },
+          take: 20, // Últimos 20 cambios de precio
+        },
       },
     });
   }
@@ -223,12 +237,14 @@ export class ProductoService {
         ubicacionId: esServicio ? null : data.ubicacionId,
         precioCompra: esServicio ? new Prisma.Decimal(0) : new Prisma.Decimal(data.precioCompra),
         precioVenta: new Prisma.Decimal(data.precioVenta),
+        margenReferencia: data.margenReferencia ? new Prisma.Decimal(data.margenReferencia) : null,
         stockActual: esServicio ? 0 : (data.stockActual ?? 0),
         stockMinimo: esServicio ? 0 : (data.stockMinimo ?? 1),
         imagenUrl: data.imagenUrl,
         specs: data.specs,
         esServicio,
         esSegundaMano: data.esSegundaMano ?? false,
+        preciosPendientes: data.preciosPendientes ?? false,
         padreId: data.padreId,
         requiereSerie: data.requiereSerie ?? false,
         garantiaProveedorMeses: data.garantiaProveedorMeses,
@@ -245,6 +261,18 @@ export class ProductoService {
           tipo: 'INVENTARIO_INICIAL',
           cantidad: producto.stockActual,
           motivo: 'Stock inicial al crear producto',
+        },
+      });
+    }
+
+    // Registrar costo inicial en historial (solo si NO es servicio y tiene precio de compra REAL)
+    // Filtrar valores temporales < 1 (ej: Crear Producto Rápido usa 0.01)
+    if (!producto.esServicio && Number(producto.precioCompra) >= 1) {
+      await prisma.historialCosto.create({
+        data: {
+          productoId: producto.id,
+          costo: producto.precioCompra,
+          fechaRegistro: new Date(),
         },
       });
     }
@@ -267,12 +295,36 @@ export class ProductoService {
       updateData.stockMinimo = 0;
     }
     
+    // Recalcular margenReferencia automáticamente si se actualiza precioCompra o precioVenta
+    // (pero solo si no se proveyó explícitamente un margenReferencia)
+    if (updateData.margenReferencia === undefined && (updateData.precioCompra || updateData.precioVenta)) {
+      // Obtener datos actuales del producto
+      const productoActual = await prisma.producto.findUnique({
+        where: { id },
+        select: { precioCompra: true, precioVenta: true },
+      });
+      
+      if (productoActual) {
+        const precioCompraFinal = updateData.precioCompra || Number(productoActual.precioCompra);
+        const precioVentaFinal = updateData.precioVenta || Number(productoActual.precioVenta);
+        
+        // Solo calcular si ambos precios son válidos (>= 1)
+        if (precioCompraFinal >= 1 && precioVentaFinal >= 1) {
+          const margenCalculado = ((precioVentaFinal - precioCompraFinal) / precioCompraFinal) * 100;
+          updateData.margenReferencia = new Prisma.Decimal(margenCalculado);
+        }
+      }
+    }
+    
     return await prisma.producto.update({
       where: { id },
       data: {
         ...updateData,
         ...(updateData.precioCompra && { precioCompra: new Prisma.Decimal(updateData.precioCompra) }),
         ...(updateData.precioVenta && { precioVenta: new Prisma.Decimal(updateData.precioVenta) }),
+        ...(updateData.margenReferencia !== undefined && { 
+          margenReferencia: updateData.margenReferencia ? new Prisma.Decimal(updateData.margenReferencia) : null 
+        }),
         updatedAt: new Date(),
       },
     });
@@ -351,6 +403,12 @@ export class ProductoService {
 
     if (nuevoStock < 0) {
       throw new Error('Stock no puede ser negativo');
+    }
+
+    // Validar que el usuario existe (trazabilidad obligatoria)
+    const usuarioExiste = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+    if (!usuarioExiste) {
+      throw new Error('Sesión inválida. Por favor, cierre sesión y vuelva a iniciar.');
     }
 
     // Preparar operaciones de transacción

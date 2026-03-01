@@ -32,6 +32,11 @@ const crearProductoSchema = z
       .number({ message: 'El precio de venta debe ser un número' })
       .positive('El precio de venta debe ser mayor a 0')
       .max(9999999.99, 'El precio de venta excede el límite'),
+    margenReferencia: z
+      .number({ message: 'El margen de referencia debe ser un número' })
+      .nonnegative('El margen de referencia no puede ser negativo')
+      .max(999.99, 'El margen de referencia excede el límite')
+      .optional(),
     stockActual: z
       .number({ message: 'El stock actual debe ser un número' })
       .int('El stock debe ser un número entero')
@@ -63,7 +68,12 @@ const crearProductoSchema = z
       .default(0)
       .optional(),
   })
-  .refine((data) => data.precioVenta > data.precioCompra, {
+  .refine((data) => {
+    // Permitir precios iguales si ambos son 0 (Crear Producto Rápido)
+    if (data.precioCompra === 0 && data.precioVenta === 0) return true;
+    // En otros casos, precioVenta debe ser mayor
+    return data.precioVenta > data.precioCompra;
+  }, {
     message: 'El precio de venta debe ser mayor al precio de compra (no se puede vender a pérdida)',
     path: ['precioVenta'],
   })
@@ -105,6 +115,11 @@ const actualizarProductoSchema = z
       .number({ message: 'El precio de venta debe ser un número' })
       .positive('El precio de venta debe ser mayor a 0')
       .max(9999999.99, 'El precio de venta excede el límite')
+      .optional(),
+    margenReferencia: z
+      .number({ message: 'El margen de referencia debe ser un número' })
+      .nonnegative('El margen de referencia no puede ser negativo')
+      .max(999.99, 'El margen de referencia excede el límite')
       .optional(),
     stockMinimo: z
       .number({ message: 'El stock mínimo debe ser un número' })
@@ -318,8 +333,64 @@ const validarProductoPadre = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+// Validador específico para Crear Producto Rápido (desde Compras)
+// Permite precios en 0 y menos campos obligatorios
+const crearProductoRapidoSchema = z
+  .object({
+    nombre: z
+      .string()
+      .min(1, 'El nombre es requerido')
+      .max(150, 'El nombre no puede exceder 150 caracteres')
+      .trim(),
+    marca: z.string().max(50, 'La marca no puede exceder 50 caracteres').trim().optional(),
+    modelo: z.string().max(50, 'El modelo no puede exceder 50 caracteres').trim().optional(),
+    categoriaId: z.string().min(1, 'El ID de categoría es requerido'),
+    ubicacionId: z.string().min(1).optional(),
+    precioCompra: z
+      .number({ message: 'El precio de compra debe ser un número' })
+      .nonnegative('El precio de compra no puede ser negativo')
+      .default(0)
+      .optional(),
+    precioVenta: z
+      .number({ message: 'El precio de venta debe ser un número' })
+      .nonnegative('El precio de venta no puede ser negativo')
+      .default(0)
+      .optional(),
+    stockActual: z
+      .number({ message: 'El stock actual debe ser un número' })
+      .int('El stock debe ser un número entero')
+      .nonnegative('El stock no puede ser negativo')
+      .default(0)
+      .optional(),
+    stockMinimo: z
+      .number({ message: 'El stock mínimo debe ser un número' })
+      .int('El stock mínimo debe ser un número entero')
+      .min(0, 'El stock mínimo no puede ser negativo')
+      .default(1)
+      .optional(),
+    esServicio: z.boolean().default(false).optional(),
+    requiereSerie: z.boolean().default(false).optional(),
+    garantiaProveedorMeses: z
+      .number({ message: 'La garantía del proveedor debe ser un número' })
+      .int('La garantía del proveedor debe ser un número entero')
+      .min(0, 'La garantía del proveedor no puede ser negativa')
+      .default(0)
+      .optional(),
+    garantiaClienteMeses: z
+      .number({ message: 'La garantía del cliente debe ser un número' })
+      .int('La garantía del cliente debe ser un número entero')
+      .min(0, 'La garantía del cliente no puede ser negativa')
+      .default(0)
+      .optional(),
+  })
+  .refine((data) => data.esServicio || data.ubicacionId !== undefined, {
+    message: 'Los productos físicos (no servicios) deben tener una ubicación asignada',
+    path: ['ubicacionId'],
+  });
+
 export const productoValidator = {
   crear: [validate(crearProductoSchema), validarCategoriaExiste, validarUbicacionExiste, validarProductoPadre],
+  crearRapido: [validate(crearProductoRapidoSchema), validarCategoriaExiste, validarUbicacionExiste],
   actualizar: [
     validate(actualizarProductoSchema),
     validarCategoriaExiste,

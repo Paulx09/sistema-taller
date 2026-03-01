@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import productoService from '../services/producto.service';
 import { deleteOldProductImage } from '../middlewares/upload.middleware';
+import { serieService } from '../services/serie.service';
 
 export class ProductoController {
   // GET /api/productos
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { busqueda, categoriaId, esServicio, bajoStock, skip, take } = req.query;
+      const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = req.query;
 
       // Convertir esServicio string a boolean
       let esServicioBool: boolean | undefined;
@@ -18,6 +19,7 @@ export class ProductoController {
         categoriaId: categoriaId as string | undefined,
         esServicio: esServicioBool,
         bajoStock: bajoStock === 'true' ? true : undefined,
+        preciosPendientes: preciosPendientes === 'true' ? true : undefined,
         skip: skip ? Number.parseInt(skip as string, 10) : undefined,
         take: take ? Number.parseInt(take as string, 10) : undefined,
       };
@@ -137,6 +139,37 @@ export class ProductoController {
     }
   }
 
+  // POST /api/productos/rapido (Crear Producto Rápido desde Compras)
+  async crearRapido(req: Request, res: Response, next: NextFunction) {
+    try {
+      const usuarioId = req.userId as string;
+      
+      // Determinar si los precios están pendientes
+      const precioCompra = req.body.precioCompra ?? 0;
+      const precioVenta = req.body.precioVenta ?? 0;
+      const preciosPendientes = precioCompra === 0 || precioVenta === 0;
+      
+      const data = {
+        ...req.body,
+        precioCompra,
+        precioVenta,
+        preciosPendientes,
+      };
+
+      const producto = await productoService.crear(data, usuarioId);
+
+      res.status(201).json({
+        success: true,
+        data: producto,
+        mensaje: preciosPendientes 
+          ? 'Producto creado. Recuerda definir los precios en Inventario.'
+          : 'Producto creado exitosamente',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // PUT /api/productos/:id
   async actualizar(req: Request, res: Response, next: NextFunction) {
     try {
@@ -150,12 +183,28 @@ export class ProductoController {
         }
       }
       
-      const producto = await productoService.actualizar(id, req.body);
+      // Extraer series retroactivas si existen
+      const { seriesRetroactivas, ...datosProducto } = req.body;
+      
+      const producto = await productoService.actualizar(id, datosProducto);
+
+      // Si hay series retroactivas, registrarlas
+      if (seriesRetroactivas && Array.isArray(seriesRetroactivas) && seriesRetroactivas.length > 0) {
+        try {
+          await serieService.registrarSeriesRetroactivas(id, seriesRetroactivas);
+        } catch (serieError: any) {
+          // Si falla el registro de series, revertir el cambio de requiereSerie
+          await productoService.actualizar(id, { requiereSerie: false });
+          throw new Error(`Error al registrar series: ${serieError.message}`);
+        }
+      }
 
       res.json({
         success: true,
         data: producto,
-        mensaje: 'Producto actualizado exitosamente',
+        mensaje: seriesRetroactivas?.length > 0 
+          ? `Producto actualizado y ${seriesRetroactivas.length} series registradas exitosamente`
+          : 'Producto actualizado exitosamente',
       });
     } catch (error) {
       next(error);
@@ -168,8 +217,8 @@ export class ProductoController {
       const id = req.params.id as string;
       const { cantidad, tipo, motivo, numerosSerie } = req.body;
 
-      // TODO: Obtener usuarioId del JWT cuando se implemente autenticación
-      const usuarioId = '78de9010-8b8b-4f6e-b3a7-40b4ff746404';
+      // Obtener usuarioId del JWT (inyectado por requireAuth middleware)
+      const usuarioId = req.userId as string;
 
       const producto = await productoService.ajustarStock(
         id,
@@ -184,6 +233,42 @@ export class ProductoController {
         success: true,
         data: producto,
         mensaje: 'Stock ajustado exitosamente',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // PUT /api/productos/actualizar-precios-masivo
+  async actualizarPreciosMasivo(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actualizaciones = req.body as Array<{ id: string; precioVenta: number }>;
+
+      if (!Array.isArray(actualizaciones) || actualizaciones.length === 0) {
+        return res.status(400).json({
+          error: 'Validación fallida',
+          mensaje: 'Debe proporcionar un array de actualizaciones',
+        });
+      }
+
+      // Actualizar cada producto
+      const resultados = [];
+      for (const { id, precioVenta } of actualizaciones) {
+        try {
+          const producto = await productoService.actualizar(id, { precioVenta });
+          resultados.push({ id, success: true, precioVenta: producto.precioVenta });
+        } catch (error: any) {
+          resultados.push({ id, success: false, error: error.message });
+        }
+      }
+
+      const exitosos = resultados.filter(r => r.success).length;
+      const fallidos = resultados.filter(r => !r.success).length;
+
+      res.json({
+        success: true,
+        mensaje: `Precios actualizados: ${exitosos} exitosos, ${fallidos} fallidos`,
+        data: resultados,
       });
     } catch (error) {
       next(error);

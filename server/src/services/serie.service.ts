@@ -60,6 +60,49 @@ export const serieService = {
   },
 
   /**
+   * Registrar números de serie retroactivamente (sin compraId)
+   * Usado cuando se activa requiereSerie en un producto con stock existente
+   */
+  async registrarSeriesRetroactivas(
+    productoId: string,
+    numerosSerie: string[]
+  ) {
+    // Validar que no existan duplicados en el array
+    const duplicadosLocales = numerosSerie.filter(
+      (item, index) => numerosSerie.indexOf(item) !== index
+    );
+    if (duplicadosLocales.length > 0) {
+      throw new Error(
+        `Números de serie duplicados en la lista: ${duplicadosLocales.join(', ')}`
+      );
+    }
+
+    // Validar que no existan en la BD
+    const existentes = await prisma.productoSerie.findMany({
+      where: {
+        numeroSerie: { in: numerosSerie },
+      },
+      select: { numeroSerie: true },
+    });
+
+    if (existentes.length > 0) {
+      throw new Error(
+        `Los siguientes números de serie ya existen: ${existentes.map((s) => s.numeroSerie).join(', ')}`
+      );
+    }
+
+    // Crear todos los registros sin compraId (retroactivo)
+    return await prisma.productoSerie.createMany({
+      data: numerosSerie.map((ns) => ({
+        productoId,
+        numeroSerie: ns.trim().toUpperCase(),
+        estado: EstadoSerie.DISPONIBLE,
+        // compraId será null para series retroactivas
+      })),
+    });
+  },
+
+  /**
    * Obtener series disponibles de un producto específico
    */
   async obtenerSeriesDisponibles(productoId: string) {
