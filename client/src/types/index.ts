@@ -38,6 +38,7 @@ export interface Producto {
   ubicacionId: string | null;
   precioCompra: number; // Decimal from Prisma, converted to number in frontend
   precioVenta: number; // Decimal from Prisma, converted to number in frontend
+  margenReferencia: number | null; // Decimal from Prisma, converted to number in frontend
   stockActual: number;
   stockMinimo: number;
   imagenUrl: string | null;
@@ -58,6 +59,14 @@ export interface Producto {
   hijos?: Producto[];
   movimientos?: MovimientoStock[];
   series?: ProductoSerie[];
+  historialCostos?: HistorialCosto[];
+}
+
+export interface HistorialCosto {
+  id: string;
+  productoId: string;
+  costo: string; // Decimal from Prisma
+  fechaRegistro: string;
 }
 
 export interface MovimientoStock {
@@ -220,6 +229,20 @@ export interface Proveedor {
   _count?: {
     compras: number;
   };
+}
+
+export interface SugerenciaPrecio {
+  productoId: string;
+  productoNombre: string;
+  cppAnterior: number;
+  cppNuevo: number;
+  margenReferencia: number | null;
+  precioActual: number;
+  precioSugerido: number;
+  precioEditado?: number; // Para edición en UI
+  margenResultante?: number; // Calculado en UI
+  aplicar?: boolean; // Checkbox en UI
+  variacionCPP: number;
 }
 
 export interface Compra {

@@ -3,6 +3,7 @@ import { FEATURES } from '@/config/features';
 import { useProductos } from '@/hooks/useProductos';
 import { useCategorias } from '@/hooks/useCategorias';
 import { useUbicaciones } from '@/hooks/useUbicaciones';
+import { productoService } from '@/services/producto.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -49,7 +50,7 @@ const getImageUrl = (imagenUrl: string | null): string | null => {
   const baseUrl = API_URL.replace('/api', ''); // Eliminar /api si existe
   return `${baseUrl}${imagenUrl}`;
 };
-import { Plus, Pencil, Trash2, Loader2, Filter, Eye, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Eye, History, AlertCircle } from 'lucide-react';
 import { ProductoForm } from '@/components/forms/ProductoForm';
 import { ProductoDetalle } from '@/components/ProductoDetalle';
 import type { Producto } from '@/types';
@@ -59,8 +60,10 @@ export function ProductosPage() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
   const [servicioFilter, setServicioFilter] = useState<string>('all');
+  const [pendientesFilter, setPendientesFilter] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [countPendientes, setCountPendientes] = useState(0);
 
   // Calcular skip para la paginación
   const skip = (currentPage - 1) * itemsPerPage;
@@ -76,6 +79,7 @@ export function ProductosPage() {
       busqueda: busqueda || undefined,
       categoriaId: categoriaFilter === 'all' ? undefined : categoriaFilter,
       esServicio: getEsServicioValue(),
+      preciosPendientes: pendientesFilter || undefined,
       skip,
       take: itemsPerPage,
     });
@@ -83,7 +87,24 @@ export function ProductosPage() {
   // Resetear a página 1 cuando cambien los filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [busqueda, categoriaFilter, servicioFilter, itemsPerPage]);
+  }, [busqueda, categoriaFilter, servicioFilter, pendientesFilter, itemsPerPage]);
+
+  // Obtener count de productos con precios pendientes
+  useEffect(() => {
+    const fetchCountPendientes = async () => {
+      try {
+        const { total: count } = await productoService.getAll({
+          preciosPendientes: true,
+          take: 1, // Solo necesitamos el count
+        });
+        setCountPendientes(count);
+      } catch (err) {
+        console.error('Error al obtener count de pendientes:', err);
+      }
+    };
+    
+    fetchCountPendientes();
+  }, [productos]); // Se actualiza cuando cambia la lista de productos
 
   const { categorias } = useCategorias();
   const { ubicaciones } = useUbicaciones();
@@ -229,7 +250,7 @@ export function ProductosPage() {
                   <span className="material-symbols-outlined text-muted-foreground text-[18px]">search</span>
                 </div>
                 <Input
-                  placeholder="Buscar producto, marca o SKU..."
+                  placeholder="Buscar producto, marca o modelo..."
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="pl-9 bg-background border-input focus:ring-1 h-9"
@@ -262,11 +283,20 @@ export function ProductosPage() {
                   </SelectContent>
                 </Select>
                 
-                <div className="h-6 w-px bg-border mx-1"></div>
-                
-                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-                   <Filter className="h-4 w-4" />
-                </Button>
+                {countPendientes > 0 && (
+                  <Button 
+                    variant={pendientesFilter ? "default" : "outline"} 
+                    size="sm"
+                    className={cn(
+                      "h-9 text-sm whitespace-nowrap",
+                      !pendientesFilter && "border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    )}
+                    onClick={() => setPendientesFilter(!pendientesFilter)}
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    {countPendientes} sin precio
+                  </Button>
+                )}
              </div>
          </div>
 

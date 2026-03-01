@@ -37,6 +37,7 @@ const transformProducto = (producto: ProductoRaw): Producto => ({
   padre: producto.padre ? transformProducto(producto.padre) : undefined,
   hijos: producto.hijos?.map(transformProducto),
   movimientos: producto.movimientos,
+  historialCostos: producto.historialCostos, // Mantener historialCostos (costo ya viene como string desde Prisma)
 });
 
 export const productoService = {
@@ -46,6 +47,7 @@ export const productoService = {
     categoriaId?: string;
     esServicio?: boolean;
     bajoStock?: boolean;
+    preciosPendientes?: boolean;
     skip?: number;
     take?: number;
   }): Promise<{ productos: Producto[]; total: number }> {
@@ -96,6 +98,12 @@ export const productoService = {
     return transformProducto(response.data.data);
   },
 
+  // POST /api/productos/rapido (Crear Producto Rápido desde Compras)
+  async createRapido(data: CrearProductoDto): Promise<Producto> {
+    const response = await api.post<ApiResponse<ProductoRaw>>('/productos/rapido', data);
+    return transformProducto(response.data.data);
+  },
+
   // PUT /api/productos/:id
   async update(id: string, data: ActualizarProductoDto | FormData): Promise<Producto> {
     const config = data instanceof FormData ? {
@@ -110,6 +118,11 @@ export const productoService = {
   async ajustarStock(id: string, data: AjustarStockDto): Promise<Producto> {
     const response = await api.patch<ApiResponse<ProductoRaw>>(`/productos/${id}/stock`, data);
     return transformProducto(response.data.data);
+  },
+
+  // PUT /api/productos/actualizar-precios-masivo
+  async actualizarPreciosMasivo(actualizaciones: Array<{ id: string; precioVenta: number }>): Promise<void> {
+    await api.put('/productos/actualizar-precios-masivo', actualizaciones);
   },
 
   // DELETE /api/productos/:id

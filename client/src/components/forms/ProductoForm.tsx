@@ -3,7 +3,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
+import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -67,6 +69,7 @@ const productoSchema = z.object({
   codigoBarras: z.string().max(50).optional().or(z.literal('')),
   precioCompra: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
   precioVenta: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
+  margenReferencia: z.string().regex(/^\d*\.?\d*$/, 'Debe ser un número válido').optional().or(z.literal('')),
   stockActual: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   stockMinimo: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   esServicio: z.boolean().optional(),
@@ -123,11 +126,17 @@ export function ProductoForm({
   ubicaciones,
 }: Readonly<ProductoFormProps>) {
   const [esServicio, setEsServicio] = useState(producto?.esServicio || false);
+  const [modoMargen, setModoMargen] = useState<boolean>(false); // false = Modo Precio, true = Modo Margen
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     getImageUrl(producto?.imagenUrl || null)
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para modal de series retroactivas
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
+  const prevRequiereSerieRef = useRef<boolean>(producto?.requiereSerie || false);
 
   const form = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
@@ -142,6 +151,7 @@ export function ProductoForm({
       codigoBarras: producto?.codigoBarras || '',
       precioCompra: producto?.precioCompra?.toString() || '',
       precioVenta: producto?.precioVenta?.toString() || '',
+      margenReferencia: producto?.margenReferencia?.toString() || '',
       stockActual: producto?.stockActual?.toString() || '',
       stockMinimo: producto?.stockMinimo?.toString() || '',
       esServicio: producto?.esServicio || false,
@@ -167,6 +177,11 @@ export function ProductoForm({
         form.setValue('precioCompra', '0');
         if (FEATURES.ENABLE_PRODUCT_SKU) form.setValue('sku', '');
         if (FEATURES.ENABLE_PRODUCT_BARCODE) form.setValue('codigoBarras', '');
+        // Resetear campos específicos de productos físicos
+        form.setValue('esSegundaMano', false);
+        form.setValue('requiereSerie', false);
+        form.setValue('garantiaProveedorMeses', '0');
+        form.setValue('garantiaClienteMeses', '0');
         setEsServicio(true);
       } else if (name === 'esServicio' && !value.esServicio) {
         setEsServicio(false);
@@ -175,8 +190,97 @@ export function ProductoForm({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  // Detectar cuando se activa requiereSerie en producto con stock existente
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'requiereSerie' && value.requiereSerie && !prevRequiereSerieRef.current) {
+        // Se acaba de activar requiereSerie
+        const stockActual = producto?.stockActual || 0;
+        
+        if (producto && stockActual > 0) {
+          // Producto en edición con stock existente - abrir modal para registrar series
+          setSeriesModalOpen(true);
+        }
+        
+        prevRequiereSerieRef.current = true;
+      } else if (name === 'requiereSerie' && !value.requiereSerie) {
+        prevRequiereSerieRef.current = false;
+        setSeriesRetroactivas([]); // Limpiar series si se desactiva
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, producto]);
+
+  // Calcular precio de venta automáticamente en Modo Margen
+  useEffect(() => {
+    if (!modoMargen) return;
+
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'precioCompra' || name === 'margenReferencia') {
+        const precioCompra = Number.parseFloat(value.precioCompra || '0');
+        const margen = Number.parseFloat(value.margenReferencia || '0');
+
+        if (precioCompra > 0 && margen >= 0) {
+          const precioVenta = precioCompra * (1 + margen / 100);
+          form.setValue('precioVenta', precioVenta.toFixed(2));
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, modoMargen]);
+
+  // Calcular margen automáticamente en Modo Precio
+  useEffect(() => {
+    if (modoMargen) return; // Solo aplica en modo precio
+
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'precioCompra' || name === 'precioVenta') {
+        const precioCompra = Number.parseFloat(value.precioCompra || '0');
+        const precioVenta = Number.parseFloat(value.precioVenta || '0');
+
+        if (precioCompra > 0 && precioVenta > precioCompra) {
+          const margen = ((precioVenta - precioCompra) / precioCompra) * 100;
+          form.setValue('margenReferencia', margen.toFixed(2));
+        } else if (precioVenta === 0 || precioCompra === 0) {
+          // Limpiar margen si los precios no son válidos
+          form.setValue('margenReferencia', '');
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, modoMargen]);
+
+  // Corregir margenReferencia desactualizado al cargar producto en edición
+  useEffect(() => {
+    if (!producto) return; // Solo para productos en edición
+    
+    const precioCompra = Number.parseFloat(producto.precioCompra?.toString() || '0');
+    const precioVenta = Number.parseFloat(producto.precioVenta?.toString() || '0');
+    const margenGuardado = Number.parseFloat(producto.margenReferencia?.toString() || '0');
+    
+    // Calcular margen real basado en los precios actuales
+    if (precioCompra > 0 && precioVenta > precioCompra) {
+      const margenReal = ((precioVenta - precioCompra) / precioCompra) * 100;
+      
+      // Si el margen guardado difiere del real por más de 0.5%, corregirlo
+      const diferencia = Math.abs(margenReal - margenGuardado);
+      if (diferencia > 0.5) {
+        form.setValue('margenReferencia', margenReal.toFixed(2));
+      }
+    }
+  }, [producto, form]);
+
   const onSubmit = async (data: ProductoFormValues) => {
     try {
+      // Validar que si se activó requiereSerie con stock, se hayan registrado las series
+      if (producto && data.requiereSerie && !prevRequiereSerieRef.current) {
+        const stockActual = producto.stockActual || 0;
+        if (stockActual > 0 && seriesRetroactivas.length === 0) {
+          alert(`Este producto tiene ${stockActual} unidades en stock. Debe registrar sus números de serie antes de guardar.`);
+          return;
+        }
+      }
+      
       // Crear FormData para enviar archivo
       const formData = new FormData();
       
@@ -191,6 +295,7 @@ export function ProductoForm({
       if (FEATURES.ENABLE_PRODUCT_BARCODE && data.codigoBarras) formData.append('codigoBarras', data.codigoBarras);
       formData.append('precioCompra', data.precioCompra);
       formData.append('precioVenta', data.precioVenta);
+      if (data.margenReferencia) formData.append('margenReferencia', data.margenReferencia);
       
       if (!esServicio) {
         // stockActual solo se envía al CREAR (trazabilidad - las ediciones usan PATCH /stock)
@@ -208,6 +313,11 @@ export function ProductoForm({
       formData.append('garantiaClienteMeses', data.garantiaClienteMeses || '0');
       if (data.padreId) formData.append('padreId', data.padreId);
       
+      // Agregar series retroactivas si existen
+      if (seriesRetroactivas.length > 0) {
+        formData.append('seriesRetroactivas', JSON.stringify(seriesRetroactivas));
+      }
+      
       // Agregar archivo si existe (solo si la funcionalidad está habilitada)
       if (FEATURES.ENABLE_PRODUCT_IMAGES && imagenFile) {
         formData.append('imagen', imagenFile);
@@ -223,9 +333,15 @@ export function ProductoForm({
       form.reset();
       setImagenFile(null);
       setPreviewUrl(null);
+      setSeriesRetroactivas([]);
     } catch (error) {
       console.error('Error al guardar:', error);
     }
+  };
+
+  const handleSeriesCompletas = (series: string[]) => {
+    setSeriesRetroactivas(series);
+    setSeriesModalOpen(false);
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -461,6 +577,16 @@ export function ProductoForm({
            <div className="flex items-center gap-2 border-b border-border pb-2">
               <span className="material-symbols-outlined text-primary text-[20px]">payments</span>
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Precios y Stock</h3>
+              {!esServicio && (
+                <div className="ml-auto flex items-center gap-2">
+                  <Badge variant={!modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(false)}>
+                    Por Precio
+                  </Badge>
+                  <Badge variant={modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(true)}>
+                    Por Margen %
+                  </Badge>
+                </div>
+              )}
            </div>
            
            {/* Fila 1: Precios y Margen */}
@@ -492,33 +618,76 @@ export function ProductoForm({
                   )}
                 />
               )}
-              <FormField
-                control={form.control}
-                name="precioVenta"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio Venta (S/.)</FormLabel>
-                    <FormControl>
-                        <Input 
-                          type="text" 
-                          className="bg-background border-border" 
-                          placeholder="0.00"
-                          {...field} 
-                          value={field.value === '0' ? '' : field.value}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (/^\d*\.?\d{0,2}$/.test(value)) {
-                                field.onChange(value);
-                            }
-                          }}
-                        />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               
-              {!esServicio && (
+              {/* Modo Precio: Usuario ingresa precio venta manualmente */}
+              {!modoMargen && (
+                <FormField
+                  control={form.control}
+                  name="precioVenta"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio Venta (S/.)</FormLabel>
+                      <FormControl>
+                          <Input 
+                            type="text" 
+                            className="bg-background border-border" 
+                            placeholder="0.00"
+                            {...field} 
+                            value={field.value === '0' ? '' : field.value}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*\.?\d{0,2}$/.test(value)) {
+                                  field.onChange(value);
+                              }
+                            }}
+                          />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              
+              {/* Modo Margen: Usuario ingresa porcentaje de margen */}
+              {modoMargen && (
+                <FormField
+                  control={form.control}
+                  name="margenReferencia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Margen Deseado (%)</FormLabel>
+                      <FormControl>
+                          <Input 
+                            type="text" 
+                            className="bg-background border-border" 
+                            placeholder="30"
+                            {...field} 
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*\.?\d{0,2}$/.test(value)) {
+                                  field.onChange(value);
+                              }
+                            }}
+                          />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              
+              {/* Modo Margen: Mostrar precio de venta calculado */}
+              {modoMargen && !esServicio && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Precio Venta</label>
+                  <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center font-semibold">
+                    S/. {form.watch('precioVenta') || '0.00'}
+                  </div>
+                </div>
+              )}
+              
+              {/* Modo Precio: Mostrar margen calculado (como antes) */}
+              {!modoMargen && !esServicio && (
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-muted-foreground">Ganancia / Margen</label>
                       <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center justify-between text-muted-foreground font-mono">
@@ -752,6 +921,25 @@ export function ProductoForm({
           </Button>
         </div>
       </form>
+
+      {/* Modal para registrar series retroactivas */}
+      {producto && seriesModalOpen && (
+        <SeriesEscanerModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            // Si cierra sin completar, desactivar requiereSerie
+            if (seriesRetroactivas.length === 0) {
+              form.setValue('requiereSerie', false);
+              prevRequiereSerieRef.current = false;
+            }
+          }}
+          productoNombre={producto.nombre}
+          cantidad={producto.stockActual}
+          onSeriesCompletas={handleSeriesCompletas}
+          modo="compra"
+        />
+      )}
     </Form>
   );
 }
