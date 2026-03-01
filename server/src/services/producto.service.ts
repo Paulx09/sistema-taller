@@ -94,6 +94,11 @@ export class ProductoService {
           categoria: { select: { id: true, nombre: true } },
           ubicacion: { select: { id: true, nombre: true } },
           padre: { select: { id: true, nombre: true } },
+          historialCostos: {
+            orderBy: { fechaRegistro: 'desc' },
+            take: 1,
+            select: { costo: true, fechaRegistro: true },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -102,7 +107,15 @@ export class ProductoService {
       prisma.producto.count({ where }),
     ]);
 
-    return { productos, total };
+    // Agregar ultimoCostoCompra a cada producto
+    const productosConUltimoCosto = productos.map(p => ({
+      ...p,
+      ultimoCostoCompra: p.historialCostos[0]?.costo 
+        ? Number(p.historialCostos[0].costo) 
+        : Number(p.precioCompra),
+    }));
+
+    return { productos: productosConUltimoCosto, total };
   }
 
   // AJUSTE CRÍTICO: Búsqueda para combobox (excluye producto actual)
