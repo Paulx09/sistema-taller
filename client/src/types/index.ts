@@ -36,9 +36,10 @@ export interface Producto {
   descripcion: string | null;
   categoriaId: string;
   ubicacionId: string | null;
-  precioCompra: number; // Decimal from Prisma, converted to number in frontend
+  precioCompra: number; // Decimal from Prisma, converted to number in frontend (CPP - Costo Promedio Ponderado)
   precioVenta: number; // Decimal from Prisma, converted to number in frontend
   margenReferencia: number | null; // Decimal from Prisma, converted to number in frontend
+  ultimoCostoCompra?: number; // Último costo registrado (para referencia en compras)
   stockActual: number;
   stockMinimo: number;
   imagenUrl: string | null;

@@ -204,7 +204,8 @@ export function ComprasPage() {
       const nuevoItem: ItemCompra = {
         producto: p,
         cantidad: 1,
-        costoUnitario: Number.parseFloat(p.precioCompra.toString()) || 0,
+        // Usar último costo de compra si está disponible, sino el CPP
+        costoUnitario: p.ultimoCostoCompra || Number.parseFloat(p.precioCompra.toString()) || 0,
         numerosSerie: [],
       };
       setDetalles([...detalles, nuevoItem]);
@@ -554,8 +555,13 @@ export function ComprasPage() {
                       <div className="flex-1">
                         <div className="font-medium text-sm">{p.nombre}</div>
                         <div className="text-xs text-muted-foreground">{[p.marca, p.modelo].filter(Boolean).join(' · ')|| '—'}</div>
-                        <div className="text-sm font-semibold text-primary mt-1">
-                          {fmt(Number.parseFloat(p.precioCompra.toString()))}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="text-sm font-semibold text-primary">
+                            {fmt(p.ultimoCostoCompra || Number.parseFloat(p.precioCompra.toString()))}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            {p.ultimoCostoCompra ? 'Última compra' : 'CPP'}
+                          </span>
                         </div>
                       </div>
                       <Badge variant="outline" className="text-xs">

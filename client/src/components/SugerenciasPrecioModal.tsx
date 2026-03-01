@@ -153,7 +153,7 @@ export function SugerenciasPrecioModal({
                   <div className="flex-1">
                     <h4 className="font-semibold text-base">{sug.productoNombre}</h4>
                     
-                    {/* Cambio de CPP */}
+                    {/* Cambio de Precio Compra */}
                     <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                       <span>Precio Compra:</span>
                       <span className="font-mono">S/ {sug.cppAnterior.toFixed(2)}</span>
