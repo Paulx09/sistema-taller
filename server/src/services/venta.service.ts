@@ -127,6 +127,13 @@ class VentaService {
         throw new Error(`Producto no encontrado: ${detalle.productoId}`);
       }
 
+      // Bloquear venta en pérdida: el precio unitario no puede ser menor al CPP
+      if (new Prisma.Decimal(detalle.precioUnitario).lessThan(producto.precioCompra)) {
+        throw new Error(
+          `No se puede vender "${producto.nombre}" en pérdida. Precio de venta (S/ ${detalle.precioUnitario}) es menor al costo promedio (S/ ${Number(producto.precioCompra).toFixed(2)}). Actualiza el precio del producto antes de realizar la venta.`
+        );
+      }
+
       // Los servicios no tienen control de stock
       if (!producto.esServicio && producto.stockActual < detalle.cantidad) {
         throw new Error(
