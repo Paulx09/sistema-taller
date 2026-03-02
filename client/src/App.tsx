@@ -9,6 +9,8 @@ import { ProveedoresPage } from '@/pages/ProveedoresPage';
 import { ComprasPage } from '@/pages/ComprasPage';
 import { VerificarGarantiaPage } from '@/pages/VerificarGarantiaPage';
 import { ClientesPage } from '@/pages/ClientesPage';
+import { OrdenesServicioPage } from '@/pages/OrdenesServicioPage';
+import { OrdenServicioDetalle } from '@/pages/OrdenServicioDetalle';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
@@ -40,6 +42,8 @@ function App() {
             <Route path="compras" element={<ComprasPage />} />
             <Route path="verificar-garantia" element={<VerificarGarantiaPage />} />
             <Route path="clientes" element={<ClientesPage />} />
+            <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
+            <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
           </Route>
 
           {/* Ruta por defecto - redirige al dashboard */}

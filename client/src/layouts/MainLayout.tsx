@@ -34,6 +34,7 @@ export function MainLayout() {
       if (location.pathname.startsWith('/compras')) return 'Compras e Inventario';
       if (location.pathname.startsWith('/verificar-garantia')) return 'Verificar Garantía';
       if (location.pathname.startsWith('/clientes')) return 'Gestión de Clientes';
+      if (location.pathname.match(/^\/ordenes-servicio\/[^/]+$/)) return 'Detalle de Orden';
       if (location.pathname.startsWith('/ordenes-servicio')) return 'Órdenes de Servicio';
       return 'Sistema Taller';
   }

@@ -2,9 +2,11 @@ import api from './api';
 
 export interface DashboardMetrics {
   ventasHoy: number;
-  gananciaHoy: number; // Por ahora será 0 o mock
+  gananciaHoy: number;
   productosStockBajo: number;
   productosSinMovimiento: number;
+  ordenesActivas: number;
+  ordenesDetalle: { recibidas: number; enReparacion: number; listas: number };
 }
 
 export interface ProductoBajoStock {
