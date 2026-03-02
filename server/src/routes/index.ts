@@ -8,6 +8,9 @@ import ventaRoutes from './venta.routes';
 import proveedorRoutes from './proveedor.routes';
 import compraRoutes from './compra.routes';
 import serieRoutes from './serie.routes';
+import clienteRoutes from './cliente.routes';
+import equipoClienteRoutes from './equipo-cliente.routes';
+import ordenServicioRoutes from './orden-servicio.routes';
 
 const router = Router();
 
@@ -21,5 +24,8 @@ router.use('/ventas', ventaRoutes);
 router.use('/proveedores', proveedorRoutes);
 router.use('/compras', compraRoutes);
 router.use('/series', serieRoutes);
+router.use('/clientes', clienteRoutes);
+router.use('/equipos', equipoClienteRoutes);
+router.use('/ordenes-servicio', ordenServicioRoutes);
 
 export default router;

@@ -28,6 +28,11 @@ model Usuario {
   movimientos     MovimientoStock[]
   compras         Compra[]          // FASE 2: Compras registradas por este usuario
 
+  // FASE 3: Órdenes de Servicio
+  ordenesRegistradas OrdenServicio[] @relation("OrdenRegistro")
+  ordenesTecnico     OrdenServicio[] @relation("OrdenTecnico")
+  notasTecnicas      NotaTecnica[]
+
   @@map("usuarios")
 }
 
@@ -99,6 +104,7 @@ model Producto {
   detalleCompras  DetalleCompra[]   // FASE 2: Compras de este producto
   historialCostos HistorialCosto[]  // FASE 2: Historial de precios
   series          ProductoSerie[]   // FASE 3: Números de serie individuales
+  itemsOrdenes    ItemOrden[]       // FASE 3: Ítems en órdenes de servicio
 
   @@map("productos")
 }
@@ -109,6 +115,8 @@ model Venta {
   fecha               DateTime       @default(now())
   usuarioId           String         @map("usuario_id")
   usuario             Usuario        @relation(fields: [usuarioId], references: [id])
+  clienteId           String?        @map("cliente_id")   // FASE 3: Cliente registrado (opcional)
+  cliente             Cliente?       @relation(fields: [clienteId], references: [id])
   clienteNombre       String?        @map("cliente_nombre") @db.VarChar(100)
   metodoPago          String?        @map("metodo_pago") @db.VarChar(20)
   total               Decimal        @db.Decimal(10, 2)
@@ -139,17 +147,19 @@ model DetalleVenta {
 }
 
 model MovimientoStock {
-  id          String          @id @default(uuid())
-  usuarioId   String?         @map("usuario_id")
-  usuario     Usuario?        @relation(fields: [usuarioId], references: [id])
-  productoId  String          @map("producto_id")
-  producto    Producto        @relation(fields: [productoId], references: [id])
-  tipo        TipoMovimiento
-  cantidad    Int
-  motivo      String?         @db.VarChar(100)
-  compraId    String?         @map("compra_id") // FASE 2: Rastreabilidad a la compra
-  compra      Compra?         @relation(fields: [compraId], references: [id])
-  createdAt   DateTime        @default(now()) @map("created_at")
+  id               String          @id @default(uuid())
+  usuarioId        String?         @map("usuario_id")
+  usuario          Usuario?        @relation(fields: [usuarioId], references: [id])
+  productoId       String          @map("producto_id")
+  producto         Producto        @relation(fields: [productoId], references: [id])
+  tipo             TipoMovimiento
+  cantidad         Int
+  motivo           String?         @db.VarChar(100)
+  compraId         String?         @map("compra_id") // FASE 2: Rastreabilidad a la compra
+  compra           Compra?         @relation(fields: [compraId], references: [id])
+  ordenServicioId  String?         @map("orden_servicio_id") // FASE 3: Trazabilidad a orden de servicio
+  ordenServicio    OrdenServicio?  @relation(fields: [ordenServicioId], references: [id])
+  createdAt        DateTime        @default(now()) @map("created_at")
 
   @@map("movimientos_stock")
 }
@@ -221,6 +231,16 @@ enum EstadoSerie {
   DEVUELTO
 }
 
+// FASE 3: ÓRDENES DE SERVICIO
+
+enum EstadoOrden {
+  RECIBIDA
+  EN_REPARACION
+  LISTA
+  ENTREGADA
+  CANCELADA
+}
+
 model ProductoSerie {
   id           String       @id @default(uuid())
   productoId   String       @map("producto_id")
@@ -241,4 +261,93 @@ model ProductoSerie {
   @@index([estado])
   @@index([numeroSerie])
   @@map("producto_series")
+}
+
+model Cliente {
+  id         String          @id @default(uuid())
+  nombre     String          @db.VarChar(100)
+  dniRuc     String?         @unique @map("dni_ruc") @db.VarChar(11)
+  telefono   String?         @db.VarChar(20)
+  direccion  String?         @db.Text
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+  deletedAt  DateTime?       @map("deleted_at")
+  equipos    EquipoCliente[]
+  ordenes    OrdenServicio[]
+  ventas     Venta[]
+
+  @@map("clientes")
+}
+
+model EquipoCliente {
+  id               String          @id @default(uuid())
+  clienteId        String          @map("cliente_id")
+  cliente          Cliente         @relation(fields: [clienteId], references: [id])
+  tipoEquipo       String          @map("tipo_equipo") @db.VarChar(50)
+  marca            String?         @db.VarChar(50)
+  modelo           String?         @db.VarChar(50)
+  numeroSerie      String?         @map("numero_serie") @db.VarChar(100)
+  contrasenaPatron String?         @map("contrasena_patron") @db.VarChar(100)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  ordenes          OrdenServicio[]
+
+  @@map("equipos_cliente")
+}
+
+model OrdenServicio {
+  id                    String            @id @default(uuid())
+  codigoCorrelativo     Int               @default(autoincrement()) @map("codigo_correlativo")
+  clienteId             String            @map("cliente_id")
+  cliente               Cliente           @relation(fields: [clienteId], references: [id])
+  equipoId              String            @map("equipo_id")
+  equipo                EquipoCliente     @relation(fields: [equipoId], references: [id])
+  usuarioRegistroId     String            @map("usuario_registro_id")
+  usuarioRegistro       Usuario           @relation("OrdenRegistro", fields: [usuarioRegistroId], references: [id])
+  usuarioTecnicoId      String?           @map("usuario_tecnico_id")
+  usuarioTecnico        Usuario?          @relation("OrdenTecnico", fields: [usuarioTecnicoId], references: [id])
+  fechaEmision          DateTime          @default(now()) @map("fecha_emision")
+  problemaReportado     String            @db.Text @map("problema_reportado")
+  diagnosticoInicial    String?           @db.Text @map("diagnostico_inicial")
+  observacionesEsteticas Json?            @map("observaciones_esteticas")
+  costoEstimado         Decimal?          @map("costo_estimado") @db.Decimal(10, 2)
+  pagoACuenta           Decimal           @default(0) @map("pago_a_cuenta") @db.Decimal(10, 2)
+  total                 Decimal           @default(0) @db.Decimal(10, 2)
+  gananciaTotal         Decimal           @default(0) @map("ganancia_total") @db.Decimal(10, 2)
+  estado                EstadoOrden       @default(RECIBIDA)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  deletedAt             DateTime?         @map("deleted_at")
+  items                 ItemOrden[]
+  notas                 NotaTecnica[]
+  movimientos           MovimientoStock[]
+
+  @@map("ordenes_servicio")
+}
+
+model ItemOrden {
+  id                    String        @id @default(uuid())
+  ordenId               String        @map("orden_id")
+  orden                 OrdenServicio @relation(fields: [ordenId], references: [id])
+  productoId            String        @map("producto_id")
+  producto              Producto      @relation(fields: [productoId], references: [id])
+  cantidad              Int
+  precioUnitario        Decimal       @map("precio_unitario") @db.Decimal(10, 2)
+  costoUnitarioSnapshot Decimal       @map("costo_unitario_snapshot") @db.Decimal(10, 2)
+  subtotal              Decimal       @db.Decimal(10, 2)
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  @@map("items_orden")
+}
+
+model NotaTecnica {
+  id        String        @id @default(uuid())
+  ordenId   String        @map("orden_id")
+  orden     OrdenServicio @relation(fields: [ordenId], references: [id])
+  usuarioId String        @map("usuario_id")
+  usuario   Usuario       @relation(fields: [usuarioId], references: [id])
+  contenido String        @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@map("notas_tecnicas")
 }
