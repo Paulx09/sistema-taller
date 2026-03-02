@@ -8,6 +8,7 @@ import { VentasPage } from '@/pages/VentasPage';
 import { ProveedoresPage } from '@/pages/ProveedoresPage';
 import { ComprasPage } from '@/pages/ComprasPage';
 import { VerificarGarantiaPage } from '@/pages/VerificarGarantiaPage';
+import { ClientesPage } from '@/pages/ClientesPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
@@ -38,6 +39,7 @@ function App() {
             <Route path="proveedores" element={<ProveedoresPage />} />
             <Route path="compras" element={<ComprasPage />} />
             <Route path="verificar-garantia" element={<VerificarGarantiaPage />} />
+            <Route path="clientes" element={<ClientesPage />} />
           </Route>
 
           {/* Ruta por defecto - redirige al dashboard */}
