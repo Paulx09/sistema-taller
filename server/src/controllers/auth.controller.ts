@@ -32,6 +32,16 @@ class AuthController {
     }
   }
 
+  // GET /api/auth/usuarios
+  async listarUsuarios(req: Request, res: Response, next: NextFunction) {
+    try {
+      const usuarios = await authService.listarUsuarios();
+      res.json({ success: true, data: usuarios });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // GET /api/auth/me (opcional - para verificar sesión)
   async getCurrentUser(req: Request, res: Response, next: NextFunction) {
     try {
