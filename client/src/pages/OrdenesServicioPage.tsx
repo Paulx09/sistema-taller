@@ -19,6 +19,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,12 +48,15 @@ import {
   User,
   Laptop,
   CalendarDays,
+  UserPlus,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useOrdenesServicio } from '@/hooks/useOrdenesServicio';
 import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
 import { usuarioService } from '@/services/usuario.service';
-import type { Cliente, EquipoCliente, Usuario, EstadoOrden, CrearOrdenDto } from '@/types';
+import type { Cliente, EquipoCliente, Usuario, EstadoOrden, CrearOrdenDto, CrearEquipoDto } from '@/types';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const ESTADOS: { value: EstadoOrden | ''; label: string }[] = [
@@ -65,6 +76,14 @@ const FORM_VACIO: CrearOrdenDto = {
   costoEstimado: null,
   pagoACuenta: 0,
   usuarioTecnicoId: null,
+};
+
+const EQUIPO_NUEVO_VACIO: CrearEquipoDto = {
+  tipoEquipo: '',
+  marca: '',
+  modelo: '',
+  numeroSerie: '',
+  contrasenaPatron: '',
 };
 
 const formatMoneda = (valor: string | null | undefined) => {
@@ -119,6 +138,19 @@ export function OrdenesServicioPage() {
   // Para el selector de técnico
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
+  // ── Nuevo cliente rápido (Dialog) ─────────────────────────────────────────
+  const [nuevoClienteDialogOpen, setNuevoClienteDialogOpen] = useState(false);
+  const [formNuevoCliente, setFormNuevoCliente] = useState({ nombre: '', telefono: '' });
+  const [submittingNuevoCliente, setSubmittingNuevoCliente] = useState(false);
+  const [errorNuevoCliente, setErrorNuevoCliente] = useState<string | null>(null);
+
+  // ── Agregar equipo inline (Sheet) ──────────────────────────────────────────
+  const [mostrarFormEquipo, setMostrarFormEquipo] = useState(false);
+  const [formNuevoEquipo, setFormNuevoEquipo] = useState<CrearEquipoDto>(EQUIPO_NUEVO_VACIO);
+  const [submittingNuevoEquipo, setSubmittingNuevoEquipo] = useState(false);
+  const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
+  const [verContrasenaEquipo, setVerContrasenaEquipo] = useState(false);
+
   const cargarDatosFormulario = useCallback(async () => {
     setLoadingClientes(true);
     try {
@@ -137,6 +169,10 @@ export function OrdenesServicioPage() {
     setClienteSearch('');
     setEquipos([]);
     setFormError(null);
+    setMostrarFormEquipo(false);
+    setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
+    setErrorNuevoEquipo(null);
+    setVerContrasenaEquipo(false);
     setSheetOpen(true);
     cargarDatosFormulario();
   };
@@ -145,6 +181,10 @@ export function OrdenesServicioPage() {
   const handleClienteChange = useCallback(async (clienteId: string) => {
     setForm((prev) => ({ ...prev, clienteId, equipoId: '' }));
     setEquipos([]);
+    setMostrarFormEquipo(false);
+    setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
+    setErrorNuevoEquipo(null);
+    setVerContrasenaEquipo(false);
     if (!clienteId) return;
     setLoadingEquipos(true);
     try {
@@ -157,6 +197,60 @@ export function OrdenesServicioPage() {
     } catch { /* silencioso */ }
     finally { setLoadingEquipos(false); }
   }, []);
+
+  // ── Crear cliente rápido ──────────────────────────────────────────────────
+  const handleCrearClienteRapido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formNuevoCliente.nombre.trim()) {
+      setErrorNuevoCliente('El nombre es obligatorio.');
+      return;
+    }
+    setSubmittingNuevoCliente(true);
+    setErrorNuevoCliente(null);
+    try {
+      const nuevoCliente = await clienteService.create({
+        nombre: formNuevoCliente.nombre.trim(),
+        telefono: formNuevoCliente.telefono.trim() || null,
+      });
+      setClientes((prev) => [nuevoCliente, ...prev]);
+      await handleClienteChange(nuevoCliente.id);
+      setNuevoClienteDialogOpen(false);
+      setFormNuevoCliente({ nombre: '', telefono: '' });
+    } catch (err: any) {
+      setErrorNuevoCliente(err.response?.data?.error || 'Error al crear el cliente');
+    } finally {
+      setSubmittingNuevoCliente(false);
+    }
+  };
+
+  // ── Agregar equipo inline ──────────────────────────────────────────────────
+  const handleCrearEquipoInline = async () => {
+    if (!form.clienteId) return;
+    if (!formNuevoEquipo.tipoEquipo.trim()) {
+      setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
+      return;
+    }
+    setSubmittingNuevoEquipo(true);
+    setErrorNuevoEquipo(null);
+    try {
+      const nuevoEquipo = await equipoClienteService.create(form.clienteId, {
+        tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+        marca: formNuevoEquipo.marca?.trim() || null,
+        modelo: formNuevoEquipo.modelo?.trim() || null,
+        numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+        contrasenaPatron: formNuevoEquipo.contrasenaPatron?.trim() || null,
+      });
+      setEquipos((prev) => [...prev, nuevoEquipo]);
+      setForm((prev) => ({ ...prev, equipoId: nuevoEquipo.id }));
+      setMostrarFormEquipo(false);
+      setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
+      setVerContrasenaEquipo(false);
+    } catch (err: any) {
+      setErrorNuevoEquipo(err.response?.data?.error || 'Error al crear el equipo');
+    } finally {
+      setSubmittingNuevoEquipo(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -478,8 +572,22 @@ export function OrdenesServicioPage() {
           <form onSubmit={handleSubmit} className="space-y-5 mt-6">
             {/* ── Seleccionar cliente ── */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Cliente <span className="text-destructive">*</span>
+              <label className="text-sm font-medium flex items-center justify-between">
+                <span>Cliente <span className="text-destructive">*</span></span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 text-xs text-primary hover:text-primary px-2"
+                  onClick={() => {
+                    setFormNuevoCliente({ nombre: '', telefono: '' });
+                    setErrorNuevoCliente(null);
+                    setNuevoClienteDialogOpen(true);
+                  }}
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Nuevo cliente
+                </Button>
               </label>
               {loadingClientes ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -550,41 +658,171 @@ export function OrdenesServicioPage() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando equipos...
                 </div>
-              ) : equipos.length === 0 ? (
-                <Alert>
-                  <AlertDescription className="text-xs">
-                    Este cliente no tiene equipos registrados. Puede registrar uno en la sección de
-                    Clientes.
-                  </AlertDescription>
-                </Alert>
               ) : (
-                <div className="border rounded-md overflow-hidden">
-                  {equipos.map((eq) => (
-                    <button
+                <div className="space-y-2">
+                  {equipos.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Este cliente aún no tiene equipos registrados.
+                    </p>
+                  ) : (
+                    <div className="border rounded-md overflow-hidden">
+                      {equipos.map((eq) => (
+                        <button
+                          type="button"
+                          key={eq.id}
+                          onClick={() => setForm((prev) => ({ ...prev, equipoId: eq.id }))}
+                          className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0 ${
+                            form.equipoId === eq.id ? 'bg-primary/10 text-primary font-medium' : ''
+                          }`}
+                        >
+                          <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-medium">{eq.tipoEquipo}</span>
+                            {(eq.marca || eq.modelo) && (
+                              <span className="text-muted-foreground font-normal">
+                                {' '}
+                                — {[eq.marca, eq.modelo].filter(Boolean).join(' ')}
+                              </span>
+                            )}
+                            {eq.numeroSerie && (
+                              <p className="text-xs text-muted-foreground font-mono">
+                                S/N: {eq.numeroSerie}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Botón / formulario inline para nuevo equipo */}
+                  {!mostrarFormEquipo ? (
+                    <Button
                       type="button"
-                      key={eq.id}
-                      onClick={() => setForm((prev) => ({ ...prev, equipoId: eq.id }))}
-                      className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0 ${
-                        form.equipoId === eq.id ? 'bg-primary/10 text-primary font-medium' : ''
-                      }`}
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1.5 text-xs h-8"
+                      onClick={() => setMostrarFormEquipo(true)}
                     >
-                      <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium">{eq.tipoEquipo}</span>
-                        {(eq.marca || eq.modelo) && (
-                          <span className="text-muted-foreground font-normal">
-                            {' '}
-                            — {[eq.marca, eq.modelo].filter(Boolean).join(' ')}
-                          </span>
-                        )}
-                        {eq.numeroSerie && (
-                          <p className="text-xs text-muted-foreground font-mono">
-                            S/N: {eq.numeroSerie}
-                          </p>
-                        )}
+                      <Plus className="h-3.5 w-3.5" />
+                      Agregar nuevo equipo
+                    </Button>
+                  ) : (
+                    <div className="border rounded-md p-3 space-y-3 bg-muted/20">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold">Nuevo equipo</p>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground text-xs leading-none"
+                          onClick={() => {
+                            setMostrarFormEquipo(false);
+                            setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
+                            setErrorNuevoEquipo(null);
+                          }}
+                        >
+                          ✕
+                        </button>
                       </div>
-                    </button>
-                  ))}
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">
+                          Tipo de equipo <span className="text-destructive">*</span>
+                        </label>
+                        <Input
+                          value={formNuevoEquipo.tipoEquipo}
+                          onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, tipoEquipo: e.target.value }))}
+                          placeholder="Laptop, Celular, PC, Impresora..."
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium">Marca</label>
+                          <Input
+                            value={formNuevoEquipo.marca || ''}
+                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))}
+                            placeholder="HP, Samsung..."
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium">Modelo</label>
+                          <Input
+                            value={formNuevoEquipo.modelo || ''}
+                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, modelo: e.target.value }))}
+                            placeholder="Pavilion, A15..."
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">N° de serie</label>
+                        <Input
+                          value={formNuevoEquipo.numeroSerie || ''}
+                          onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, numeroSerie: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-8 text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">Contraseña / patrón</label>
+                        <div className="relative">
+                          <Input
+                            type={verContrasenaEquipo ? 'text' : 'password'}
+                            value={formNuevoEquipo.contrasenaPatron || ''}
+                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, contrasenaPatron: e.target.value }))}
+                            placeholder="Opcional"
+                            className="h-8 text-xs pr-8"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVerContrasenaEquipo((v) => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {verContrasenaEquipo
+                              ? <EyeOff className="h-3.5 w-3.5" />
+                              : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {errorNuevoEquipo && (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertDescription className="text-xs">{errorNuevoEquipo}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-7 text-xs"
+                          onClick={() => {
+                            setMostrarFormEquipo(false);
+                            setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
+                            setErrorNuevoEquipo(null);
+                          }}
+                          disabled={submittingNuevoEquipo}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="flex-1 h-7 text-xs"
+                          onClick={handleCrearEquipoInline}
+                          disabled={submittingNuevoEquipo}
+                        >
+                          {submittingNuevoEquipo && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          Guardar equipo
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -695,6 +933,60 @@ export function OrdenesServicioPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* ── Dialog: Nuevo Cliente Rápido ────────────────────────────────────── */}
+      <Dialog open={nuevoClienteDialogOpen} onOpenChange={setNuevoClienteDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nuevo Cliente</DialogTitle>
+            <DialogDescription>
+              Registro rápido. Puede completar el perfil (DNI/RUC, dirección) después en el módulo
+              de Clientes.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCrearClienteRapido} className="space-y-3 mt-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Nombre <span className="text-destructive">*</span>
+              </label>
+              <Input
+                autoFocus
+                value={formNuevoCliente.nombre}
+                onChange={(e) => setFormNuevoCliente((p) => ({ ...p, nombre: e.target.value }))}
+                placeholder="Nombre completo o razón social"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Teléfono</label>
+              <Input
+                type="tel"
+                value={formNuevoCliente.telefono}
+                onChange={(e) => setFormNuevoCliente((p) => ({ ...p, telefono: e.target.value }))}
+                placeholder="9XXXXXXXX"
+              />
+            </div>
+            {errorNuevoCliente && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-sm">{errorNuevoCliente}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter className="gap-2 mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setNuevoClienteDialogOpen(false)}
+                disabled={submittingNuevoCliente}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingNuevoCliente}>
+                {submittingNuevoCliente && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar cliente
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
