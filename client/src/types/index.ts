@@ -389,3 +389,182 @@ export interface SerieEstadisticas {
   GARANTIA: number;
   DEVUELTO: number;
 }
+
+// FASE 3: CLIENTES, EQUIPOS Y ÓRDENES DE SERVICIO 
+
+export interface Cliente {
+  id: string;
+  nombre: string;
+  dniRuc: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  equipos?: EquipoCliente[];
+  ordenes?: OrdenServicioResumen[];
+  ventas?: VentaResumen[];
+  _count?: {
+    equipos: number;
+    ordenes: number;
+    ventas: number;
+  };
+}
+
+export interface EquipoCliente {
+  id: string;
+  clienteId: string;
+  tipoEquipo: string;
+  marca: string | null;
+  modelo: string | null;
+  numeroSerie: string | null;
+  // contrasenaPatron: nunca se incluye en el tipo general (se revela por endpoint específico)
+  createdAt: string;
+  updatedAt: string;
+  cliente?: { id: string; nombre: string };
+  _count?: { ordenes: number };
+}
+
+export type EstadoOrden = 'RECIBIDA' | 'EN_REPARACION' | 'LISTA' | 'ENTREGADA' | 'CANCELADA';
+
+export interface OrdenServicio {
+  id: string;
+  codigoCorrelativo: number;
+  codigoFormateado: string;
+  clienteId: string;
+  equipoId: string;
+  usuarioRegistroId: string;
+  usuarioTecnicoId: string | null;
+  fechaEmision: string;
+  problemaReportado: string;
+  diagnosticoInicial: string | null;
+  observacionesEsteticas: Record<string, any> | null;
+  costoEstimado: string | null;
+  pagoACuenta: string;
+  total: string;
+  gananciaTotal: string;
+  estado: EstadoOrden;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  cliente?: { id: string; nombre: string; telefono: string | null; dniRuc: string | null };
+  equipo?: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null; numeroSerie: string | null };
+  usuarioRegistro?: { id: string; username: string; nombreCompleto: string };
+  usuarioTecnico?: { id: string; username: string; nombreCompleto: string } | null;
+  items?: ItemOrden[];
+  notas?: NotaTecnica[];
+  _count?: { items: number; notas: number };
+}
+
+/** Versión resumida para listados */
+export interface OrdenServicioResumen {
+  id: string;
+  codigoCorrelativo: number;
+  codigoFormateado: string;
+  estado: EstadoOrden;
+  fechaEmision: string;
+  total: string;
+  costoEstimado: string | null;
+  pagoACuenta: string;
+  cliente: { id: string; nombre: string; telefono: string | null };
+  equipo: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null };
+  usuarioRegistro: { id: string; nombreCompleto: string };
+  usuarioTecnico: { id: string; nombreCompleto: string } | null;
+  _count: { items: number; notas: number };
+}
+
+export interface VentaResumen {
+  id: string;
+  codigoCorrelativo: number;
+  fecha: string;
+  total: string;
+  estado: string;
+}
+
+export interface ItemOrden {
+  id: string;
+  ordenId: string;
+  productoId: string;
+  cantidad: number;
+  precioUnitario: string;
+  costoUnitarioSnapshot: string;
+  subtotal: string;
+  createdAt: string;
+  producto?: {
+    id: string;
+    nombre: string;
+    marca: string | null;
+    modelo: string | null;
+    sku: string | null;
+    esServicio: boolean;
+    imagenUrl: string | null;
+  };
+}
+
+export interface NotaTecnica {
+  id: string;
+  ordenId: string;
+  usuarioId: string;
+  contenido: string;
+  createdAt: string;
+  usuario?: { id: string; username: string; nombreCompleto: string };
+}
+
+// DTOs Clientes
+export interface CrearClienteDto {
+  nombre: string;
+  dniRuc?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+}
+
+export interface ActualizarClienteDto {
+  nombre?: string;
+  dniRuc?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+}
+
+// DTOs Equipos
+export interface CrearEquipoDto {
+  tipoEquipo: string;
+  marca?: string | null;
+  modelo?: string | null;
+  numeroSerie?: string | null;
+  contrasenaPatron?: string | null;
+}
+
+export interface ActualizarEquipoDto {
+  tipoEquipo?: string;
+  marca?: string | null;
+  modelo?: string | null;
+  numeroSerie?: string | null;
+  contrasenaPatron?: string | null;
+}
+
+// DTOs Órdenes de Servicio
+export interface CrearOrdenDto {
+  clienteId: string;
+  equipoId: string;
+  usuarioTecnicoId?: string | null;
+  problemaReportado: string;
+  diagnosticoInicial?: string | null;
+  observacionesEsteticas?: Record<string, boolean> | null;
+  costoEstimado?: number | null;
+  pagoACuenta?: number;
+}
+
+export interface ActualizarOrdenDto {
+  usuarioTecnicoId?: string | null;
+  diagnosticoInicial?: string | null;
+  observacionesEsteticas?: Record<string, boolean> | null;
+  costoEstimado?: number | null;
+  pagoACuenta?: number;
+  problemaReportado?: string;
+}
+
+export interface AgregarItemOrdenDto {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+}
