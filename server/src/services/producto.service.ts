@@ -118,14 +118,18 @@ export class ProductoService {
     return { productos: productosConUltimoCosto, total };
   }
 
-  // AJUSTE CRÍTICO: Búsqueda para combobox (excluye producto actual)
-  async buscarParaCombobox(query: string, excludeId?: string) {
+  // Búsqueda para combobox (productos físicos o también servicios según parámetro)
+  async buscarParaCombobox(query: string, excludeId?: string, incluirServicios = false) {
     return await prisma.producto.findMany({
       where: {
         deletedAt: null,
-        esServicio: false, // Solo productos físicos pueden ser padres
-        ...(excludeId && { id: { not: excludeId } }), // Excluir el producto actual
-        nombre: { contains: query, mode: 'insensitive' },
+        ...(!incluirServicios && { esServicio: false }),
+        ...(excludeId && { id: { not: excludeId } }),
+        OR: [
+          { nombre: { contains: query, mode: 'insensitive' } },
+          { marca:  { contains: query, mode: 'insensitive' } },
+          { modelo: { contains: query, mode: 'insensitive' } },
+        ],
       },
       select: {
         id: true,
@@ -133,6 +137,8 @@ export class ProductoService {
         marca: true,
         modelo: true,
         stockActual: true,
+        esServicio: true,
+        precioVenta: true,
       },
       take: 10,
       orderBy: { nombre: 'asc' },

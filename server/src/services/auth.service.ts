@@ -63,6 +63,13 @@ class AuthService {
     };
   }
 
+  async listarUsuarios() {
+    return prisma.usuario.findMany({
+      select: { id: true, username: true, nombreCompleto: true, rol: true },
+      orderBy: { nombreCompleto: 'asc' },
+    });
+  }
+
   verifyToken(token: string): { userId: string; username: string; rol: string } {
     try {
       const decoded = jwt.verify(token, this.JWT_SECRET) as {

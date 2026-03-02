@@ -38,10 +38,10 @@ export class ProductoController {
     }
   }
 
-  // GET /api/productos/buscar?q=...&excludeId=...
+  // GET /api/productos/buscar?q=...&excludeId=...&incluirServicios=true
   async buscarParaCombobox(req: Request, res: Response, next: NextFunction) {
     try {
-      const { q, excludeId } = req.query;
+      const { q, excludeId, incluirServicios } = req.query;
 
       if (!q) {
         return res.json({
@@ -52,7 +52,8 @@ export class ProductoController {
 
       const productos = await productoService.buscarParaCombobox(
         q as string,
-        excludeId as string | undefined
+        excludeId as string | undefined,
+        incluirServicios === 'true'
       );
 
       res.json({

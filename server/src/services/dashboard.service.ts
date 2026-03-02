@@ -54,11 +54,20 @@ class DashboardService {
       0
     );
 
+    // Contar órdenes activas por estado
+    const [recibidas, enReparacion, listas] = await Promise.all([
+      prisma.ordenServicio.count({ where: { estado: 'RECIBIDA', deletedAt: null } }),
+      prisma.ordenServicio.count({ where: { estado: 'EN_REPARACION', deletedAt: null } }),
+      prisma.ordenServicio.count({ where: { estado: 'LISTA', deletedAt: null } }),
+    ]);
+
     return {
       ventasHoy,
       gananciaHoy,
       productosStockBajo,
       productosSinMovimiento,
+      ordenesActivas: recibidas + enReparacion + listas,
+      ordenesDetalle: { recibidas, enReparacion, listas },
     };
   }
 }

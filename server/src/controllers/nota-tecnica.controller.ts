@@ -21,7 +21,7 @@ class NotaTecnicaController {
     try {
       const { ordenId } = req.params;
       const { contenido } = req.body;
-      const usuarioId = (req as any).user.id;
+      const usuarioId = req.userId!;
 
       if (!contenido || contenido.trim() === '') {
         return res.status(400).json({ success: false, error: 'El contenido de la nota es requerido' });

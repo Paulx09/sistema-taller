@@ -61,7 +61,7 @@ class OrdenServicioController {
         pagoACuenta,
       } = req.body;
 
-      const usuarioRegistroId = (req as any).user.id;
+      const usuarioRegistroId = req.userId!;
 
       const orden = await ordenServicioService.crear({
         clienteId,
@@ -126,7 +126,7 @@ class OrdenServicioController {
     try {
       const { id } = req.params;
       const { productoId, cantidad, precioUnitario } = req.body;
-      const usuarioId = (req as any).user.id;
+      const usuarioId = req.userId!;
 
       const orden = await ordenServicioService.agregarItem(
         id as string,
@@ -154,7 +154,7 @@ class OrdenServicioController {
   async quitarItem(req: Request, res: Response, next: NextFunction) {
     try {
       const { id, itemId } = req.params;
-      const usuarioId = (req as any).user.id;
+      const usuarioId = req.userId!;
 
       const orden = await ordenServicioService.quitarItem(id as string, itemId as string, usuarioId);
 
@@ -179,7 +179,7 @@ class OrdenServicioController {
     try {
       const { id } = req.params;
       const { estado } = req.body;
-      const usuarioId = (req as any).user.id;
+      const usuarioId = req.userId!;
 
       const orden = await ordenServicioService.cambiarEstado(id as string, estado, usuarioId);
 
