@@ -13,6 +13,8 @@ interface ProductoBusqueda {
   marca: string | null;
   modelo: string | null;
   stockActual: number;
+  esServicio: boolean;
+  precioVenta: number | string;
 }
 
 // Tipo para el producto que viene del backend con precios como string (Decimal de Prisma)
@@ -66,10 +68,10 @@ export const productoService = {
     return transformProducto(response.data.data);
   },
 
-  // GET /api/productos/buscar?q=...&excludeId=...
-  async buscarParaCombobox(query: string, excludeId?: string): Promise<ProductoBusqueda[]> {
+  // GET /api/productos/buscar?q=...&excludeId=...&incluirServicios=...
+  async buscarParaCombobox(query: string, excludeId?: string, incluirServicios = false): Promise<ProductoBusqueda[]> {
     const response = await api.get<ApiResponse<ProductoBusqueda[]>>('/productos/buscar', {
-      params: { q: query, excludeId },
+      params: { q: query, excludeId, incluirServicios: incluirServicios || undefined },
     });
     return response.data.data;
   },
