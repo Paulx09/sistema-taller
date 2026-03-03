@@ -257,13 +257,13 @@ export function ProductosPage() {
                 />
              </div>
              
-             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+             <div className="flex items-center gap-2 overflow-x-auto pb-3 md:pb-0">
                 <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-                  <SelectTrigger className="w-[160px] bg-background border-input h-9 text-sm">
+                  <SelectTrigger className="w-[190px] bg-background text-sm">
                     <SelectValue placeholder="Categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="all">Todas las categorías</SelectItem>
                     {categorias.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.nombre}
@@ -273,11 +273,11 @@ export function ProductosPage() {
                 </Select>
 
                 <Select value={servicioFilter} onValueChange={setServicioFilter}>
-                  <SelectTrigger className="w-[140px] bg-background border-input h-9 text-sm">
+                  <SelectTrigger className="w-[190px] bg-background text-sm">
                     <SelectValue placeholder="Tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="all">Todos los tipos</SelectItem>
                     <SelectItem value="false">Productos</SelectItem>
                     <SelectItem value="true">Servicios</SelectItem>
                   </SelectContent>
