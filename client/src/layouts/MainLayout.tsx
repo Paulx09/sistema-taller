@@ -59,10 +59,14 @@ export function MainLayout() {
         </div>
 
         <nav className="flex-1 px-3 flex flex-col gap-1 overflow-y-auto pt-2">
+          {/* General */}
           <NavLink to="/" className={navLinkClass} end>
             <span className="material-symbols-outlined text-[20px]">dashboard</span>
             Dashboard
           </NavLink>
+
+          {/* Comercial */}
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Comercial</p>
           <NavLink to="/ventas" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
             Ventas
@@ -71,6 +75,9 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
             Compras
           </NavLink>
+
+          {/* Inventario */}
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Inventario</p>
           <NavLink to="/productos" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">inventory_2</span>
             Inventario
@@ -84,13 +91,12 @@ export function MainLayout() {
             Categorías
           </NavLink>
           <NavLink to="/ubicaciones" className={navLinkClass}>
-             <span className="material-symbols-outlined text-[20px]">shelves</span>
-             Ubicaciones
+            <span className="material-symbols-outlined text-[20px]">shelves</span>
+            Ubicaciones
           </NavLink>
-          <NavLink to="/verificar-garantia" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">verified</span>
-            Verificar Garantía
-          </NavLink>
+
+          {/* Servicio Técnico */}
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Servicio Técnico</p>
           <NavLink to="/clientes" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">person</span>
             Clientes
@@ -99,27 +105,21 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">build_circle</span>
             Órdenes Servicio
           </NavLink>
-          <NavLink to="/reportes" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">bar_chart</span>
-            Reportes
+          <NavLink to="/verificar-garantia" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">verified</span>
+            Verificar Garantía
           </NavLink>
         </nav>
 
         <div className="p-4 border-t border-border mt-auto">
-          <NavLink to="/configuracion" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">settings</span>
-            Configuración
-          </NavLink>
-          <div className="mt-2">
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="w-full justify-start gap-2 px-3 text-muted-foreground hover:text-foreground"
-            >
-              <span className="material-symbols-outlined text-[20px]">logout</span>
-              <span>Cerrar Sesión</span>
-            </Button>
-          </div>
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
+            className="w-full justify-start gap-2 px-3 text-muted-foreground hover:text-foreground"
+          >
+            <span className="material-symbols-outlined text-[20px]">logout</span>
+            <span>Cerrar Sesión</span>
+          </Button>
         </div>
       </aside>
 
@@ -148,23 +148,7 @@ export function MainLayout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative hidden md:block w-64">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground material-symbols-outlined text-[18px]">search</span>
-              <input 
-                className="w-full h-9 pl-9 pr-4 rounded-md bg-muted/50 border border-transparent focus:bg-white focus:border-primary focus:ring-0 text-sm transition-all placeholder:text-muted-foreground outline-none" 
-                placeholder="Buscar..." 
-                type="text"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <ModeToggle />
-              <button className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors relative">
-                <span className="material-symbols-outlined text-[20px]">notifications</span>
-                <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-white"></span>
-              </button>
-            </div>
-          </div>
+          <ModeToggle />
         </header>
 
         <div className={cn(

@@ -140,7 +140,7 @@ const S = StyleSheet.create({
   notaContenido: { fontSize: 9, color: '#451a03' },
 });
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// Helpers
 const fmt = (val: string | null | undefined) =>
   val ? `S/ ${parseFloat(val).toFixed(2)}` : 'S/ 0.00';
 
@@ -188,7 +188,7 @@ interface Props {
   nombreTaller?: string;
 }
 
-export function OrdenServicioPDF({ orden, nombreTaller = 'Servicio Técnico' }: Props) {
+export function OrdenServicioPDF({ orden, nombreTaller = 'Servicio Técnico - José Gálvez' }: Props) {
   const saldo = parseFloat(orden.total) - parseFloat(orden.pagoACuenta);
 
   return (
