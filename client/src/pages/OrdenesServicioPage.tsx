@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import {
   Table,
   TableBody,
@@ -47,7 +51,7 @@ import {
   RotateCcw,
   User,
   Laptop,
-  CalendarDays,
+  Calendar as CalendarIcon,
   UserPlus,
   Eye,
   EyeOff,
@@ -112,6 +116,8 @@ export function OrdenesServicioPage() {
 
   // ── Filtros ────────────────────────────────────────────────────────────────
   const [busquedaLocal, setBusquedaLocal] = useState('');
+  const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
+  const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
   const busquedaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleBusquedaChange = (valor: string) => {
@@ -301,7 +307,7 @@ export function OrdenesServicioPage() {
     }
   };
 
-  // ── Clientes filtrados para el selector ───────────────────────────────────
+  // Clientes filtrados para el selector
   const clientesFiltrados = clientes.filter(
     (c) =>
       !clienteSearch ||
@@ -312,7 +318,7 @@ export function OrdenesServicioPage() {
 
   const clienteSeleccionado = clientes.find((c) => c.id === form.clienteId);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Header */}
@@ -332,7 +338,7 @@ export function OrdenesServicioPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-wrap gap-3 items-center">
         {/* Búsqueda */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -364,31 +370,72 @@ export function OrdenesServicioPage() {
         </Select>
 
         {/* Fecha desde */}
-        <div className="flex items-center gap-1.5">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <Input
-            type="date"
-            value={filtros.desde}
-            onChange={(e) => aplicarFiltros({ desde: e.target.value })}
-            className="w-40"
-            placeholder="Desde"
-          />
-        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-48">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {fechaDesde ? format(fechaDesde, 'PPP', { locale: es }) : 'Desde'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={fechaDesde}
+              onSelect={(date) => {
+                setFechaDesde(date);
+                aplicarFiltros({ desde: date ? format(date, 'yyyy-MM-dd') : '' });
+              }}
+              locale={es}
+              disabled={(date) => {
+                // No puede ser fecha futura
+                if (date > new Date()) return true;
+                // No puede ser posterior a fechaHasta
+                if (fechaHasta && date > fechaHasta) return true;
+                return false;
+              }}
+            />
+          </PopoverContent>
+        </Popover>
 
         {/* Fecha hasta */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-muted-foreground">hasta</span>
-          <Input
-            type="date"
-            value={filtros.hasta}
-            onChange={(e) => aplicarFiltros({ hasta: e.target.value })}
-            className="w-40"
-            placeholder="Hasta"
-          />
-        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-48">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {fechaHasta ? format(fechaHasta, 'PPP', { locale: es }) : 'Hasta'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={fechaHasta}
+              onSelect={(date) => {
+                setFechaHasta(date);
+                aplicarFiltros({ hasta: date ? format(date, 'yyyy-MM-dd') : '' });
+              }}
+              locale={es}
+              disabled={(date) => {
+                // No puede ser fecha futura
+                if (date > new Date()) return true;
+                // No puede ser anterior a fechaDesde
+                if (fechaDesde && date < fechaDesde) return true;
+                return false;
+              }}
+            />
+          </PopoverContent>
+        </Popover>
 
         {/* Limpiar + total */}
-        <Button variant="ghost" size="sm" onClick={limpiarFiltros} title="Limpiar filtros">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setFechaDesde(undefined);
+            setFechaHasta(undefined);
+            limpiarFiltros();
+          }}
+          title="Limpiar filtros"
+        >
           <RotateCcw className="h-4 w-4" />
         </Button>
         <Badge variant="outline" className="h-9 px-4 flex items-center">
