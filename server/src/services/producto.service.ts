@@ -80,6 +80,7 @@ export class ProductoService {
         stockActual: { lte: prisma.producto.fields.stockMinimo },
       }),
       ...(preciosPendientes && {
+        esServicio: false,
         OR: [
           { precioCompra: { equals: 0 } },
           { precioVenta: { equals: 0 } },
