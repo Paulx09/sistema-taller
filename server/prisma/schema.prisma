@@ -266,7 +266,7 @@ model ProductoSerie {
 model Cliente {
   id         String          @id @default(uuid())
   nombre     String          @db.VarChar(100)
-  dniRuc     String?         @unique @map("dni_ruc") @db.VarChar(11)
+  dniRuc     String?         @map("dni_ruc") @db.VarChar(11)
   telefono   String?         @db.VarChar(20)
   direccion  String?         @db.Text
   createdAt  DateTime        @default(now()) @map("created_at")
