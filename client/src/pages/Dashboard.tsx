@@ -76,7 +76,7 @@ export function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Ventas */}
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
+        <Link to="/ventas" className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4">
             <p className="text-sm font-medium text-muted-foreground">Ventas de Hoy</p>
             <span className="material-symbols-outlined text-muted-foreground text-[20px]">payments</span>
@@ -91,7 +91,7 @@ export function Dashboard() {
                {' '}vs. ayer
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* Card 2: Ganancia Real */}
         <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -131,7 +131,7 @@ export function Dashboard() {
         </Link>
 
         {/* Card 4: Alertas Stock */}
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
+        <Link to="/productos" className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
            <div className="flex justify-between items-start mb-4">
             <p className="text-sm font-medium text-muted-foreground">Alertas de Stock</p>
             <span className="material-symbols-outlined text-muted-foreground text-[20px]">inventory</span>
@@ -146,7 +146,7 @@ export function Dashboard() {
                {' '}reponer pronto
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Content Grid */}
