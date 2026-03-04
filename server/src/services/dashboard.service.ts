@@ -49,10 +49,27 @@ class DashboardService {
     });
 
     const ventasHoy = ventasDelDia.length;
-    const gananciaHoy = ventasDelDia.reduce(
+    const gananciaVentas = ventasDelDia.reduce(
       (sum, venta) => sum + Number.parseFloat(venta.gananciaTotal.toString()),
       0
     );
+
+    // Órdenes de servicio entregadas hoy y sus ganancias
+    const osEntregadasHoy = await prisma.ordenServicio.findMany({
+      where: {
+        fechaEntrega: { gte: hoy, lt: manana },
+        estado: 'ENTREGADA',
+        deletedAt: null,
+      },
+      select: { gananciaTotal: true },
+    });
+
+    const gananciaOS = osEntregadasHoy.reduce(
+      (sum, os) => sum + Number.parseFloat(os.gananciaTotal.toString()),
+      0
+    );
+
+    const gananciaHoy = gananciaVentas + gananciaOS;
 
     // Contar órdenes activas por estado
     const [recibidas, enReparacion, listas] = await Promise.all([
