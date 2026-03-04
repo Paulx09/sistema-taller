@@ -259,6 +259,12 @@ class OrdenServicioService {
       if (!tecnico) throw new Error('Técnico no encontrado');
     }
 
+    if (data.pagoACuenta !== undefined && Number(data.pagoACuenta) > Number(orden.total)) {
+      throw new Error(
+        `El pago a cuenta (S/ ${Number(data.pagoACuenta).toFixed(2)}) no puede superar el total de la orden (S/ ${Number(orden.total).toFixed(2)}).`,
+      );
+    }
+
     await prisma.ordenServicio.update({
       where: { id },
       data: {
@@ -415,6 +421,15 @@ class OrdenServicioService {
       );
     }
 
+    if (nuevoEstado === 'ENTREGADA') {
+      const saldo = Number(orden.total) - Number(orden.pagoACuenta);
+      if (saldo > 0.004) {
+        throw new Error(
+          `No se puede entregar la orden con saldo pendiente de S/ ${saldo.toFixed(2)}. Registre el pago antes de entregar.`,
+        );
+      }
+    }
+
     if (nuevoEstado === 'CANCELADA') {
       // Revertir stock de todos los ítems físicos dentro de una transacción
       await prisma.$transaction(async (tx) => {
@@ -447,7 +462,10 @@ class OrdenServicioService {
     } else {
       await prisma.ordenServicio.update({
         where: { id: ordenId },
-        data: { estado: nuevoEstado },
+        data: {
+          estado: nuevoEstado,
+          ...(nuevoEstado === 'ENTREGADA' ? { fechaEntrega: new Date() } : {}),
+        },
       });
     }
 

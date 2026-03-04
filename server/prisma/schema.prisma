@@ -315,6 +315,7 @@ model OrdenServicio {
   total                 Decimal           @default(0) @db.Decimal(10, 2)
   gananciaTotal         Decimal           @default(0) @map("ganancia_total") @db.Decimal(10, 2)
   estado                EstadoOrden       @default(RECIBIDA)
+  fechaEntrega          DateTime?         @map("fecha_entrega")
   createdAt             DateTime          @default(now()) @map("created_at")
   updatedAt             DateTime          @updatedAt @map("updated_at")
   deletedAt             DateTime?         @map("deleted_at")
