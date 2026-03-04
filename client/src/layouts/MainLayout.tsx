@@ -97,13 +97,13 @@ export function MainLayout() {
 
           {/* Servicio Técnico */}
           <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Servicio Técnico</p>
-          <NavLink to="/clientes" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">person</span>
-            Clientes
-          </NavLink>
           <NavLink to="/ordenes-servicio" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">build_circle</span>
             Órdenes Servicio
+          </NavLink>
+          <NavLink to="/clientes" className={navLinkClass}>
+            <span className="material-symbols-outlined text-[20px]">person</span>
+            Clientes
           </NavLink>
           <NavLink to="/verificar-garantia" className={navLinkClass}>
             <span className="material-symbols-outlined text-[20px]">verified</span>
