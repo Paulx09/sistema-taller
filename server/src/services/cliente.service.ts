@@ -128,12 +128,14 @@ class ClienteService {
 
   // POST /api/clientes
   async crear(data: CrearClienteData) {
-    if (data.dniRuc) {
+    // Solo el DNI (8 dígitos) es único por persona. El RUC (11 dígitos) puede
+    // repetirse porque varias personas pueden pertenecer a la misma empresa.
+    if (data.dniRuc?.length === 8) {
       const existente = await prisma.cliente.findFirst({
         where: { dniRuc: data.dniRuc, deletedAt: null },
       });
       if (existente) {
-        throw new Error(`Ya existe un cliente con el DNI/RUC ${data.dniRuc}`);
+        throw new Error(`Ya existe un cliente registrado con el DNI ${data.dniRuc}`);
       }
     }
 
@@ -157,12 +159,12 @@ class ClienteService {
       throw new Error('Cliente no encontrado');
     }
 
-    if (data.dniRuc && data.dniRuc !== cliente.dniRuc) {
+    if (data.dniRuc && data.dniRuc !== cliente.dniRuc && data.dniRuc?.length === 8) {
       const existente = await prisma.cliente.findFirst({
         where: { dniRuc: data.dniRuc, deletedAt: null, NOT: { id } },
       });
       if (existente) {
-        throw new Error(`Ya existe un cliente con el DNI/RUC ${data.dniRuc}`);
+        throw new Error(`Ya existe un cliente registrado con el DNI ${data.dniRuc}`);
       }
     }
 

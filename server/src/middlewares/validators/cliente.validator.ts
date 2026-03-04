@@ -7,8 +7,15 @@ const crearClienteSchema = z.object({
     .max(100, 'El nombre no puede exceder 100 caracteres')
     .trim(),
   dniRuc: z.string()
-    .max(11, 'El DNI/RUC no puede exceder 11 caracteres')
     .trim()
+    .refine(
+      (val) => val.length === 8 || val.length === 11,
+      { message: 'El DNI debe tener 8 dígitos o el RUC 11 dígitos' }
+    )
+    .refine(
+      (val) => /^\d+$/.test(val),
+      { message: 'El DNI/RUC solo debe contener números' }
+    )
     .optional()
     .nullable(),
   telefono: z.string()
@@ -29,8 +36,15 @@ const actualizarClienteSchema = z.object({
     .trim()
     .optional(),
   dniRuc: z.string()
-    .max(11, 'El DNI/RUC no puede exceder 11 caracteres')
     .trim()
+    .refine(
+      (val) => val.length === 8 || val.length === 11,
+      { message: 'El DNI debe tener 8 dígitos o el RUC 11 dígitos' }
+    )
+    .refine(
+      (val) => /^\d+$/.test(val),
+      { message: 'El DNI/RUC solo debe contener números' }
+    )
     .optional()
     .nullable(),
   telefono: z.string()

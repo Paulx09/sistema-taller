@@ -133,6 +133,7 @@ class OrdenServicioService {
           total: true,
           costoEstimado: true,
           pagoACuenta: true,
+          problemaReportado: true,
           cliente: { select: { id: true, nombre: true, telefono: true } },
           equipo: { select: { id: true, tipoEquipo: true, marca: true, modelo: true } },
           usuarioRegistro: { select: { id: true, nombreCompleto: true } },
