@@ -52,7 +52,7 @@ import { usuarioService } from '@/services/usuario.service';
 import type { OrdenServicio, EstadoOrden, Usuario, AgregarItemOrdenDto, ActualizarOrdenDto } from '@/types';
 
 // Transiciones válidas
-const TRANSICIONES: Record<EstadoOrden, { estado: EstadoOrden; label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }[]> = {
+const TRANSICIONES: Record<EstadoOrden, { estado: EstadoOrden; label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary'; requiereSaldoCero?: boolean }[]> = {
   RECIBIDA: [
     { estado: 'EN_REPARACION', label: 'Iniciar Reparación', variant: 'default' },
     { estado: 'CANCELADA', label: 'Cancelar', variant: 'destructive' },
@@ -62,7 +62,7 @@ const TRANSICIONES: Record<EstadoOrden, { estado: EstadoOrden; label: string; va
     { estado: 'CANCELADA', label: 'Cancelar OS', variant: 'destructive' },
   ],
   LISTA: [
-    { estado: 'ENTREGADA', label: 'Registrar Entrega', variant: 'default' },
+    { estado: 'ENTREGADA', label: 'Registrar Entrega', variant: 'default', requiereSaldoCero: true },
     { estado: 'EN_REPARACION', label: 'Volver a Reparación', variant: 'outline' },
     { estado: 'CANCELADA', label: 'Cancelar', variant: 'destructive' },
   ],
@@ -132,6 +132,7 @@ export function OrdenServicioDetalle() {
   const [formEdit, setFormEdit] = useState<ActualizarOrdenDto>({});
   const [guardando, setGuardando] = useState(false);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [pagoACuentaError, setPagoACuentaError] = useState<string | null>(null);
 
   const handleAbrirEdicion = async () => {
     if (!orden) return;
@@ -142,6 +143,7 @@ export function OrdenServicioDetalle() {
       pagoACuenta: parseFloat(orden.pagoACuenta),
       usuarioTecnicoId: orden.usuarioTecnicoId || null,
     });
+    setPagoACuentaError(null);
     if (usuarios.length === 0) {
       const us = await usuarioService.getAll();
       setUsuarios(us);
@@ -362,22 +364,35 @@ export function OrdenServicioDetalle() {
 
         {/* Botones de transición */}
         {transicionesPosibles.length > 0 && (
-          <div className="flex flex-wrap gap-2 p-3 bg-muted/40 rounded-lg border">
-            <span className="text-xs text-muted-foreground self-center mr-1">Cambiar estado:</span>
-            {transicionesPosibles.map((t) => (
-              <Button
-                key={t.estado}
-                variant={t.variant}
-                size="sm"
-                onClick={() => setConfirmEstado({ estado: t.estado, label: t.label })}
-                disabled={cambiandoEstado !== null}
-              >
-                {cambiandoEstado === t.estado && (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                )}
-                {t.label}
-              </Button>
-            ))}
+          <div className="flex flex-col gap-2 p-3 bg-muted/40 rounded-lg border">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground mr-1">Cambiar estado:</span>
+              {transicionesPosibles.map((t) => {
+                const bloqueadoPorSaldo = t.requiereSaldoCero && saldo > 0;
+                return (
+                  <Button
+                    key={t.estado}
+                    variant={t.variant}
+                    size="sm"
+                    onClick={() => setConfirmEstado({ estado: t.estado, label: t.label })}
+                    disabled={cambiandoEstado !== null || bloqueadoPorSaldo}
+                    title={bloqueadoPorSaldo ? `Saldo pendiente: ${fmt(String(saldo))}` : undefined}
+                  >
+                    {cambiandoEstado === t.estado && (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    )}
+                    {t.label}
+                  </Button>
+                );
+              })}
+            </div>
+            {transicionesPosibles.some((t) => t.requiereSaldoCero && saldo > 0) && (
+              <p className="text-xs text-destructive flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
+                Para registrar la entrega primero debe registrarse el pago del saldo pendiente de{' '}
+                <span className="font-semibold">{fmt(String(saldo))}</span>
+              </p>
+            )}
           </div>
         )}
 
@@ -432,26 +447,55 @@ export function OrdenServicioDetalle() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase">Costo est. (S/)</label>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={formEdit.costoEstimado ?? ''}
-                      onChange={(e) =>
-                        setFormEdit({ ...formEdit, costoEstimado: e.target.value === '' ? null : parseFloat(e.target.value) })
-                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) {
+                          setFormEdit((prev) => ({ ...prev, costoEstimado: v as any }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseFloat(e.target.value);
+                        setFormEdit((prev) => ({
+                          ...prev,
+                          costoEstimado: e.target.value === '' || isNaN(num) || num < 0 ? null : num,
+                        }));
+                      }}
                       placeholder="0.00"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase">Pago a cuenta (S/)</label>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formEdit.pagoACuenta ?? 0}
-                      onChange={(e) => setFormEdit({ ...formEdit, pagoACuenta: parseFloat(e.target.value) || 0 })}
+                      type="text"
+                      inputMode="decimal"
+                      value={formEdit.pagoACuenta ?? ''}
+                      className={pagoACuentaError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) {
+                          setFormEdit((prev) => ({ ...prev, pagoACuenta: v as any }));
+                          setPagoACuentaError(null);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseFloat(e.target.value);
+                        const normalizado = isNaN(num) || num < 0 ? 0 : num;
+                        const total = orden ? parseFloat(orden.total) : 0;
+                        if (normalizado > total) {
+                          setPagoACuentaError(`No puede superar el total (${fmt(orden?.total)})`);
+                        } else {
+                          setPagoACuentaError(null);
+                        }
+                        setFormEdit((prev) => ({ ...prev, pagoACuenta: normalizado }));
+                      }}
                       placeholder="0.00"
                     />
+                    {pagoACuentaError && (
+                      <p className="text-xs text-destructive">{pagoACuentaError}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -476,7 +520,7 @@ export function OrdenServicioDetalle() {
                   </Select>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button size="sm" onClick={handleGuardarEdicion} disabled={guardando}>
+                  <Button size="sm" onClick={handleGuardarEdicion} disabled={guardando || !!pagoACuentaError}>
                     {guardando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                     <Save className="mr-1.5 h-3.5 w-3.5" />
                     Guardar
