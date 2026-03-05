@@ -634,7 +634,7 @@ export function OrdenServicioDetalle() {
             to="/clientes"
             className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-muted hover:bg-muted/70 text-xs font-semibold transition-colors"
           >
-            Ver Todos los Clientes
+            Ver todos los clientes
           </Link>
         </div>
 
@@ -676,10 +676,6 @@ export function OrdenServicioDetalle() {
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center justify-between gap-4">
           <div>
             <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
-              <Link to="/" className="hover:text-foreground transition-colors">
-                Dashboard
-              </Link>
-              <ChevronRight className="h-3 w-3" />
               <Link to="/ordenes-servicio" className="hover:text-foreground transition-colors">
                 Órdenes
               </Link>
@@ -724,7 +720,7 @@ export function OrdenServicioDetalle() {
             Selecciona un equipo del panel izquierdo.
           </div>
         ) : (
-          <div className="p-6 space-y-6 max-w-4xl">
+          <div className="p-6 space-y-6 w-full">
 
             {/* 1. Estado del equipo */}
             <div className="rounded-xl border bg-card px-5 py-4">
