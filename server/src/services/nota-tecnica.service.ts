@@ -1,15 +1,15 @@
 import prisma from '../config/database';
 
 class NotaTecnicaService {
-  // GET /api/ordenes-servicio/:ordenId/notas
-  async listarPorOrden(ordenId: string) {
-    const orden = await prisma.ordenServicio.findFirst({
-      where: { id: ordenId, deletedAt: null },
+  // GET /api/ordenes-servicio/:ordenId/equipos/:equipoOrdenId/notas
+  async listarPorEquipoOrden(ordenId: string, equipoOrdenId: string) {
+    const equipoOrden = await prisma.equipoOrden.findFirst({
+      where: { id: equipoOrdenId, ordenId, orden: { deletedAt: null } },
     });
-    if (!orden) throw new Error('Orden de servicio no encontrada');
+    if (!equipoOrden) throw new Error('Equipo no encontrado en esta orden');
 
     return prisma.notaTecnica.findMany({
-      where: { ordenId },
+      where: { equipoOrdenId },
       orderBy: { createdAt: 'asc' },
       include: {
         usuario: { select: { id: true, username: true, nombreCompleto: true } },
@@ -17,19 +17,19 @@ class NotaTecnicaService {
     });
   }
 
-  // POST /api/ordenes-servicio/:ordenId/notas
-  async agregar(ordenId: string, usuarioId: string, contenido: string) {
-    const orden = await prisma.ordenServicio.findFirst({
-      where: { id: ordenId, deletedAt: null },
+  // POST /api/ordenes-servicio/:ordenId/equipos/:equipoOrdenId/notas
+  async agregar(ordenId: string, equipoOrdenId: string, usuarioId: string, contenido: string) {
+    const equipoOrden = await prisma.equipoOrden.findFirst({
+      where: { id: equipoOrdenId, ordenId, orden: { deletedAt: null } },
     });
-    if (!orden) throw new Error('Orden de servicio no encontrada');
+    if (!equipoOrden) throw new Error('Equipo no encontrado en esta orden');
 
-    if (orden.estado === 'CANCELADA') {
-      throw new Error('No se pueden agregar notas a una orden cancelada');
+    if (equipoOrden.estado === 'CANCELADA') {
+      throw new Error('No se pueden agregar notas a un equipo cancelado');
     }
 
     return prisma.notaTecnica.create({
-      data: { ordenId, usuarioId, contenido: contenido.trim() },
+      data: { equipoOrdenId, usuarioId, contenido: contenido.trim() },
       include: {
         usuario: { select: { id: true, username: true, nombreCompleto: true } },
       },
