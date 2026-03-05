@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,14 +55,23 @@ import {
   UserPlus,
   Eye,
   EyeOff,
+  X,
 } from 'lucide-react';
 import { useOrdenesServicio } from '@/hooks/useOrdenesServicio';
 import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
 import { usuarioService } from '@/services/usuario.service';
-import type { Cliente, EquipoCliente, Usuario, EstadoOrden, CrearOrdenDto, CrearEquipoDto } from '@/types';
+import type {
+  Cliente,
+  EquipoCliente,
+  Usuario,
+  EstadoOrden,
+  CrearOrdenDto,
+  CrearEquipoDto,
+  EquipoOrdenInputDto,
+} from '@/types';
 
-// ── Constantes ────────────────────────────────────────────────────────────────
+// Constantes
 const ESTADOS: { value: EstadoOrden | ''; label: string }[] = [
   { value: '', label: 'Todos los estados' },
   { value: 'RECIBIDA', label: 'Recibida' },
@@ -72,14 +81,11 @@ const ESTADOS: { value: EstadoOrden | ''; label: string }[] = [
   { value: 'CANCELADA', label: 'Cancelada' },
 ];
 
-const FORM_VACIO: CrearOrdenDto = {
-  clienteId: '',
+const EQUIPO_ENTRADA_VACIO = {
   equipoId: '',
   problemaReportado: '',
-  diagnosticoInicial: '',
-  costoEstimado: null,
-  pagoACuenta: 0,
-  usuarioTecnicoId: null,
+  diagnosticoTecnico: '',
+  costoEstimado: '',
 };
 
 const EQUIPO_NUEVO_VACIO: CrearEquipoDto = {
@@ -98,7 +104,7 @@ const formatMoneda = (valor: string | null | undefined) => {
 const formatFecha = (iso: string) =>
   new Date(iso).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-// ── Componente ────────────────────────────────────────────────────────────────
+// Componente
 export function OrdenesServicioPage() {
   const navigate = useNavigate();
   const {
@@ -114,7 +120,7 @@ export function OrdenesServicioPage() {
     deleteOrden,
   } = useOrdenesServicio();
 
-  // ── Filtros ────────────────────────────────────────────────────────────────
+  // Filtros
   const [busquedaLocal, setBusquedaLocal] = useState('');
   const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
@@ -126,37 +132,41 @@ export function OrdenesServicioPage() {
     busquedaTimer.current = setTimeout(() => aplicarFiltros({ busqueda: valor }), 400);
   };
 
-  // ── Sheet de creación ──────────────────────────────────────────────────────
+  // Estado Sheet "Nueva Orden"
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [form, setForm] = useState<CrearOrdenDto>(FORM_VACIO);
+  const [clienteId, setClienteId] = useState('');
+  const [usuarioTecnicoId, setUsuarioTecnicoId] = useState<string | null>(null);
+  const [pagoACuenta, setPagoACuenta] = useState<number>(0);
+  const [equiposEnOrden, setEquiposEnOrden] = useState<EquipoOrdenInputDto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Para el selector de cliente
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteSearch, setClienteSearch] = useState('');
   const [loadingClientes, setLoadingClientes] = useState(false);
-
-  // Para el selector de equipo
-  const [equipos, setEquipos] = useState<EquipoCliente[]>([]);
-  const [loadingEquipos, setLoadingEquipos] = useState(false);
-
-  // Para el selector de técnico
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
-  // ── Nuevo cliente rápido (Dialog) ─────────────────────────────────────────
+  // Estado Dialog "Nuevo Cliente"
   const [nuevoClienteDialogOpen, setNuevoClienteDialogOpen] = useState(false);
   const [formNuevoCliente, setFormNuevoCliente] = useState({ nombre: '', telefono: '' });
   const [submittingNuevoCliente, setSubmittingNuevoCliente] = useState(false);
   const [errorNuevoCliente, setErrorNuevoCliente] = useState<string | null>(null);
 
-  // ── Agregar equipo inline (Sheet) ──────────────────────────────────────────
+  // Estado Dialog "Agregar Equipo a la Orden"
+  const [agregarEquipoDialogOpen, setAgregarEquipoDialogOpen] = useState(false);
+  const [equipos, setEquipos] = useState<EquipoCliente[]>([]);
+  const [loadingEquipos, setLoadingEquipos] = useState(false);
+  const [equipoEntrada, setEquipoEntrada] = useState({ ...EQUIPO_ENTRADA_VACIO });
+  const [entradaError, setEntradaError] = useState<string | null>(null);
+
+  // Mini-form crear nuevo equipo (dentro del dialog de agregar equipo)
   const [mostrarFormEquipo, setMostrarFormEquipo] = useState(false);
-  const [formNuevoEquipo, setFormNuevoEquipo] = useState<CrearEquipoDto>(EQUIPO_NUEVO_VACIO);
+  const [formNuevoEquipo, setFormNuevoEquipo] = useState<CrearEquipoDto>({ ...EQUIPO_NUEVO_VACIO });
   const [submittingNuevoEquipo, setSubmittingNuevoEquipo] = useState(false);
   const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
   const [verContrasenaEquipo, setVerContrasenaEquipo] = useState(false);
 
+  // Carga inicial del formulario
   const cargarDatosFormulario = useCallback(async () => {
     setLoadingClientes(true);
     try {
@@ -171,40 +181,97 @@ export function OrdenesServicioPage() {
   }, []);
 
   const handleAbrirSheet = () => {
-    setForm(FORM_VACIO);
+    setClienteId('');
+    setUsuarioTecnicoId(null);
+    setPagoACuenta(0);
+    setEquiposEnOrden([]);
     setClienteSearch('');
     setEquipos([]);
     setFormError(null);
-    setMostrarFormEquipo(false);
-    setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
-    setErrorNuevoEquipo(null);
-    setVerContrasenaEquipo(false);
     setSheetOpen(true);
     cargarDatosFormulario();
   };
 
-  // Cargar equipos cuando cambia el cliente
-  const handleClienteChange = useCallback(async (clienteId: string) => {
-    setForm((prev) => ({ ...prev, clienteId, equipoId: '' }));
+  // Cambio de cliente
+  const handleClienteChange = useCallback(async (id: string) => {
+    setClienteId(id);
+    setEquiposEnOrden([]);
     setEquipos([]);
-    setMostrarFormEquipo(false);
-    setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
-    setErrorNuevoEquipo(null);
-    setVerContrasenaEquipo(false);
-    if (!clienteId) return;
+    if (!id) return;
     setLoadingEquipos(true);
     try {
-      const data = await equipoClienteService.getByCliente(clienteId);
+      const data = await equipoClienteService.getByCliente(id);
       setEquipos(data);
-      // Autoselect si hay un único equipo
-      if (data.length === 1) {
-        setForm((prev) => ({ ...prev, equipoId: data[0].id }));
-      }
     } catch { /* silencioso */ }
     finally { setLoadingEquipos(false); }
   }, []);
 
-  // ── Crear cliente rápido ──────────────────────────────────────────────────
+  // Abrir dialog "Agregar Equipo"
+  const handleAbrirAgregarEquipo = () => {
+    setEquipoEntrada({ ...EQUIPO_ENTRADA_VACIO });
+    setEntradaError(null);
+    setMostrarFormEquipo(false);
+    setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+    setErrorNuevoEquipo(null);
+    setVerContrasenaEquipo(false);
+    setAgregarEquipoDialogOpen(true);
+  };
+
+  // Crear equipo nuevo desde el dialog
+  const handleCrearEquipoInline = async () => {
+    if (!clienteId) return;
+    if (!formNuevoEquipo.tipoEquipo.trim()) {
+      setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
+      return;
+    }
+    setSubmittingNuevoEquipo(true);
+    setErrorNuevoEquipo(null);
+    try {
+      const nuevoEquipo = await equipoClienteService.create(clienteId, {
+        tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+        marca: formNuevoEquipo.marca?.trim() || null,
+        modelo: formNuevoEquipo.modelo?.trim() || null,
+        numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+        contrasenaPatron: formNuevoEquipo.contrasenaPatron?.trim() || null,
+      });
+      setEquipos((prev) => [...prev, nuevoEquipo]);
+      setEquipoEntrada((prev) => ({ ...prev, equipoId: nuevoEquipo.id }));
+      setMostrarFormEquipo(false);
+      setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+      setVerContrasenaEquipo(false);
+    } catch (err: any) {
+      setErrorNuevoEquipo(err.response?.data?.error || 'Error al crear el equipo');
+    } finally {
+      setSubmittingNuevoEquipo(false);
+    }
+  };
+
+  // Confirmar "Agregar a la Orden"
+  const handleConfirmarAgregarEquipo = () => {
+    if (!equipoEntrada.equipoId) {
+      setEntradaError('Debe seleccionar un equipo.');
+      return;
+    }
+    if (!equipoEntrada.problemaReportado.trim()) {
+      setEntradaError('El problema reportado es obligatorio.');
+      return;
+    }
+    const nuevo: EquipoOrdenInputDto = {
+      equipoId: equipoEntrada.equipoId,
+      problemaReportado: equipoEntrada.problemaReportado.trim(),
+      diagnosticoTecnico: equipoEntrada.diagnosticoTecnico.trim() || null,
+      costoEstimado: equipoEntrada.costoEstimado ? parseFloat(equipoEntrada.costoEstimado) : null,
+    };
+    setEquiposEnOrden((prev) => [...prev, nuevo]);
+    setAgregarEquipoDialogOpen(false);
+  };
+
+  // Quitar equipo de la lista
+  const handleQuitarEquipo = (index: number) => {
+    setEquiposEnOrden((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Crear cliente rapido
   const handleCrearClienteRapido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formNuevoCliente.nombre.trim()) {
@@ -229,60 +296,28 @@ export function OrdenesServicioPage() {
     }
   };
 
-  // ── Agregar equipo inline ──────────────────────────────────────────────────
-  const handleCrearEquipoInline = async () => {
-    if (!form.clienteId) return;
-    if (!formNuevoEquipo.tipoEquipo.trim()) {
-      setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
-      return;
-    }
-    setSubmittingNuevoEquipo(true);
-    setErrorNuevoEquipo(null);
-    try {
-      const nuevoEquipo = await equipoClienteService.create(form.clienteId, {
-        tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
-        marca: formNuevoEquipo.marca?.trim() || null,
-        modelo: formNuevoEquipo.modelo?.trim() || null,
-        numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
-        contrasenaPatron: formNuevoEquipo.contrasenaPatron?.trim() || null,
-      });
-      setEquipos((prev) => [...prev, nuevoEquipo]);
-      setForm((prev) => ({ ...prev, equipoId: nuevoEquipo.id }));
-      setMostrarFormEquipo(false);
-      setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
-      setVerContrasenaEquipo(false);
-    } catch (err: any) {
-      setErrorNuevoEquipo(err.response?.data?.error || 'Error al crear el equipo');
-    } finally {
-      setSubmittingNuevoEquipo(false);
-    }
-  };
-
+  // Submit principal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clienteId || !form.equipoId) {
-      setFormError('Debe seleccionar un cliente y un equipo.');
+    if (!clienteId) {
+      setFormError('Debe seleccionar un cliente.');
       return;
     }
-    if (!form.problemaReportado.trim()) {
-      setFormError('El problema reportado es obligatorio.');
+    if (equiposEnOrden.length === 0) {
+      setFormError('Debe agregar al menos un equipo a la orden.');
       return;
     }
     setSubmitting(true);
     setFormError(null);
     try {
       const payload: CrearOrdenDto = {
-        clienteId: form.clienteId,
-        equipoId: form.equipoId,
-        problemaReportado: form.problemaReportado.trim(),
-        diagnosticoInicial: form.diagnosticoInicial?.trim() || null,
-        costoEstimado: form.costoEstimado ? Number(form.costoEstimado) : null,
-        pagoACuenta: form.pagoACuenta ? Number(form.pagoACuenta) : 0,
-        usuarioTecnicoId: form.usuarioTecnicoId || null,
+        clienteId,
+        usuarioTecnicoId: usuarioTecnicoId || null,
+        pagoACuenta: pagoACuenta || 0,
+        equipos: equiposEnOrden,
       };
       const orden = await createOrden(payload);
       setSheetOpen(false);
-      // Navegar al detalle de la nueva orden
       navigate(`/ordenes-servicio/${orden.id}`);
     } catch (err: any) {
       setFormError(err.response?.data?.error || 'Error al crear la orden');
@@ -291,7 +326,7 @@ export function OrdenesServicioPage() {
     }
   };
 
-  // ── Eliminación ────────────────────────────────────────────────────────────
+  // Eliminacion
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -300,14 +335,11 @@ export function OrdenesServicioPage() {
     try {
       await deleteOrden(id);
       setDeleteConfirmId(null);
-    } catch (err: any) {
-      // El error queda en el hook
-    } finally {
-      setDeletingId(null);
-    }
+    } catch { /* silencioso */ }
+    finally { setDeletingId(null); }
   };
 
-  // Clientes filtrados para el selector
+  // Derivados
   const clientesFiltrados = clientes.filter(
     (c) =>
       !clienteSearch ||
@@ -315,8 +347,8 @@ export function OrdenesServicioPage() {
       (c.dniRuc && c.dniRuc.includes(clienteSearch)) ||
       (c.telefono && c.telefono.includes(clienteSearch))
   );
-
-  const clienteSeleccionado = clientes.find((c) => c.id === form.clienteId);
+  const clienteSeleccionado = clientes.find((c) => c.id === clienteId);
+  const equipoSeleccionadoObj = equipos.find((e) => e.id === equipoEntrada.equipoId);
 
   // Render
   return (
@@ -325,10 +357,10 @@ export function OrdenesServicioPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-            Órdenes de Servicio
+            Ordenes de Servicio
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Gestione las reparaciones y servicios técnicos.
+            Gestione las reparaciones y servicios tecnicos.
           </p>
         </div>
         <Button onClick={handleAbrirSheet} className="font-bold shadow-sm">
@@ -339,18 +371,16 @@ export function OrdenesServicioPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
-        {/* Búsqueda */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={busquedaLocal}
             onChange={(e) => handleBusquedaChange(e.target.value)}
-            placeholder="Buscar por código o cliente..."
+            placeholder="Buscar por codigo o cliente..."
             className="pl-9"
           />
         </div>
 
-        {/* Estado */}
         <Select
           value={filtros.estado || '__all__'}
           onValueChange={(v) =>
@@ -369,7 +399,6 @@ export function OrdenesServicioPage() {
           </SelectContent>
         </Select>
 
-        {/* Fecha desde */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-48">
@@ -387,9 +416,7 @@ export function OrdenesServicioPage() {
               }}
               locale={es}
               disabled={(date) => {
-                // No puede ser fecha futura
                 if (date > new Date()) return true;
-                // No puede ser posterior a fechaHasta
                 if (fechaHasta && date > fechaHasta) return true;
                 return false;
               }}
@@ -397,7 +424,6 @@ export function OrdenesServicioPage() {
           </PopoverContent>
         </Popover>
 
-        {/* Fecha hasta */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-48">
@@ -415,9 +441,7 @@ export function OrdenesServicioPage() {
               }}
               locale={es}
               disabled={(date) => {
-                // No puede ser fecha futura
                 if (date > new Date()) return true;
-                // No puede ser anterior a fechaDesde
                 if (fechaDesde && date < fechaDesde) return true;
                 return false;
               }}
@@ -425,7 +449,6 @@ export function OrdenesServicioPage() {
           </PopoverContent>
         </Popover>
 
-        {/* Limpiar + total */}
         <Button
           variant="ghost"
           size="sm"
@@ -459,7 +482,7 @@ export function OrdenesServicioPage() {
         ) : ordenes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-60 text-muted-foreground">
             <Wrench className="h-12 w-12 mb-3 opacity-20" />
-            <p className="font-medium">No hay órdenes de servicio</p>
+            <p className="font-medium">No hay ordenes de servicio</p>
             <p className="text-sm">Crea una nueva orden para comenzar</p>
           </div>
         ) : (
@@ -468,133 +491,138 @@ export function OrdenesServicioPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-32">Código</TableHead>
+                    <TableHead className="w-32">Codigo</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Equipo</TableHead>
-                    <TableHead className="max-w-[200px]">Problema</TableHead>
+                    <TableHead>Equipos</TableHead>
                     <TableHead className="w-36">Estado</TableHead>
-                    <TableHead>Técnico</TableHead>
+                    <TableHead>Tecnico</TableHead>
                     <TableHead className="w-24">Fecha</TableHead>
                     <TableHead className="w-28 text-right">Total</TableHead>
                     <TableHead className="text-right w-32">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ordenes.map((orden) => (
-                    <TableRow
-                      key={orden.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/ordenes-servicio/${orden.id}`)}
-                    >
-                      <TableCell>
-                        <span className="font-mono text-xs font-semibold text-primary">
-                          {orden.codigoFormateado}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">{orden.cliente.nombre}</span>
-                          {orden.cliente.telefono && (
-                            <span className="text-xs text-muted-foreground">{orden.cliente.telefono}</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm">{orden.equipo.tipoEquipo}</span>
-                          {(orden.equipo.marca || orden.equipo.modelo) && (
-                            <span className="text-xs text-muted-foreground">
-                              {[orden.equipo.marca, orden.equipo.modelo].filter(Boolean).join(' ')}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[200px]">
-                        <p className="text-sm truncate" title={orden.problemaReportado}>
-                          {orden.problemaReportado}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <EstadoBadge estado={orden.estado} />
-                      </TableCell>
-                      <TableCell>
-                        {orden.usuarioTecnico ? (
-                          <div className="flex items-center gap-1.5 text-sm">
-                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate max-w-[120px]">
-                              {orden.usuarioTecnico.nombreCompleto}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Sin asignar</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatFecha(orden.fechaEmision)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-sm">
-                        {formatMoneda(orden.total)}
-                      </TableCell>
-                      <TableCell
-                        className="text-right"
-                        onClick={(e) => e.stopPropagation()}
+                  {ordenes.map((orden) => {
+                    const primerEquipo = orden.equipos?.[0]?.equipo;
+                    const totalEquipos = orden._count?.equipos ?? orden.equipos?.length ?? 0;
+                    return (
+                      <TableRow
+                        key={orden.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/ordenes-servicio/${orden.id}`)}
                       >
-                        {deleteConfirmId === orden.id ? (
-                          <div className="flex gap-1.5 justify-end">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-7 text-xs"
-                              onClick={() => handleEliminar(orden.id)}
-                              disabled={deletingId === orden.id}
-                            >
-                              {deletingId === orden.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                'Confirmar'
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => setDeleteConfirmId(null)}
-                            >
-                              Cancelar
-                            </Button>
+                        <TableCell>
+                          <span className="font-mono text-xs font-semibold text-primary">
+                            {orden.codigoFormateado}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{orden.cliente.nombre}</span>
+                            {orden.cliente.telefono && (
+                              <span className="text-xs text-muted-foreground">{orden.cliente.telefono}</span>
+                            )}
                           </div>
-                        ) : (
-                          <div className="flex gap-1 justify-end">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => navigate(`/ordenes-servicio/${orden.id}`)}
-                              title="Ver detalle"
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
-                            {(orden.estado === 'RECIBIDA' || orden.estado === 'CANCELADA') && (
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {primerEquipo ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">{primerEquipo.tipoEquipo}</span>
+                                {(primerEquipo.marca || primerEquipo.modelo) && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {[primerEquipo.marca, primerEquipo.modelo].filter(Boolean).join(' ')}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Sin equipos</span>
+                            )}
+                            {totalEquipos > 1 && (
+                              <span className="text-xs text-muted-foreground">+{totalEquipos - 1} mas</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <EstadoBadge estado={orden.estado} />
+                        </TableCell>
+                        <TableCell>
+                          {orden.usuarioTecnico ? (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate max-w-[120px]">
+                                {orden.usuarioTecnico.nombreCompleto}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Sin asignar</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatFecha(orden.fechaEmision)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-sm">
+                          {formatMoneda(orden.total)}
+                        </TableCell>
+                        <TableCell
+                          className="text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {deleteConfirmId === orden.id ? (
+                            <div className="flex gap-1.5 justify-end">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 text-xs"
+                                onClick={() => handleEliminar(orden.id)}
+                                disabled={deletingId === orden.id}
+                              >
+                                {deletingId === orden.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  'Confirmar'
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => setDeleteConfirmId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1 justify-end">
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-7 w-7 hover:text-destructive"
-                                onClick={() => setDeleteConfirmId(orden.id)}
-                                title="Eliminar orden"
+                                className="h-7 w-7"
+                                onClick={() => navigate(`/ordenes-servicio/${orden.id}`)}
+                                title="Ver detalle"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <ExternalLink className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              {(orden.estado === 'RECIBIDA' || orden.estado === 'CANCELADA') && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 hover:text-destructive"
+                                  onClick={() => setDeleteConfirmId(orden.id)}
+                                  title="Eliminar orden"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
-
-            {/* Paginación */}
             <Pagination
               currentPage={filtros.page}
               totalItems={total}
@@ -606,7 +634,7 @@ export function OrdenesServicioPage() {
         )}
       </div>
 
-      {/* ── Sheet: Nueva Orden ───────────────────────────────────────────────── */}
+      {/* Sheet: Nueva Orden */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader className="border-b pb-4">
@@ -617,10 +645,12 @@ export function OrdenesServicioPage() {
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-5 mt-6">
-            {/* ── Seleccionar cliente ── */}
+            {/* Seleccionar cliente */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
-                <span>Cliente <span className="text-destructive">*</span></span>
+                <span>
+                  Cliente <span className="text-destructive">*</span>
+                </span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -665,7 +695,7 @@ export function OrdenesServicioPage() {
                             key={c.id}
                             onClick={() => handleClienteChange(c.id)}
                             className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors flex items-center justify-between gap-2 ${
-                              form.clienteId === c.id ? 'bg-primary/10 text-primary font-medium' : ''
+                              clienteId === c.id ? 'bg-primary/10 text-primary font-medium' : ''
                             }`}
                           >
                             <span className="flex items-center gap-2">
@@ -673,9 +703,7 @@ export function OrdenesServicioPage() {
                               {c.nombre}
                             </span>
                             {c.dniRuc && (
-                              <span className="text-xs text-muted-foreground font-mono">
-                                {c.dniRuc}
-                              </span>
+                              <span className="text-xs text-muted-foreground font-mono">{c.dniRuc}</span>
                             )}
                           </button>
                         ))
@@ -684,262 +712,109 @@ export function OrdenesServicioPage() {
                   </div>
                   {clienteSeleccionado && (
                     <p className="text-xs text-green-600 dark:text-green-400 font-medium">
-                      ✓ Cliente seleccionado: {clienteSeleccionado.nombre}
+                      Cliente seleccionado: {clienteSeleccionado.nombre}
                     </p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* ── Seleccionar equipo ── */}
+            {/* Lista de equipos en la orden */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Equipo <span className="text-destructive">*</span>
+              <label className="text-sm font-medium flex items-center gap-2">
+                Equipos <span className="text-destructive">*</span>
+                {equiposEnOrden.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {equiposEnOrden.length}
+                  </Badge>
+                )}
               </label>
-              {!form.clienteId ? (
+
+              {equiposEnOrden.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">
-                  Primero seleccione un cliente.
+                  {clienteId
+                    ? 'Aun no has agregado equipos. Usa el boton de abajo.'
+                    : 'Primero selecciona un cliente.'}
                 </p>
-              ) : loadingEquipos ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Cargando equipos...
-                </div>
               ) : (
                 <div className="space-y-2">
-                  {equipos.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      Este cliente aún no tiene equipos registrados.
-                    </p>
-                  ) : (
-                    <div className="border rounded-md overflow-hidden">
-                      {equipos.map((eq) => (
-                        <button
-                          type="button"
-                          key={eq.id}
-                          onClick={() => setForm((prev) => ({ ...prev, equipoId: eq.id }))}
-                          className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0 ${
-                            form.equipoId === eq.id ? 'bg-primary/10 text-primary font-medium' : ''
-                          }`}
-                        >
-                          <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-medium">{eq.tipoEquipo}</span>
-                            {(eq.marca || eq.modelo) && (
-                              <span className="text-muted-foreground font-normal">
-                                {' '}
-                                — {[eq.marca, eq.modelo].filter(Boolean).join(' ')}
-                              </span>
-                            )}
-                            {eq.numeroSerie && (
-                              <p className="text-xs text-muted-foreground font-mono">
-                                S/N: {eq.numeroSerie}
+                  {equiposEnOrden.map((item, index) => {
+                    const equipo = equipos.find((e) => e.id === item.equipoId);
+                    return (
+                      <div
+                        key={index}
+                        className="border rounded-md px-3 py-2.5 bg-muted/20 flex items-start justify-between gap-2"
+                      >
+                        <div className="flex items-start gap-2 min-w-0">
+                          <Laptop className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {equipo
+                                ? [equipo.tipoEquipo, equipo.marca, equipo.modelo].filter(Boolean).join(' ')
+                                : item.equipoId}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {item.problemaReportado}
+                            </p>
+                            {item.costoEstimado != null && (
+                              <p className="text-xs text-muted-foreground">
+                                Costo est.: S/ {Number(item.costoEstimado).toFixed(2)}
                               </p>
                             )}
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Botón / formulario inline para nuevo equipo */}
-                  {!mostrarFormEquipo ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs h-8"
-                      onClick={() => setMostrarFormEquipo(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Agregar nuevo equipo
-                    </Button>
-                  ) : (
-                    <div className="border rounded-md p-3 space-y-3 bg-muted/20">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold">Nuevo equipo</p>
+                        </div>
                         <button
                           type="button"
-                          className="text-muted-foreground hover:text-foreground text-xs leading-none"
-                          onClick={() => {
-                            setMostrarFormEquipo(false);
-                            setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
-                            setErrorNuevoEquipo(null);
-                          }}
+                          onClick={() => handleQuitarEquipo(index)}
+                          className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
+                          title="Quitar equipo"
                         >
-                          ✕
+                          <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">
-                          Tipo de equipo <span className="text-destructive">*</span>
-                        </label>
-                        <Input
-                          value={formNuevoEquipo.tipoEquipo}
-                          onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, tipoEquipo: e.target.value }))}
-                          placeholder="Laptop, Celular, PC, Impresora..."
-                          className="h-8 text-xs"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium">Marca</label>
-                          <Input
-                            value={formNuevoEquipo.marca || ''}
-                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))}
-                            placeholder="HP, Samsung..."
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium">Modelo</label>
-                          <Input
-                            value={formNuevoEquipo.modelo || ''}
-                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, modelo: e.target.value }))}
-                            placeholder="Pavilion, A15..."
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">N° de serie</label>
-                        <Input
-                          value={formNuevoEquipo.numeroSerie || ''}
-                          onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, numeroSerie: e.target.value }))}
-                          placeholder="Opcional"
-                          className="h-8 text-xs font-mono"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">Contraseña / patrón</label>
-                        <div className="relative">
-                          <Input
-                            type={verContrasenaEquipo ? 'text' : 'password'}
-                            value={formNuevoEquipo.contrasenaPatron || ''}
-                            onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, contrasenaPatron: e.target.value }))}
-                            placeholder="Opcional"
-                            className="h-8 text-xs pr-8"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setVerContrasenaEquipo((v) => !v)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          >
-                            {verContrasenaEquipo
-                              ? <EyeOff className="h-3.5 w-3.5" />
-                              : <Eye className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {errorNuevoEquipo && (
-                        <Alert variant="destructive" className="py-2">
-                          <AlertDescription className="text-xs">{errorNuevoEquipo}</AlertDescription>
-                        </Alert>
-                      )}
-
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 h-7 text-xs"
-                          onClick={() => {
-                            setMostrarFormEquipo(false);
-                            setFormNuevoEquipo(EQUIPO_NUEVO_VACIO);
-                            setErrorNuevoEquipo(null);
-                          }}
-                          disabled={submittingNuevoEquipo}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="flex-1 h-7 text-xs"
-                          onClick={handleCrearEquipoInline}
-                          disabled={submittingNuevoEquipo}
-                        >
-                          {submittingNuevoEquipo && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                          Guardar equipo
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
+              )}
+
+              {clienteId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 text-xs h-8"
+                  onClick={handleAbrirAgregarEquipo}
+                  disabled={loadingEquipos}
+                >
+                  {loadingEquipos ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  Agregar equipo
+                </Button>
               )}
             </div>
 
-            {/* ── Problema reportado ── */}
+            {/* Pago a cuenta */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Problema reportado <span className="text-destructive">*</span>
-              </label>
-              <Textarea
-                required
-                value={form.problemaReportado}
-                onChange={(e) => setForm({ ...form, problemaReportado: e.target.value })}
-                placeholder="Describir el problema que reporta el cliente..."
-                rows={3}
+              <label className="text-sm font-medium">Pago a cuenta (S/)</label>
+              <Input
+                type="text"
+                min="0"
+                step="0.01"
+                value={pagoACuenta || ''}
+                onChange={(e) => setPagoACuenta(parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
               />
             </div>
 
-            {/* ── Diagnóstico inicial ── */}
+            {/* Tecnico asignado */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Diagnóstico inicial</label>
-              <Textarea
-                value={form.diagnosticoInicial || ''}
-                onChange={(e) => setForm({ ...form, diagnosticoInicial: e.target.value })}
-                placeholder="Diagnóstico preliminar (opcional)..."
-                rows={2}
-              />
-            </div>
-
-            {/* ── Costo estimado + pago a cuenta ── */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Costo estimado (S/)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.costoEstimado ?? ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      costoEstimado: e.target.value === '' ? null : parseFloat(e.target.value),
-                    })
-                  }
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Pago a cuenta (S/)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.pagoACuenta ?? 0}
-                  onChange={(e) =>
-                    setForm({ ...form, pagoACuenta: parseFloat(e.target.value) || 0 })
-                  }
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            {/* ── Técnico asignado ── */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Técnico asignado</label>
+              <label className="text-sm font-medium">Tecnico asignado</label>
               <Select
-                value={form.usuarioTecnicoId || '__none__'}
-                onValueChange={(v) =>
-                  setForm({ ...form, usuarioTecnicoId: v === '__none__' ? null : v })
-                }
+                value={usuarioTecnicoId || '__none__'}
+                onValueChange={(v) => setUsuarioTecnicoId(v === '__none__' ? null : v)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin asignar" />
@@ -981,14 +856,264 @@ export function OrdenesServicioPage() {
         </SheetContent>
       </Sheet>
 
-      {/* ── Dialog: Nuevo Cliente Rápido ────────────────────────────────────── */}
+      {/* Dialog: Agregar Equipo a la Orden */}
+      <Dialog open={agregarEquipoDialogOpen} onOpenChange={setAgregarEquipoDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>Agregar equipo a la orden</DialogTitle>
+            <DialogDescription>
+              Selecciona un equipo del cliente y describe el problema reportado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Layout dos columnas */}
+          <div className="grid grid-cols-2 gap-6 mt-2 overflow-hidden flex-1 min-h-0">
+
+            {/* Columna izquierda: selección de equipo */}
+            <div className="flex flex-col gap-3 overflow-hidden">
+              <label className="text-sm font-medium shrink-0">
+                Equipo <span className="text-destructive">*</span>
+              </label>
+
+              {/* Lista de equipos del cliente */}
+              <div className="flex-1 overflow-y-auto min-h-0 border rounded-md">
+                {equipos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-3">
+                    Este cliente aun no tiene equipos registrados.
+                  </p>
+                ) : (
+                  equipos.map((eq) => (
+                    <button
+                      type="button"
+                      key={eq.id}
+                      onClick={() => setEquipoEntrada((prev) => ({ ...prev, equipoId: eq.id }))}
+                      className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0 ${
+                        equipoEntrada.equipoId === eq.id
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : ''
+                      }`}
+                    >
+                      <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-medium">{eq.tipoEquipo}</span>
+                        {(eq.marca || eq.modelo) && (
+                          <span className="text-muted-foreground font-normal">
+                            {' '}{[eq.marca, eq.modelo].filter(Boolean).join(' ')}
+                          </span>
+                        )}
+                        {eq.numeroSerie && (
+                          <p className="text-xs text-muted-foreground font-mono">S/N: {eq.numeroSerie}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {/* Mini-form nuevo equipo — aparece debajo de la lista */}
+              {!mostrarFormEquipo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-xs h-8"
+                  onClick={() => setMostrarFormEquipo(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Registrar nuevo equipo
+                </Button>
+              ) : (
+                <div className="border rounded-md p-3 space-y-3 bg-muted/20 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold">Nuevo equipo</p>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setMostrarFormEquipo(false);
+                        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                        setErrorNuevoEquipo(null);
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">
+                      Tipo de equipo <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      value={formNuevoEquipo.tipoEquipo}
+                      onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, tipoEquipo: e.target.value }))}
+                      placeholder="Laptop, Celular, PC..."
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Marca</label>
+                      <Input
+                        value={formNuevoEquipo.marca || ''}
+                        onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))}
+                        placeholder="HP, Samsung..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Modelo</label>
+                      <Input
+                        value={formNuevoEquipo.modelo || ''}
+                        onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, modelo: e.target.value }))}
+                        placeholder="Pavilion, A15..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">N de serie</label>
+                      <Input
+                        value={formNuevoEquipo.numeroSerie || ''}
+                        onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, numeroSerie: e.target.value }))}
+                        placeholder="Opcional"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Contrasena / patron</label>
+                      <div className="relative">
+                        <Input
+                          type={verContrasenaEquipo ? 'text' : 'password'}
+                          value={formNuevoEquipo.contrasenaPatron || ''}
+                          onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, contrasenaPatron: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-8 text-xs pr-8"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setVerContrasenaEquipo((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {verContrasenaEquipo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {errorNuevoEquipo && (
+                    <Alert variant="destructive" className="py-2">
+                      <AlertDescription className="text-xs">{errorNuevoEquipo}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs"
+                      onClick={() => {
+                        setMostrarFormEquipo(false);
+                        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                        setErrorNuevoEquipo(null);
+                      }}
+                      disabled={submittingNuevoEquipo}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1 h-7 text-xs"
+                      onClick={handleCrearEquipoInline}
+                      disabled={submittingNuevoEquipo}
+                    >
+                      {submittingNuevoEquipo && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      Guardar equipo
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirmación equipo seleccionado */}
+              {equipoSeleccionadoObj && (
+                <p className="text-xs text-green-600 dark:text-green-400 font-medium shrink-0">
+                  ✓ {[equipoSeleccionadoObj.tipoEquipo, equipoSeleccionadoObj.marca, equipoSeleccionadoObj.modelo].filter(Boolean).join(' ')}
+                </p>
+              )}
+            </div>
+
+            {/* Columna derecha: descripción del caso */}
+            <div className="flex flex-col gap-4 overflow-y-auto">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Problema reportado <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  value={equipoEntrada.problemaReportado}
+                  onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, problemaReportado: e.target.value }))}
+                  placeholder="Describir el problema que reporta el cliente..."
+                  rows={5}
+                  className="resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Diagnostico tecnico</label>
+                <Textarea
+                  value={equipoEntrada.diagnosticoTecnico}
+                  onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, diagnosticoTecnico: e.target.value }))}
+                  placeholder="Diagnostico preliminar (opcional)..."
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Costo estimado (S/)</label>
+                <Input
+                  type="text"
+                  min="0"
+                  value={equipoEntrada.costoEstimado}
+                  onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, costoEstimado: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {entradaError && (
+                <Alert variant="destructive">
+                  <AlertDescription className="text-sm">{entradaError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 mt-4 shrink-0 border-t pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAgregarEquipoDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleConfirmarAgregarEquipo}>
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar a la Orden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Nuevo Cliente Rapido */}
       <Dialog open={nuevoClienteDialogOpen} onOpenChange={setNuevoClienteDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Nuevo Cliente</DialogTitle>
             <DialogDescription>
-              Registro rápido. Puede completar el perfil (DNI/RUC, dirección) después en el módulo
-              de Clientes.
+              Registro rapido. Puede completar el perfil (DNI/RUC, direccion) despues en el modulo de Clientes.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCrearClienteRapido} className="space-y-3 mt-2">
@@ -1000,11 +1125,11 @@ export function OrdenesServicioPage() {
                 autoFocus
                 value={formNuevoCliente.nombre}
                 onChange={(e) => setFormNuevoCliente((p) => ({ ...p, nombre: e.target.value }))}
-                placeholder="Nombre completo o razón social"
+                placeholder="Nombre completo o razon social"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Teléfono</label>
+              <label className="text-sm font-medium">Telefono</label>
               <Input
                 type="tel"
                 value={formNuevoCliente.telefono}
