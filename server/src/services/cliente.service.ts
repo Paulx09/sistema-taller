@@ -83,7 +83,7 @@ class ClienteService {
             numeroSerie: true,
             // contrasenaPatron NO se incluye aquí por seguridad
             createdAt: true,
-            _count: { select: { ordenes: true } },
+            _count: { select: { equiposOrdenes: true } },
           },
         },
         ordenes: {
@@ -96,8 +96,10 @@ class ClienteService {
             estado: true,
             fechaEmision: true,
             total: true,
-            equipo: {
-              select: { tipoEquipo: true, marca: true, modelo: true },
+            equipos: {
+              select: {
+                equipo: { select: { tipoEquipo: true, marca: true, modelo: true } },
+              },
             },
           },
         },
