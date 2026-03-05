@@ -39,7 +39,7 @@ class EquipoClienteService {
         // contrasenaPatron excluida por defecto
         createdAt: true,
         updatedAt: true,
-        _count: { select: { ordenes: true } },
+        _count: { select: { equiposOrdenes: true } },
       },
     });
   }
@@ -139,14 +139,14 @@ class EquipoClienteService {
   async eliminar(id: string) {
     const equipo = await prisma.equipoCliente.findFirst({
       where: { id },
-      include: { _count: { select: { ordenes: true } } },
+      include: { _count: { select: { equiposOrdenes: true } } },
     });
 
     if (!equipo) {
       throw new Error('Equipo no encontrado');
     }
 
-    if (equipo._count.ordenes > 0) {
+    if (equipo._count.equiposOrdenes > 0) {
       throw new Error('No se puede eliminar el equipo porque tiene órdenes de servicio asociadas');
     }
 

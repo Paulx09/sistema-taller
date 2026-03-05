@@ -1,46 +1,70 @@
 import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 
-// Crear orden (wizard paso 3)
-const crearOrdenSchema = z.object({
-  clienteId: z.string().uuid('clienteId debe ser un UUID válido'),
+// Esquema de un equipo dentro de la orden
+const equipoOrdenInputSchema = z.object({
   equipoId: z.string().uuid('equipoId debe ser un UUID válido'),
-  usuarioTecnicoId: z.string().uuid('usuarioTecnicoId debe ser un UUID válido').optional().nullable(),
   problemaReportado: z.string().min(1, 'El problema reportado es requerido').trim(),
-  diagnosticoInicial: z.string().trim().optional().nullable(),
+  diagnosticoTecnico: z.string().trim().optional().nullable(),
   observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
   costoEstimado: z.number().positive('El costo estimado debe ser positivo').optional().nullable(),
-  pagoACuenta: z.number().min(0, 'El pago a cuenta no puede ser negativo').optional(),
 });
 
-// Editar campos generales de la orden
+// Crear orden
+const crearOrdenSchema = z.object({
+  clienteId: z.string().uuid('clienteId debe ser un UUID válido'),
+  usuarioTecnicoId: z.string().uuid('usuarioTecnicoId debe ser un UUID válido').optional().nullable(),
+  pagoACuenta: z.number().min(0, 'El pago a cuenta no puede ser negativo').optional(),
+  equipos: z.array(equipoOrdenInputSchema).min(1, 'La orden debe tener al menos un equipo'),
+});
+
+// Editar orden (solo campos globales)
 const actualizarOrdenSchema = z.object({
   usuarioTecnicoId: z.string().uuid().optional().nullable(),
-  diagnosticoInicial: z.string().trim().optional().nullable(),
-  observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
-  costoEstimado: z.number().positive().optional().nullable(),
   pagoACuenta: z.number().min(0).optional(),
-  problemaReportado: z.string().min(1).trim().optional(),
 });
 
-// Agregar ítem a orden
+// Agregar / actualizar equipo en la orden
+const agregarEquipoSchema = z.object({
+  equipoId: z.string().uuid('equipoId debe ser un UUID válido'),
+  problemaReportado: z.string().min(1, 'El problema reportado es requerido').trim(),
+  diagnosticoTecnico: z.string().trim().optional().nullable(),
+  observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
+  costoEstimado: z.number().positive('El costo estimado debe ser positivo').optional().nullable(),
+});
+
+const actualizarEquipoSchema = z.object({
+  problemaReportado: z.string().min(1).trim().optional(),
+  diagnosticoTecnico: z.string().trim().optional().nullable(),
+  observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
+  costoEstimado: z.number().positive().optional().nullable(),
+});
+
+// Cambiar estado de un equipo
+const cambiarEstadoEquipoSchema = z.object({
+  estado: z.enum(['RECIBIDA', 'EN_REPARACION', 'LISTA', 'CANCELADA'] as const, {
+    error: 'Estado de equipo inválido',
+  }),
+});
+
+// Agregar ítem
 const agregarItemSchema = z.object({
   productoId: z.string().uuid('productoId debe ser un UUID válido'),
   cantidad: z.number().int().positive('La cantidad debe ser un entero positivo'),
   precioUnitario: z.number().positive('El precio unitario debe ser positivo'),
 });
 
-// Cambiar estado
+// Cambiar estado global de la orden (solo ENTREGADA)
 const cambiarEstadoSchema = z.object({
-  estado: z.enum(['RECIBIDA', 'EN_REPARACION', 'LISTA', 'ENTREGADA', 'CANCELADA'] as const, {
-    error: 'Estado inválido',
-  }),
+  estado: z.literal('ENTREGADA', { error: 'Solo se puede cambiar el estado global a ENTREGADA' }),
 });
 
+// Param ID
 const idParamSchema = z.object({
   id: z.string().uuid('El ID debe ser un UUID válido'),
 });
 
+// Helper
 const validate = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -79,6 +103,9 @@ const validateId = (req: Request, res: Response, next: NextFunction) => {
 export const ordenServicioValidator = {
   crear: validate(crearOrdenSchema),
   actualizar: validate(actualizarOrdenSchema),
+  agregarEquipo: validate(agregarEquipoSchema),
+  actualizarEquipo: validate(actualizarEquipoSchema),
+  cambiarEstadoEquipo: validate(cambiarEstadoEquipoSchema),
   agregarItem: validate(agregarItemSchema),
   cambiarEstado: validate(cambiarEstadoSchema),
   validateId,
