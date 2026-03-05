@@ -422,24 +422,38 @@ export interface EquipoCliente {
   createdAt: string;
   updatedAt: string;
   cliente?: { id: string; nombre: string };
-  _count?: { ordenes: number };
+  _count?: { equiposOrdenes: number };
 }
 
 export type EstadoOrden = 'RECIBIDA' | 'EN_REPARACION' | 'LISTA' | 'ENTREGADA' | 'CANCELADA';
+export type EstadoEquipoOrden = 'RECIBIDA' | 'EN_REPARACION' | 'LISTA' | 'CANCELADA';
+
+export interface EquipoOrden {
+  id: string;
+  ordenId: string;
+  equipoId: string;
+  problemaReportado: string;
+  diagnosticoTecnico: string | null;
+  observacionesEsteticas: Record<string, any> | null;
+  costoEstimado: string | null;
+  subtotal: string;
+  ganancia: string;
+  estado: EstadoEquipoOrden;
+  createdAt: string;
+  updatedAt: string;
+  equipo?: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null; numeroSerie: string | null };
+  items?: ItemOrden[];
+  notas?: NotaTecnica[];
+}
 
 export interface OrdenServicio {
   id: string;
   codigoCorrelativo: number;
   codigoFormateado: string;
   clienteId: string;
-  equipoId: string;
   usuarioRegistroId: string;
   usuarioTecnicoId: string | null;
   fechaEmision: string;
-  problemaReportado: string;
-  diagnosticoInicial: string | null;
-  observacionesEsteticas: Record<string, any> | null;
-  costoEstimado: string | null;
   pagoACuenta: string;
   total: string;
   gananciaTotal: string;
@@ -448,12 +462,10 @@ export interface OrdenServicio {
   updatedAt: string;
   deletedAt: string | null;
   cliente?: { id: string; nombre: string; telefono: string | null; dniRuc: string | null };
-  equipo?: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null; numeroSerie: string | null };
+  equipos?: EquipoOrden[];
   usuarioRegistro?: { id: string; username: string; nombreCompleto: string };
   usuarioTecnico?: { id: string; username: string; nombreCompleto: string } | null;
-  items?: ItemOrden[];
-  notas?: NotaTecnica[];
-  _count?: { items: number; notas: number };
+  _count?: { equipos: number };
 }
 
 /** Versión resumida para listados */
@@ -464,13 +476,12 @@ export interface OrdenServicioResumen {
   estado: EstadoOrden;
   fechaEmision: string;
   total: string;
-  costoEstimado: string | null;
   pagoACuenta: string;
   cliente: { id: string; nombre: string; telefono: string | null };
-  equipo: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null };
+  equipos: { equipo: { tipoEquipo: string; marca: string | null; modelo: string | null } }[];
   usuarioRegistro: { id: string; nombreCompleto: string };
   usuarioTecnico: { id: string; nombreCompleto: string } | null;
-  _count: { items: number; notas: number };
+  _count: { equipos: number };
 }
 
 export interface VentaResumen {
@@ -483,7 +494,7 @@ export interface VentaResumen {
 
 export interface ItemOrden {
   id: string;
-  ordenId: string;
+  equipoOrdenId: string;
   productoId: string;
   cantidad: number;
   precioUnitario: string;
@@ -503,7 +514,7 @@ export interface ItemOrden {
 
 export interface NotaTecnica {
   id: string;
-  ordenId: string;
+  equipoOrdenId: string;
   usuarioId: string;
   contenido: string;
   createdAt: string;
@@ -543,24 +554,35 @@ export interface ActualizarEquipoDto {
 }
 
 // DTOs Órdenes de Servicio
+export interface EquipoOrdenInputDto {
+  equipoId: string;
+  problemaReportado: string;
+  diagnosticoTecnico?: string | null;
+  observacionesEsteticas?: Record<string, any> | null;
+  costoEstimado?: number | null;
+}
+
 export interface CrearOrdenDto {
   clienteId: string;
-  equipoId: string;
   usuarioTecnicoId?: string | null;
-  problemaReportado: string;
-  diagnosticoInicial?: string | null;
-  observacionesEsteticas?: Record<string, boolean> | null;
-  costoEstimado?: number | null;
   pagoACuenta?: number;
+  equipos: EquipoOrdenInputDto[];
 }
 
 export interface ActualizarOrdenDto {
   usuarioTecnicoId?: string | null;
-  diagnosticoInicial?: string | null;
-  observacionesEsteticas?: Record<string, boolean> | null;
-  costoEstimado?: number | null;
   pagoACuenta?: number;
+}
+
+export interface ActualizarEquipoOrdenDto {
   problemaReportado?: string;
+  diagnosticoTecnico?: string | null;
+  observacionesEsteticas?: Record<string, any> | null;
+  costoEstimado?: number | null;
+}
+
+export interface CambiarEstadoEquipoDto {
+  estado: EstadoEquipoOrden;
 }
 
 export interface AgregarItemOrdenDto {
