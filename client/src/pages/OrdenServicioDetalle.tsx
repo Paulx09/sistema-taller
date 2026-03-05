@@ -379,7 +379,7 @@ export function OrdenServicioDetalle() {
     setItemForm({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '' });
     setItemError(null);
     setBusquedaProducto('');
-    buscarProductos('');
+    setProductos([]);
     setItemDialogOpen(true);
   }
 
@@ -430,7 +430,8 @@ export function OrdenServicioDetalle() {
     setAgregarEquipoDialogOpen(true);
     try {
       const cli = await clienteService.getById(orden.clienteId);
-      setEquiposCliente(cli.equipos ?? []);
+      const idsEnOrden = new Set(orden.equipos?.map((e) => e.equipoId) ?? []);
+      setEquiposCliente((cli.equipos ?? []).filter((eq) => !idsEnOrden.has(eq.id)));
     } catch {
       setEquiposCliente([]);
     }
@@ -630,10 +631,10 @@ export function OrdenServicioDetalle() {
             </a>
           )}
           <Link
-            to={`/clientes/${orden.clienteId}`}
+            to="/clientes"
             className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-muted hover:bg-muted/70 text-xs font-semibold transition-colors"
           >
-            Historial del cliente
+            Ver Todos los Clientes
           </Link>
         </div>
 
@@ -1177,30 +1178,6 @@ export function OrdenServicioDetalle() {
 
           <Separator />
 
-          {/* Documentos PDF */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">
-              Documentos
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" className="text-xs gap-1" asChild>
-                <Link to={`/ordenes-servicio/${id}/pdf`} target="_blank">
-                  <FileText className="h-3 w-3" /> Global
-                </Link>
-              </Button>
-              {equipoActivoId && (
-                <Button variant="outline" size="sm" className="text-xs gap-1" asChild>
-                  <Link
-                    to={`/ordenes-servicio/${id}/pdf?equipo=${equipoActivoId}`}
-                    target="_blank"
-                  >
-                    <FileText className="h-3 w-3" /> Equipo
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </div>
-
           {/* Botón ENTREGADA */}
           {orden.estado === 'LISTA' && (
             <>
@@ -1259,11 +1236,13 @@ export function OrdenServicioDetalle() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Producto / Servicio</label>
               <Input
-                placeholder="Buscar por nombre..."
+                placeholder="Escribe al menos 2 caracteres..."
                 value={busquedaProducto}
                 onChange={(e) => {
-                  setBusquedaProducto(e.target.value);
-                  buscarProductos(e.target.value);
+                  const q = e.target.value;
+                  setBusquedaProducto(q);
+                  if (q.length >= 2) buscarProductos(q);
+                  else setProductos([]);
                 }}
               />
               <div className="border rounded-md max-h-44 overflow-y-auto">
@@ -1333,9 +1312,8 @@ export function OrdenServicioDetalle() {
                   min="0"
                   step="0.01"
                   value={itemForm.precioUnitario}
-                  onChange={(e) =>
-                    setItemForm((p) => ({ ...p, precioUnitario: e.target.value }))
-                  }
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -1397,7 +1375,7 @@ export function OrdenServicioDetalle() {
               <div className="flex-1 overflow-y-auto min-h-0 border rounded-md">
                 {equiposCliente.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic p-3">
-                    Sin equipos registrados para este cliente.
+                    Todos los equipos del cliente ya están en esta orden, o no tiene equipos registrados. Registra uno nuevo abajo.
                   </p>
                 ) : (
                   equiposCliente.map((eq) => (

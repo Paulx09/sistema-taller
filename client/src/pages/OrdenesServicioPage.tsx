@@ -349,6 +349,8 @@ export function OrdenesServicioPage() {
   );
   const clienteSeleccionado = clientes.find((c) => c.id === clienteId);
   const equipoSeleccionadoObj = equipos.find((e) => e.id === equipoEntrada.equipoId);
+  const idsEnOrden = new Set(equiposEnOrden.map((e) => e.equipoId));
+  const equiposDisponibles = equipos.filter((eq) => !idsEnOrden.has(eq.id));
 
   // Render
   return (
@@ -879,10 +881,14 @@ export function OrdenesServicioPage() {
               <div className="flex-1 overflow-y-auto min-h-0 border rounded-md">
                 {equipos.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic p-3">
-                    Este cliente aun no tiene equipos registrados.
+                    Este cliente aún no tiene equipos registrados.
+                  </p>
+                ) : equiposDisponibles.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-3">
+                    Todos los equipos del cliente ya están en esta orden. Registra uno nuevo abajo.
                   </p>
                 ) : (
-                  equipos.map((eq) => (
+                  equiposDisponibles.map((eq) => (
                     <button
                       type="button"
                       key={eq.id}
