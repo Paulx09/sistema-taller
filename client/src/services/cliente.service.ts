@@ -1,5 +1,5 @@
 import api from './api';
-import type { Cliente, CrearClienteDto, ActualizarClienteDto, ApiResponse } from '../types';
+import type { Cliente, CrearClienteDto, ActualizarClienteDto, ApiResponse, CrearEquipoDto, EquipoCliente } from '../types';
 
 interface GetClientesParams {
   busqueda?: string;
@@ -38,5 +38,11 @@ export const clienteService = {
   // DELETE /api/clientes/:id
   async delete(id: string): Promise<void> {
     await api.delete(`/clientes/${id}`);
+  },
+
+  // POST /api/clientes/:clienteId/equipos
+  async crearEquipo(clienteId: string, data: CrearEquipoDto): Promise<EquipoCliente> {
+    const response = await api.post<ApiResponse<EquipoCliente>>(`/clientes/${clienteId}/equipos`, data);
+    return response.data.data;
   },
 };

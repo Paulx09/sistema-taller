@@ -1,19 +1,36 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { pdf } from '@react-pdf/renderer';
+import {
+  ChevronRight,
+  Laptop,
+  Plus,
+  Trash2,
+  Save,
+  Pencil,
+  X,
+  Loader2,
+  MessageCircle,
+  FileText,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  WrenchIcon,
+  PackageCheck,
+  User,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -21,947 +38,1605 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { EstadoBadge } from '@/components/EstadoBadge';
-import { OrdenServicioPDF } from '@/components/OrdenServicioPDF';
-import {
-  ArrowLeft,
-  FileDown,
-  Loader2,
-  Plus,
-  Trash2,
-  MessageSquare,
-  Send,
-  Pencil,
-  Save,
-  X,
-  Package,
-  User,
-  Laptop,
-  Wrench,
-  ChevronRight,
-} from 'lucide-react';
 import { ordenServicioService } from '@/services/orden-servicio.service';
-import { productoService } from '@/services/producto.service';
 import { usuarioService } from '@/services/usuario.service';
-import type { OrdenServicio, EstadoOrden, Usuario, AgregarItemOrdenDto, ActualizarOrdenDto } from '@/types';
+import { clienteService } from '@/services/cliente.service';
+import { productoService } from '@/services/producto.service';
+import type {
+  OrdenServicio,
+  EquipoOrden,
+  NotaTecnica,
+  EstadoEquipoOrden,
+  AgregarItemOrdenDto,
+  ActualizarEquipoOrdenDto,
+  Usuario,
+  Producto,
+  EquipoOrdenInputDto,
+  EquipoCliente,
+} from '@/types';
+import { cn } from '@/lib/utils';
 
-// Transiciones válidas
-const TRANSICIONES: Record<EstadoOrden, { estado: EstadoOrden; label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary'; requiereSaldoCero?: boolean }[]> = {
-  RECIBIDA: [
-    { estado: 'EN_REPARACION', label: 'Iniciar Reparación', variant: 'default' },
-    { estado: 'CANCELADA', label: 'Cancelar', variant: 'destructive' },
-  ],
-  EN_REPARACION: [
-    { estado: 'LISTA', label: 'Marcar como Lista', variant: 'default' },
-    { estado: 'CANCELADA', label: 'Cancelar OS', variant: 'destructive' },
-  ],
-  LISTA: [
-    { estado: 'ENTREGADA', label: 'Registrar Entrega', variant: 'default', requiereSaldoCero: true },
-    { estado: 'EN_REPARACION', label: 'Volver a Reparación', variant: 'outline' },
-    { estado: 'CANCELADA', label: 'Cancelar', variant: 'destructive' },
-  ],
-  ENTREGADA: [],
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(val: string | number | null | undefined): string {
+  const n = parseFloat(String(val ?? '0'));
+  return isNaN(n) ? '0.00' : n.toFixed(2);
+}
+
+const ESTADO_EQUIPO_CONFIG: Record<
+  EstadoEquipoOrden,
+  { label: string; icon: React.ReactNode; className: string }
+> = {
+  RECIBIDA: {
+    label: 'Recibida',
+    icon: <Clock className="h-3.5 w-3.5" />,
+    className:
+      'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+  },
+  EN_REPARACION: {
+    label: 'En Reparación',
+    icon: <WrenchIcon className="h-3.5 w-3.5" />,
+    className:
+      'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800',
+  },
+  LISTA: {
+    label: 'Lista',
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    className:
+      'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+  },
+  CANCELADA: {
+    label: 'Cancelada',
+    icon: <X className="h-3.5 w-3.5" />,
+    className:
+      'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+  },
+};
+
+/** Transiciones válidas desde un estado de equipo */
+const TRANSICIONES: Record<EstadoEquipoOrden, EstadoEquipoOrden[]> = {
+  RECIBIDA: ['EN_REPARACION', 'CANCELADA'],
+  EN_REPARACION: ['LISTA', 'CANCELADA'],
+  LISTA: ['CANCELADA'],
   CANCELADA: [],
 };
 
-const fmt = (val: string | null | undefined) =>
-  val ? `S/ ${parseFloat(val).toFixed(2)}` : 'S/ 0.00';
+function EquipoBadge({ estado }: { estado: EstadoEquipoOrden }) {
+  const cfg = ESTADO_EQUIPO_CONFIG[estado];
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+        cfg.className
+      )}
+    >
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  );
+}
 
-const fmtFecha = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-PE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+// ─── constantes vacías ─────────────────────────────────────────────────────────
 
-const fmtFechaHora = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-PE', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+const EQUIPO_NUEVO_VACIO = { tipoEquipo: '', marca: '', modelo: '', numeroSerie: '' };
 
-// Componente
+const EQUIPO_ENTRADA_VACIO = {
+  equipoId: '',
+  problemaReportado: '',
+  diagnosticoTecnico: '',
+  costoEstimado: '',
+};
+
+// ─── componente principal ─────────────────────────────────────────────────────
+
 export function OrdenServicioDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  // ── datos principales ──────────────────────────────────────────────────────
   const [orden, setOrden] = useState<OrdenServicio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar orden
+  // equipo activo en el sidebar
+  const [equipoActivoId, setEquipoActivoId] = useState<string | null>(null);
+
+  // notas del equipo activo
+  const [notas, setNotas] = useState<NotaTecnica[]>([]);
+  const [notaContenido, setNotaContenido] = useState('');
+  const [guardandoNota, setGuardandoNota] = useState(false);
+
+  // edición inline del equipo activo
+  const [editandoEquipo, setEditandoEquipo] = useState(false);
+  const [formEquipo, setFormEquipo] = useState<ActualizarEquipoOrdenDto>({});
+  const [guardandoEquipo, setGuardandoEquipo] = useState(false);
+
+  // cambio de estado del equipo
+  const [cambiandoEstadoEquipo, setCambiandoEstadoEquipo] = useState(false);
+
+  // técnico
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [guardandoTecnico, setGuardandoTecnico] = useState(false);
+
+  // pago a cuenta edición inline
+  const [editandoPago, setEditandoPago] = useState(false);
+  const [pagoInput, setPagoInput] = useState('');
+  const [guardandoPago, setGuardandoPago] = useState(false);
+
+  // marcar entregada
+  const [marcandoEntregada, setMarcandoEntregada] = useState(false);
+
+  // Dialog: agregar ítem
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [buscandoProductos, setBuscandoProductos] = useState(false);
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [itemForm, setItemForm] = useState<{
+    productoId: string;
+    productoNombre: string;
+    cantidad: string;
+    precioUnitario: string;
+  }>({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '' });
+  const [guardandoItem, setGuardandoItem] = useState(false);
+  const [itemError, setItemError] = useState<string | null>(null);
+
+  // Dialog: agregar otro equipo
+  const [agregarEquipoDialogOpen, setAgregarEquipoDialogOpen] = useState(false);
+  const [equiposCliente, setEquiposCliente] = useState<EquipoCliente[]>([]);
+  const [equipoEntrada, setEquipoEntrada] = useState({ ...EQUIPO_ENTRADA_VACIO });
+  const [mostrarFormEquipoNuevo, setMostrarFormEquipoNuevo] = useState(false);
+  const [formNuevoEquipo, setFormNuevoEquipo] = useState({ ...EQUIPO_NUEVO_VACIO });
+  const [submittingNuevoEquipo, setSubmittingNuevoEquipo] = useState(false);
+  const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
+  const [entradaEquipoError, setEntradaEquipoError] = useState<string | null>(null);
+  const [agregarEquipoLoading, setAgregarEquipoLoading] = useState(false);
+
+  // ── carga inicial ──────────────────────────────────────────────────────────
   const cargarOrden = useCallback(async () => {
     if (!id) return;
-    setLoading(true);
-    setError(null);
     try {
+      setLoading(true);
+      setError(null);
       const data = await ordenServicioService.getById(id);
       setOrden(data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Orden no encontrada');
+      setEquipoActivoId((prev) => {
+        if (prev && data.equipos?.find((e) => e.id === prev)) return prev;
+        return data.equipos?.[0]?.id ?? null;
+      });
+    } catch {
+      setError('No se pudo cargar la orden de servicio.');
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { cargarOrden(); }, [cargarOrden]);
+  useEffect(() => {
+    cargarOrden();
+    usuarioService.getAll().then(setUsuarios).catch(() => {});
+  }, [cargarOrden]);
 
-  // Cambio de estado
-  const [cambiandoEstado, setCambiandoEstado] = useState<EstadoOrden | null>(null);
-  const [confirmEstado, setConfirmEstado] = useState<{ estado: EstadoOrden; label: string } | null>(null);
-
-  const handleCambiarEstado = async (nuevoEstado: EstadoOrden) => {
-    if (!id) return;
-    setCambiandoEstado(nuevoEstado);
-    try {
-      await ordenServicioService.cambiarEstado(id, nuevoEstado);
-      setConfirmEstado(null);
-      await cargarOrden();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al cambiar estado');
-    } finally {
-      setCambiandoEstado(null);
+  // ── notas al cambiar equipo activo ─────────────────────────────────────────
+  useEffect(() => {
+    if (!id || !equipoActivoId) {
+      setNotas([]);
+      return;
     }
-  };
+    ordenServicioService
+      .getNotas(id, equipoActivoId)
+      .then(setNotas)
+      .catch(() => setNotas([]));
+  }, [id, equipoActivoId]);
 
-  // Edición de orden 
-  const [editando, setEditando] = useState(false);
-  const [formEdit, setFormEdit] = useState<ActualizarOrdenDto>({});
-  const [guardando, setGuardando] = useState(false);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [pagoACuentaError, setPagoACuentaError] = useState<string | null>(null);
+  // ── estado derivado ────────────────────────────────────────────────────────
+  const equipoActivo: EquipoOrden | null =
+    orden?.equipos?.find((e) => e.id === equipoActivoId) ?? null;
 
-  const handleAbrirEdicion = async () => {
-    if (!orden) return;
-    setFormEdit({
-      problemaReportado: orden.problemaReportado,
-      diagnosticoInicial: orden.diagnosticoInicial || '',
-      costoEstimado: orden.costoEstimado ? parseFloat(orden.costoEstimado) : null,
-      pagoACuenta: parseFloat(orden.pagoACuenta),
-      usuarioTecnicoId: orden.usuarioTecnicoId || null,
-    });
-    setPagoACuentaError(null);
-    if (usuarios.length === 0) {
-      const us = await usuarioService.getAll();
-      setUsuarios(us);
-    }
-    setEditando(true);
-  };
+  const subtotalOS =
+    orden?.equipos?.reduce((acc, eq) => acc + parseFloat(eq.subtotal ?? '0'), 0) ?? 0;
 
-  const handleGuardarEdicion = async () => {
-    if (!id) return;
-    setGuardando(true);
-    try {
-      await ordenServicioService.update(id, {
-        ...formEdit,
-        diagnosticoInicial: formEdit.diagnosticoInicial || null,
-        usuarioTecnicoId: formEdit.usuarioTecnicoId || null,
+  const pagoACuenta = parseFloat(orden?.pagoACuenta ?? '0');
+  const saldoPendiente = Math.max(0, subtotalOS - pagoACuenta);
+  const puedeEntregarSe = orden?.estado === 'LISTA' && saldoPendiente === 0;
+
+  // ── sincronizar form al cambiar equipo ─────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (equipoActivo) {
+      setFormEquipo({
+        problemaReportado: equipoActivo.problemaReportado,
+        diagnosticoTecnico: equipoActivo.diagnosticoTecnico ?? '',
+        costoEstimado: equipoActivo.costoEstimado
+          ? parseFloat(equipoActivo.costoEstimado)
+          : null,
       });
-      setEditando(false);
-      await cargarOrden();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al guardar cambios');
-    } finally {
-      setGuardando(false);
+      setEditandoEquipo(false);
     }
-  };
+  }, [equipoActivo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Agregar ítem
-  const [addItemOpen, setAddItemOpen] = useState(false);
-  const [busquedaProd, setBusquedaProd] = useState('');
-  const [resultadosProd, setResultadosProd] = useState<{ id: string; nombre: string; marca: string | null; modelo: string | null; stockActual: number; esServicio: boolean; precioVenta: number | string }[]>([]);
-  const [buscandoProd, setBuscandoProd] = useState(false);
-  const [itemSeleccionado, setItemSeleccionado] = useState<{ id: string; nombre: string; stockActual: number; esServicio: boolean; precioVenta: number | string } | null>(null);
-  const [itemCantidad, setItemCantidad] = useState(1);
-  const [itemPrecio, setItemPrecio] = useState<number>(0);
-  const [agregandoItem, setAgregandoItem] = useState(false);
-  const [removeItemId, setRemoveItemId] = useState<string | null>(null);
-  const [removingItem, setRemovingItem] = useState<string | null>(null);
-  const busquedaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── acciones ───────────────────────────────────────────────────────────────
+  async function handleGuardarEquipo() {
+    if (!id || !equipoActivoId) return;
+    setGuardandoEquipo(true);
+    try {
+      const updated = await ordenServicioService.actualizarEquipo(
+        id,
+        equipoActivoId,
+        formEquipo
+      );
+      setOrden(updated);
+      setEditandoEquipo(false);
+    } catch {
+      //
+    } finally {
+      setGuardandoEquipo(false);
+    }
+  }
 
-  const buscarProductos = (q: string) => {
-    setBusquedaProd(q);
-    if (busquedaTimer.current) clearTimeout(busquedaTimer.current);
-    if (!q.trim()) { setResultadosProd([]); return; }
-    busquedaTimer.current = setTimeout(async () => {
-      setBuscandoProd(true);
-      try {
-        const data = await productoService.buscarParaCombobox(q, undefined, true);
-        setResultadosProd(data);
-      } catch { /* silencioso */ }
-      finally { setBuscandoProd(false); }
-    }, 300);
-  };
+  async function handleCambiarEstadoEquipo(nuevoEstado: EstadoEquipoOrden) {
+    if (!id || !equipoActivoId) return;
+    setCambiandoEstadoEquipo(true);
+    try {
+      const updated = await ordenServicioService.cambiarEstadoEquipo(
+        id,
+        equipoActivoId,
+        { estado: nuevoEstado }
+      );
+      setOrden(updated);
+    } catch {
+      //
+    } finally {
+      setCambiandoEstadoEquipo(false);
+    }
+  }
 
-  const handleAgregarItem = async () => {
-    if (!id || !itemSeleccionado) return;
-    setAgregandoItem(true);
+  async function handleGuardarTecnico(val: string) {
+    if (!id) return;
+    setGuardandoTecnico(true);
+    try {
+      const updated = await ordenServicioService.update(id, {
+        usuarioTecnicoId: val === 'none' ? null : val,
+      });
+      setOrden(updated);
+    } catch {
+      //
+    } finally {
+      setGuardandoTecnico(false);
+    }
+  }
+
+  async function handleGuardarPago() {
+    if (!id) return;
+    setGuardandoPago(true);
+    try {
+      const updated = await ordenServicioService.update(id, {
+        pagoACuenta: parseFloat(pagoInput) || 0,
+      });
+      setOrden(updated);
+      setEditandoPago(false);
+    } catch {
+      //
+    } finally {
+      setGuardandoPago(false);
+    }
+  }
+
+  async function handleMarcarEntregada() {
+    if (!id) return;
+    setMarcandoEntregada(true);
+    try {
+      const updated = await ordenServicioService.cambiarEstado(id, 'ENTREGADA');
+      setOrden(updated);
+    } catch {
+      //
+    } finally {
+      setMarcandoEntregada(false);
+    }
+  }
+
+  async function handleAgregarNota() {
+    if (!id || !equipoActivoId || !notaContenido.trim()) return;
+    setGuardandoNota(true);
+    try {
+      const nueva = await ordenServicioService.crearNota(
+        id,
+        equipoActivoId,
+        notaContenido.trim()
+      );
+      setNotas((prev) => [...prev, nueva]);
+      setNotaContenido('');
+    } catch {
+      //
+    } finally {
+      setGuardandoNota(false);
+    }
+  }
+
+  async function handleQuitarItem(itemId: string) {
+    if (!id) return;
+    try {
+      const updated = await ordenServicioService.quitarItem(id, itemId);
+      setOrden(updated);
+    } catch {
+      //
+    }
+  }
+
+  // Dialog agregar ítem
+  async function buscarProductos(q: string) {
+    setBuscandoProductos(true);
+    try {
+      const res = await productoService.getAll({ busqueda: q, take: 20 });
+      setProductos(res.productos);
+    } catch {
+      setProductos([]);
+    } finally {
+      setBuscandoProductos(false);
+    }
+  }
+
+  function abrirItemDialog() {
+    setItemForm({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '' });
+    setItemError(null);
+    setBusquedaProducto('');
+    buscarProductos('');
+    setItemDialogOpen(true);
+  }
+
+  async function handleAgregarItem() {
+    if (!id || !equipoActivoId) return;
+    if (!itemForm.productoId) {
+      setItemError('Selecciona un producto.');
+      return;
+    }
+    const cant = parseInt(itemForm.cantidad);
+    const precio = parseFloat(itemForm.precioUnitario);
+    if (!cant || cant < 1) {
+      setItemError('Cantidad inválida.');
+      return;
+    }
+    if (!precio || precio <= 0) {
+      setItemError('Precio inválido.');
+      return;
+    }
+    setGuardandoItem(true);
     try {
       const payload: AgregarItemOrdenDto = {
-        productoId: itemSeleccionado.id,
-        cantidad: itemCantidad,
-        precioUnitario: itemPrecio,
+        productoId: itemForm.productoId,
+        cantidad: cant,
+        precioUnitario: precio,
       };
-      await ordenServicioService.agregarItem(id, payload);
-      setAddItemOpen(false);
-      setBusquedaProd('');
-      setResultadosProd([]);
-      setItemSeleccionado(null);
-      setItemCantidad(1);
-      setItemPrecio(0);
-      await cargarOrden();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al agregar ítem');
+      const updated = await ordenServicioService.agregarItem(
+        id,
+        equipoActivoId,
+        payload
+      );
+      setOrden(updated);
+      setItemDialogOpen(false);
+    } catch {
+      setItemError('No se pudo agregar el ítem.');
     } finally {
-      setAgregandoItem(false);
+      setGuardandoItem(false);
     }
-  };
+  }
 
-  const handleQuitarItem = async (itemId: string) => {
+  // Dialog agregar equipo
+  async function abrirAgregarEquipoDialog() {
+    if (!orden?.clienteId) return;
+    setEquipoEntrada({ ...EQUIPO_ENTRADA_VACIO });
+    setMostrarFormEquipoNuevo(false);
+    setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+    setEntradaEquipoError(null);
+    setAgregarEquipoDialogOpen(true);
+    try {
+      const cli = await clienteService.getById(orden.clienteId);
+      setEquiposCliente(cli.equipos ?? []);
+    } catch {
+      setEquiposCliente([]);
+    }
+  }
+
+  async function handleCrearEquipoInline() {
+    if (!orden?.clienteId) return;
+    if (!formNuevoEquipo.tipoEquipo.trim()) {
+      setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
+      return;
+    }
+    setSubmittingNuevoEquipo(true);
+    try {
+      const eq = await clienteService.crearEquipo(orden.clienteId, {
+        tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+        marca: formNuevoEquipo.marca || null,
+        modelo: formNuevoEquipo.modelo || null,
+        numeroSerie: formNuevoEquipo.numeroSerie || null,
+      });
+      setEquiposCliente((prev) => [...prev, eq]);
+      setEquipoEntrada((prev) => ({ ...prev, equipoId: eq.id }));
+      setMostrarFormEquipoNuevo(false);
+      setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+      setErrorNuevoEquipo(null);
+    } catch {
+      setErrorNuevoEquipo('No se pudo registrar el equipo.');
+    } finally {
+      setSubmittingNuevoEquipo(false);
+    }
+  }
+
+  async function handleConfirmarAgregarEquipo() {
     if (!id) return;
-    setRemovingItem(itemId);
-    try {
-      await ordenServicioService.quitarItem(id, itemId);
-      setRemoveItemId(null);
-      await cargarOrden();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al quitar ítem');
-    } finally {
-      setRemovingItem(null);
+    if (!equipoEntrada.equipoId) {
+      setEntradaEquipoError('Selecciona un equipo.');
+      return;
     }
-  };
-
-  // Nota técnica
-  const [nuevaNota, setNuevaNota] = useState('');
-  const [enviandoNota, setEnviandoNota] = useState(false);
-  const notasEndRef = useRef<HTMLDivElement>(null);
-
-  const handleEnviarNota = async () => {
-    if (!id || !nuevaNota.trim()) return;
-    setEnviandoNota(true);
-    try {
-      await ordenServicioService.crearNota(id, nuevaNota.trim());
-      setNuevaNota('');
-      await cargarOrden();
-      setTimeout(() => notasEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al enviar nota');
-    } finally {
-      setEnviandoNota(false);
+    if (!equipoEntrada.problemaReportado.trim()) {
+      setEntradaEquipoError('El problema reportado es obligatorio.');
+      return;
     }
-  };
-
-  // Descargar PDF
-  const [generandoPDF, setGenerandoPDF] = useState(false);
-
-  const handleDescargarPDF = async () => {
-    if (!orden) return;
-    setGenerandoPDF(true);
+    setAgregarEquipoLoading(true);
     try {
-      const blob = await pdf(<OrdenServicioPDF orden={orden} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${orden.codigoFormateado}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Error generando PDF', err);
+      const payload: EquipoOrdenInputDto = {
+        equipoId: equipoEntrada.equipoId,
+        problemaReportado: equipoEntrada.problemaReportado.trim(),
+        diagnosticoTecnico: equipoEntrada.diagnosticoTecnico || null,
+        costoEstimado: equipoEntrada.costoEstimado
+          ? parseFloat(equipoEntrada.costoEstimado)
+          : null,
+      };
+      const updated = await ordenServicioService.agregarEquipo(id, payload);
+      setOrden(updated);
+      const nuevoId = updated.equipos?.find(
+        (e) => e.equipoId === equipoEntrada.equipoId
+      )?.id;
+      if (nuevoId) setEquipoActivoId(nuevoId);
+      setAgregarEquipoDialogOpen(false);
+    } catch {
+      setEntradaEquipoError('No se pudo agregar el equipo.');
     } finally {
-      setGenerandoPDF(false);
+      setAgregarEquipoLoading(false);
     }
-  };
+  }
 
-  // Saldo pendiente
-  const saldo = orden
-    ? parseFloat(orden.total) - parseFloat(orden.pagoACuenta)
-    : 0;
-
-  // Si la orden es editable
-  const esEditable = orden
-    ? orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA'
-    : false;
-
-  // Render
+  // Render: Estados de carga
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-60">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  if (error && !orden) {
+  if (error || !orden) {
     return (
-      <div className="flex flex-col items-center justify-center h-60 gap-4">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertDescription>{error}</AlertDescription>
+      <div className="p-8 space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error ?? 'Orden no encontrada.'}</AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => navigate('/ordenes-servicio')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver a Órdenes
+          Volver al listado
         </Button>
       </div>
     );
   }
 
-  if (!orden) return null;
-
-  const transicionesPosibles = TRANSICIONES[orden.estado] || [];
-
+  // ── render principal ───────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5">
-      {/* Breadcrumb + Header */}
-      <div className="flex flex-col gap-2">
-        {/* Breadcrumb */}
-        <nav className="flex items-center text-sm text-muted-foreground gap-1.5">
-          <Link to="/ordenes-servicio" className="hover:text-foreground transition-colors">
-            Órdenes de Servicio
-          </Link>
-          <ChevronRight className="h-3.5 w-3.5" />
-          <span className="text-foreground font-medium">{orden.codigoFormateado}</span>
-        </nav>
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
 
-        {/* Header principal */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={() => navigate('/ordenes-servicio')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold font-mono text-foreground">
-                  {orden.codigoFormateado}
-                </h2>
-                <EstadoBadge estado={orden.estado} />
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Emitida el {fmtFecha(orden.fechaEmision)} · Registrada por{' '}
-                {orden.usuarioRegistro?.nombreCompleto}
-              </p>
+      {/* SIDEBAR */}
+      <aside className="w-64 shrink-0 flex flex-col border-r bg-card overflow-hidden">
+
+        {/* Encabezado OS */}
+        <div className="p-4 border-b shrink-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <WrenchIcon className="h-4 w-4 text-muted-foreground" />
+            <span className="font-bold text-sm">{orden.codigoFormateado}</span>
+          </div>
+          <EstadoBadge estado={orden.estado} />
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {new Date(orden.fechaEmision).toLocaleDateString('es-PE', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })}
+          </p>
+        </div>
+
+        {/* Lista de equipos */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 py-1 mb-1">
+            Equipos en esta orden
+          </p>
+
+          {orden.equipos?.map((eq) => {
+            const activo = eq.id === equipoActivoId;
+            const cfg = ESTADO_EQUIPO_CONFIG[eq.estado];
+            return (
+              <button
+                key={eq.id}
+                onClick={() => setEquipoActivoId(eq.id)}
+                className={cn(
+                  'w-full text-left flex items-start gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                  activo
+                    ? 'bg-primary/10 text-primary font-semibold border-l-2 border-primary rounded-l-none'
+                    : 'hover:bg-muted text-foreground'
+                )}
+              >
+                <Laptop className="h-4 w-4 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="truncate font-medium leading-snug">
+                    {eq.equipo?.tipoEquipo ?? '—'}
+                  </p>
+                  {(eq.equipo?.marca || eq.equipo?.modelo) && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {[eq.equipo.marca, eq.equipo.modelo].filter(Boolean).join(' ')}
+                    </p>
+                  )}
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-0.5 text-[10px] font-medium mt-0.5',
+                      cfg.className
+                        .split(' ')
+                        .filter((c) => c.startsWith('text-'))
+                        .join(' ')
+                    )}
+                  >
+                    {cfg.icon}
+                    {cfg.label}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+
+          {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' && (
+            <button
+              onClick={abrirAgregarEquipoDialog}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-primary italic transition-colors mt-1"
+            >
+              <Plus className="h-4 w-4" />
+              Agregar otro equipo
+            </button>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Info cliente */}
+        <div className="p-3 space-y-2 shrink-0">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-1">
+            Cliente
+          </p>
+          <div className="flex items-center gap-2 px-1">
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{orden.cliente?.nombre}</p>
+              {orden.cliente?.telefono && (
+                <p className="text-xs text-muted-foreground">{orden.cliente.telefono}</p>
+              )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDescargarPDF}
-              disabled={generandoPDF}
+          {orden.cliente?.telefono && (
+            <a
+              href={`https://wa.me/51${orden.cliente.telefono.replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-bold transition-colors"
             >
-              {generandoPDF ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileDown className="mr-2 h-4 w-4" />
-              )}
-              Descargar PDF
+              <MessageCircle className="h-3.5 w-3.5" />
+              WhatsApp
+            </a>
+          )}
+          <Link
+            to={`/clientes/${orden.clienteId}`}
+            className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-muted hover:bg-muted/70 text-xs font-semibold transition-colors"
+          >
+            Historial del cliente
+          </Link>
+        </div>
+
+        <Separator />
+
+        {/* Técnico asignado */}
+        <div className="p-3 shrink-0">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-1 mb-2">
+            Técnico asignado
+          </p>
+          <Select
+            value={orden.usuarioTecnicoId ?? 'none'}
+            onValueChange={handleGuardarTecnico}
+            disabled={
+              guardandoTecnico ||
+              orden.estado === 'ENTREGADA' ||
+              orden.estado === 'CANCELADA'
+            }
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Sin asignar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin asignar</SelectItem>
+              {usuarios.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.nombreCompleto}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </aside>
+
+      {/* PANEL CENTRAL */}
+      <main className="flex-1 overflow-y-auto bg-background">
+
+        {/* Header sticky */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center justify-between gap-4">
+          <div>
+            <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
+              <Link to="/" className="hover:text-foreground transition-colors">
+                Dashboard
+              </Link>
+              <ChevronRight className="h-3 w-3" />
+              <Link to="/ordenes-servicio" className="hover:text-foreground transition-colors">
+                Órdenes
+              </Link>
+              <ChevronRight className="h-3 w-3" />
+              <span className="text-foreground font-medium">{orden.codigoFormateado}</span>
+            </nav>
+            <h1 className="text-xl font-bold leading-tight">
+              {equipoActivo
+                ? [
+                    equipoActivo.equipo?.tipoEquipo,
+                    equipoActivo.equipo?.marca,
+                    equipoActivo.equipo?.modelo,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                : orden.codigoFormateado}
+            </h1>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/ordenes-servicio/${id}/pdf`} target="_blank">
+                <FileText className="h-4 w-4 mr-1.5" />
+                PDF global
+              </Link>
             </Button>
+            {equipoActivo && (
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  to={`/ordenes-servicio/${id}/pdf?equipo=${equipoActivoId}`}
+                  target="_blank"
+                >
+                  <FileText className="h-4 w-4 mr-1.5" />
+                  PDF equipo
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Botones de transición */}
-        {transicionesPosibles.length > 0 && (
-          <div className="flex flex-col gap-2 p-3 bg-muted/40 rounded-lg border">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground mr-1">Cambiar estado:</span>
-              {transicionesPosibles.map((t) => {
-                const bloqueadoPorSaldo = t.requiereSaldoCero && saldo > 0;
-                return (
+        {!equipoActivo ? (
+          <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+            Selecciona un equipo del panel izquierdo.
+          </div>
+        ) : (
+          <div className="p-6 space-y-6 max-w-4xl">
+
+            {/* 1. Estado del equipo */}
+            <div className="rounded-xl border bg-card px-5 py-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <EquipoBadge estado={equipoActivo.estado} />
+                  {equipoActivo.costoEstimado && (
+                    <span className="text-sm text-muted-foreground">
+                      Costo estimado:{' '}
+                      <span className="font-semibold text-foreground">
+                        S/ {fmt(equipoActivo.costoEstimado)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+
+                {TRANSICIONES[equipoActivo.estado].length > 0 &&
+                  orden.estado !== 'ENTREGADA' && (
+                    <div className="flex gap-2">
+                      {TRANSICIONES[equipoActivo.estado].map((sig) => (
+                        <Button
+                          key={sig}
+                          size="sm"
+                          variant={sig === 'CANCELADA' ? 'destructive' : 'default'}
+                          disabled={cambiandoEstadoEquipo}
+                          onClick={() => handleCambiarEstadoEquipo(sig)}
+                          className="text-xs"
+                        >
+                          {cambiandoEstadoEquipo && (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          )}
+                          {ESTADO_EQUIPO_CONFIG[sig].label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+              </div>
+            </div>
+
+            {/* 2. Detalles del servicio */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="px-5 py-4 border-b flex items-center justify-between">
+                <h2 className="font-semibold text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  Detalles del servicio
+                </h2>
+                {!editandoEquipo ? (
                   <Button
-                    key={t.estado}
-                    variant={t.variant}
                     size="sm"
-                    onClick={() => setConfirmEstado({ estado: t.estado, label: t.label })}
-                    disabled={cambiandoEstado !== null || bloqueadoPorSaldo}
-                    title={bloqueadoPorSaldo ? `Saldo pendiente: ${fmt(String(saldo))}` : undefined}
+                    variant="ghost"
+                    className="gap-1.5 h-7 text-xs"
+                    onClick={() => setEditandoEquipo(true)}
+                    disabled={
+                      orden.estado === 'ENTREGADA' || orden.estado === 'CANCELADA'
+                    }
                   >
-                    {cambiandoEstado === t.estado && (
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    )}
-                    {t.label}
+                    <Pencil className="h-3 w-3" /> Editar
                   </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 h-7 text-xs"
+                      onClick={() => setEditandoEquipo(false)}
+                    >
+                      <X className="h-3 w-3" /> Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 h-7 text-xs"
+                      onClick={handleGuardarEquipo}
+                      disabled={guardandoEquipo}
+                    >
+                      {guardandoEquipo ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      Guardar
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5 grid grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">
+                    Problema reportado
+                  </label>
+                  {editandoEquipo ? (
+                    <Textarea
+                      rows={4}
+                      value={formEquipo.problemaReportado ?? ''}
+                      onChange={(e) =>
+                        setFormEquipo((p) => ({
+                          ...p,
+                          problemaReportado: e.target.value,
+                        }))
+                      }
+                      className="text-sm resize-none"
+                    />
+                  ) : (
+                    <p className="text-sm bg-muted/40 rounded-lg p-3 min-h-[5rem] leading-relaxed">
+                      {equipoActivo.problemaReportado}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">
+                    Diagnóstico técnico
+                  </label>
+                  {editandoEquipo ? (
+                    <Textarea
+                      rows={4}
+                      value={String(formEquipo.diagnosticoTecnico ?? '')}
+                      onChange={(e) =>
+                        setFormEquipo((p) => ({
+                          ...p,
+                          diagnosticoTecnico: e.target.value,
+                        }))
+                      }
+                      placeholder="Diagnóstico preliminar..."
+                      className="text-sm resize-none"
+                    />
+                  ) : (
+                    <p className="text-sm bg-blue-50/60 dark:bg-blue-900/10 rounded-lg p-3 min-h-[5rem] leading-relaxed text-muted-foreground italic">
+                      {equipoActivo.diagnosticoTecnico ?? 'Sin diagnóstico registrado.'}
+                    </p>
+                  )}
+                </div>
+
+                {editandoEquipo && (
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Costo estimado (S/)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formEquipo.costoEstimado ?? ''}
+                      onChange={(e) =>
+                        setFormEquipo((p) => ({
+                          ...p,
+                          costoEstimado: e.target.value
+                            ? parseFloat(e.target.value)
+                            : null,
+                        }))
+                      }
+                      placeholder="0.00"
+                      className="max-w-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Repuestos y Mano de Obra ── */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="px-5 py-4 border-b flex items-center justify-between">
+                <h2 className="font-semibold text-sm flex items-center gap-2">
+                  <PackageCheck className="h-4 w-4 text-primary" />
+                  Repuestos y Mano de Obra
+                </h2>
+                {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 h-7 text-xs"
+                    onClick={abrirItemDialog}
+                  >
+                    <Plus className="h-3 w-3" /> Agregar ítem
+                  </Button>
+                )}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30 text-xs font-semibold uppercase text-muted-foreground">
+                      <th className="px-5 py-3 text-left">Descripción</th>
+                      <th className="px-5 py-3 text-center">Cant.</th>
+                      <th className="px-5 py-3 text-right">Unitario</th>
+                      <th className="px-5 py-3 text-right">Subtotal</th>
+                      <th className="px-2 py-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {(equipoActivo.items ?? []).length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-5 py-8 text-center text-muted-foreground text-xs italic"
+                        >
+                          Sin ítems. Agrega repuestos o mano de obra.
+                        </td>
+                      </tr>
+                    ) : (
+                      equipoActivo.items!.map((item) => (
+                        <tr key={item.id} className="hover:bg-muted/20">
+                          <td className="px-5 py-3 font-medium">
+                            {item.producto?.nombre ?? '—'}
+                            {item.producto?.esServicio && (
+                              <span className="ml-1.5 text-[10px] text-muted-foreground border rounded px-1">
+                                servicio
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-center">{item.cantidad}</td>
+                          <td className="px-5 py-3 text-right">
+                            S/ {fmt(item.precioUnitario)}
+                          </td>
+                          <td className="px-5 py-3 text-right font-semibold">
+                            S/ {fmt(item.subtotal)}
+                          </td>
+                          <td className="px-2 py-3 text-center">
+                            {orden.estado !== 'ENTREGADA' &&
+                              orden.estado !== 'CANCELADA' && (
+                                <button
+                                  onClick={() => handleQuitarItem(item.id)}
+                                  className="text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {(equipoActivo.items ?? []).length > 0 && (
+                    <tfoot>
+                      <tr className="bg-muted/20">
+                        <td
+                          colSpan={3}
+                          className="px-5 py-3 text-sm font-semibold text-right"
+                        >
+                          Total para este equipo:
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-base">
+                          S/ {fmt(equipoActivo.subtotal)}
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+
+            {/* 4. Notas técnicas internas */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="px-5 py-4 border-b">
+                <h2 className="font-semibold text-sm flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-primary" />
+                  Notas técnicas internas
+                </h2>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {notas.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    Sin notas registradas.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {notas.map((nota) => (
+                      <div
+                        key={nota.id}
+                        className="bg-muted/30 rounded-lg p-3 space-y-1"
+                      >
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="font-medium">
+                            {nota.usuario?.nombreCompleto ?? nota.usuarioId}
+                          </span>
+                          <span>
+                            {new Date(nota.createdAt).toLocaleString('es-PE', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm leading-relaxed">{nota.contenido}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' && (
+                  <div className="space-y-2">
+                    <Textarea
+                      rows={3}
+                      value={notaContenido}
+                      onChange={(e) => setNotaContenido(e.target.value)}
+                      placeholder="Añadir observaciones internas sobre la reparación..."
+                      className="text-sm resize-none"
+                    />
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Estas notas no se muestran en el ticket del cliente.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={handleAgregarNota}
+                      disabled={!notaContenido.trim() || guardandoNota}
+                    >
+                      {guardandoNota && (
+                        <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                      )}
+                      Agregar nota
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+      </main>
+
+      {/* PANEL DERECHO */}
+      <aside className="w-72 shrink-0 border-l overflow-y-auto bg-card">
+
+        {/* Header */}
+        <div className="bg-primary text-primary-foreground px-5 py-4 sticky top-0 z-10">
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <PackageCheck className="h-4 w-4" />
+            Resumen Económico
+          </h3>
+          <p className="text-xs text-primary-foreground/60 mt-0.5">
+            TOTAL CONSOLIDADO DE LA ORDEN
+          </p>
+        </div>
+
+        <div className="p-5 space-y-4">
+
+          {/* Breakdown por equipo */}
+          {(orden.equipos ?? []).length > 0 && (
+            <div className="space-y-1">
+              {orden.equipos!.map((eq) => {
+                const sub = parseFloat(eq.subtotal ?? '0');
+                const activo = eq.id === equipoActivoId;
+                return (
+                  <div
+                    key={eq.id}
+                    onClick={() => setEquipoActivoId(eq.id)}
+                    className={cn(
+                      'flex items-center justify-between text-xs py-1.5 px-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                      activo && 'bg-muted/60 font-semibold'
+                    )}
+                  >
+                    <span className="truncate text-muted-foreground max-w-[9.5rem]">
+                      {[eq.equipo?.tipoEquipo, eq.equipo?.marca]
+                        .filter(Boolean)
+                        .join(' ')}
+                    </span>
+                    <span className="font-semibold shrink-0 ml-2">
+                      S/ {fmt(sub)}
+                    </span>
+                  </div>
                 );
               })}
             </div>
-            {transicionesPosibles.some((t) => t.requiereSaldoCero && saldo > 0) && (
-              <p className="text-xs text-destructive flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
-                Para registrar la entrega primero debe registrarse el pago del saldo pendiente de{' '}
-                <span className="font-semibold">{fmt(String(saldo))}</span>
-              </p>
-            )}
-          </div>
-        )}
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      {/* Layout principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-        {/* Columna izquierda (7/12) */}
-        <div className="lg:col-span-7 flex flex-col gap-5">
-
-          {/* Problema + diagnóstico */}
-          <div className="border rounded-lg bg-card p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Wrench className="h-4 w-4 text-muted-foreground" />
-                Detalle del Servicio
-              </h3>
-              {esEditable && !editando && (
-                <Button variant="ghost" size="sm" onClick={handleAbrirEdicion}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Editar
-                </Button>
-              )}
-            </div>
-
-            {editando ? (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase">Problema reportado</label>
-                  <Textarea
-                    value={formEdit.problemaReportado || ''}
-                    onChange={(e) => setFormEdit({ ...formEdit, problemaReportado: e.target.value })}
-                    rows={2}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase">Diagnóstico</label>
-                  <Textarea
-                    value={formEdit.diagnosticoInicial || ''}
-                    onChange={(e) => setFormEdit({ ...formEdit, diagnosticoInicial: e.target.value })}
-                    rows={2}
-                    placeholder="Diagnóstico técnico..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Costo est. (S/)</label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={formEdit.costoEstimado ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) {
-                          setFormEdit((prev) => ({ ...prev, costoEstimado: v as any }));
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const num = parseFloat(e.target.value);
-                        setFormEdit((prev) => ({
-                          ...prev,
-                          costoEstimado: e.target.value === '' || isNaN(num) || num < 0 ? null : num,
-                        }));
-                      }}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Pago a cuenta (S/)</label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={formEdit.pagoACuenta ?? ''}
-                      className={pagoACuentaError ? 'border-destructive focus-visible:ring-destructive' : ''}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) {
-                          setFormEdit((prev) => ({ ...prev, pagoACuenta: v as any }));
-                          setPagoACuentaError(null);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const num = parseFloat(e.target.value);
-                        const normalizado = isNaN(num) || num < 0 ? 0 : num;
-                        const total = orden ? parseFloat(orden.total) : 0;
-                        if (normalizado > total) {
-                          setPagoACuentaError(`No puede superar el total (${fmt(orden?.total)})`);
-                        } else {
-                          setPagoACuentaError(null);
-                        }
-                        setFormEdit((prev) => ({ ...prev, pagoACuenta: normalizado }));
-                      }}
-                      placeholder="0.00"
-                    />
-                    {pagoACuentaError && (
-                      <p className="text-xs text-destructive">{pagoACuentaError}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase">Técnico asignado</label>
-                  <Select
-                    value={formEdit.usuarioTecnicoId || '__none__'}
-                    onValueChange={(v) =>
-                      setFormEdit({ ...formEdit, usuarioTecnicoId: v === '__none__' ? null : v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sin asignar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Sin asignar</SelectItem>
-                      {usuarios.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.nombreCompleto}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button size="sm" onClick={handleGuardarEdicion} disabled={guardando || !!pagoACuentaError}>
-                    {guardando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                    <Save className="mr-1.5 h-3.5 w-3.5" />
-                    Guardar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditando(false)} disabled={guardando}>
-                    <X className="mr-1.5 h-3.5 w-3.5" />
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Problema reportado</p>
-                  <p className="text-sm">{orden.problemaReportado}</p>
-                </div>
-                {orden.diagnosticoInicial && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Diagnóstico</p>
-                    <p className="text-sm">{orden.diagnosticoInicial}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Repuestos / Ítems */}
-          <div className="border rounded-lg bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Package className="h-4 w-4 text-muted-foreground" />
-                Repuestos y Servicios
-                {orden.items && orden.items.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{orden.items.length}</Badge>
-                )}
-              </h3>
-              {esEditable && (
-                <Button variant="outline" size="sm" onClick={() => setAddItemOpen(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Agregar
-                </Button>
-              )}
-            </div>
-
-            {!orden.items || orden.items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm gap-2">
-                <Package className="h-8 w-8 opacity-20" />
-                <p>Sin repuestos ni servicios agregados</p>
-                {esEditable && (
-                  <Button variant="link" size="sm" onClick={() => setAddItemOpen(true)}>
-                    Agregar el primero
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto / Servicio</TableHead>
-                    <TableHead className="text-center w-16">Cant.</TableHead>
-                    <TableHead className="text-right w-24">P. Unit.</TableHead>
-                    <TableHead className="text-right w-28">Subtotal</TableHead>
-                    {esEditable && <TableHead className="w-12" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orden.items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {item.producto?.esServicio ? (
-                            <Wrench className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          ) : (
-                            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          )}
-                          <div>
-                            <p className="text-sm font-medium">{item.producto?.nombre || 'Producto'}</p>
-                            {item.producto?.sku && (
-                              <p className="text-xs text-muted-foreground font-mono">SKU: {item.producto.sku}</p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">{item.cantidad}</TableCell>
-                      <TableCell className="text-right text-sm">{fmt(item.precioUnitario)}</TableCell>
-                      <TableCell className="text-right font-medium text-sm">{fmt(item.subtotal)}</TableCell>
-                      {esEditable && (
-                        <TableCell>
-                          {removeItemId === item.id ? (
-                            <div className="flex gap-1">
-                              <Button
-                                size="icon"
-                                variant="destructive"
-                                className="h-6 w-6"
-                                onClick={() => handleQuitarItem(item.id)}
-                                disabled={removingItem === item.id}
-                              >
-                                {removingItem === item.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )}
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6"
-                                onClick={() => setRemoveItemId(null)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 hover:text-destructive"
-                              onClick={() => setRemoveItemId(item.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-
-          {/* Notas técnicas */}
-          <div className="border rounded-lg bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="font-semibold flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                Notas Técnicas
-                {orden.notas && orden.notas.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{orden.notas.length}</Badge>
-                )}
-              </h3>
-            </div>
-
-            {/* Timeline */}
-            <div className="p-4 space-y-3 max-h-72 overflow-y-auto">
-              {!orden.notas || orden.notas.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Sin notas aún.</p>
-              ) : (
-                orden.notas.map((nota) => (
-                  <div key={nota.id} className="flex gap-3">
-                    <div className="mt-1 h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <User className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                    <div className="flex-1 bg-muted/40 rounded-lg p-3">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs font-semibold">{nota.usuario?.nombreCompleto || 'Técnico'}</span>
-                        <span className="text-xs text-muted-foreground">{fmtFechaHora(nota.createdAt)}</span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{nota.contenido}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={notasEndRef} />
-            </div>
-
-            {/* Agregar nota */}
-            {esEditable && (
-              <div className="px-4 pb-4 pt-2 border-t flex gap-2">
-                <Textarea
-                  value={nuevaNota}
-                  onChange={(e) => setNuevaNota(e.target.value)}
-                  placeholder="Agregar nota técnica..."
-                  rows={2}
-                  className="flex-1 resize-none text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.ctrlKey) handleEnviarNota();
-                  }}
-                />
-                <Button
-                  size="icon"
-                  onClick={handleEnviarNota}
-                  disabled={enviandoNota || !nuevaNota.trim()}
-                  className="self-end h-9 w-9"
-                  title="Enviar (Ctrl+Enter)"
-                >
-                  {enviandoNota ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Columna derecha (5/12) ───────────────────────────────── */}
-        <div className="lg:col-span-5 flex flex-col gap-5">
-
-          {/* Cliente */}
-          <div className="border rounded-lg bg-card p-4 space-y-3">
-            <h3 className="font-semibold flex items-center gap-2 text-sm">
-              <User className="h-4 w-4 text-muted-foreground" />
-              Cliente
-            </h3>
-            <div className="space-y-1.5">
-              <p className="font-semibold">{orden.cliente?.nombre}</p>
-              {orden.cliente?.dniRuc && (
-                <p className="text-sm text-muted-foreground font-mono">DNI/RUC: {orden.cliente.dniRuc}</p>
-              )}
-              {orden.cliente?.telefono && (
-                <p className="text-sm text-muted-foreground">Tel: {orden.cliente.telefono}</p>
-              )}
-            </div>
-            <Link
-              to={`/clientes`}
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-            >
-              Ver todos los clientes <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {/* Equipo */}
-          <div className="border rounded-lg bg-card p-4 space-y-3">
-            <h3 className="font-semibold flex items-center gap-2 text-sm">
-              <Laptop className="h-4 w-4 text-muted-foreground" />
-              Equipo
-            </h3>
-            <div className="space-y-1.5">
-              <p className="font-semibold">{orden.equipo?.tipoEquipo}</p>
-              {(orden.equipo?.marca || orden.equipo?.modelo) && (
-                <p className="text-sm text-muted-foreground">
-                  {[orden.equipo.marca, orden.equipo.modelo].filter(Boolean).join(' ')}
-                </p>
-              )}
-              {orden.equipo?.numeroSerie && (
-                <p className="text-xs text-muted-foreground font-mono">S/N: {orden.equipo.numeroSerie}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Técnico */}
-          <div className="border rounded-lg bg-card p-4 space-y-2">
-            <h3 className="font-semibold flex items-center gap-2 text-sm">
-              <Wrench className="h-4 w-4 text-muted-foreground" />
-              Técnico asignado
-            </h3>
-            {orden.usuarioTecnico ? (
-              <p className="text-sm font-medium">{orden.usuarioTecnico.nombreCompleto}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">Sin asignar</p>
-            )}
-          </div>
-
-          {/* Resumen económico */}
-          <div className="border rounded-lg bg-card p-4 space-y-3">
-            <h3 className="font-semibold text-sm">Resumen Económico</h3>
-            <div className="space-y-2 text-sm">
-              {orden.costoEstimado && (
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Costo estimado</span>
-                  <span>{fmt(orden.costoEstimado)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-muted-foreground">
-                <span>Total a pagar</span>
-                <span className="font-medium text-foreground">{fmt(orden.total)}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Pago a cuenta</span>
-                <span>- {fmt(orden.pagoACuenta)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
-                <span>Saldo pendiente</span>
-                <span className={saldo > 0 ? 'text-destructive' : 'text-green-600'}>
-                  {fmt(String(saldo))}
-                </span>
-              </div>
-              {orden.gananciaTotal && parseFloat(orden.gananciaTotal) !== 0 && (
-                <div className="flex justify-between text-xs text-muted-foreground border-t pt-2">
-                  <span>Ganancia neta</span>
-                  <span className="text-green-600">{fmt(orden.gananciaTotal)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Dialog confirmar cambio de estado ──────────────────────── */}
-      <Dialog open={!!confirmEstado} onOpenChange={() => setConfirmEstado(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Confirmar cambio de estado</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            ¿Confirmas cambiar el estado de{' '}
-            <span className="font-medium text-foreground">{orden.codigoFormateado}</span> a{' '}
-            <span className="font-semibold text-foreground">"{confirmEstado?.label}"</span>?
-          </p>
-          {confirmEstado?.estado === 'CANCELADA' && (
-            <Alert variant="destructive">
-              <AlertDescription className="text-xs">
-                Al cancelar, todos los repuestos físicos se devolverán al stock automáticamente.
-              </AlertDescription>
-            </Alert>
           )}
-          <div className="flex gap-3 mt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setConfirmEstado(null)}
-              disabled={cambiandoEstado !== null}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant={confirmEstado?.estado === 'CANCELADA' ? 'destructive' : 'default'}
-              className="flex-1"
-              onClick={() => confirmEstado && handleCambiarEstado(confirmEstado.estado)}
-              disabled={cambiandoEstado !== null}
-            >
-              {cambiandoEstado !== null && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* ── Dialog agregar ítem ─────────────────────────────────────── */}
-      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Agregar Repuesto / Servicio</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Búsqueda de producto */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Buscar producto</label>
-              <div className="relative">
-                <Input
-                  value={busquedaProd}
-                  onChange={(e) => buscarProductos(e.target.value)}
-                  placeholder="Nombre, modelo, marca..."
-                  autoFocus
-                />
-                {buscandoProd && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-              {resultadosProd.length > 0 && !itemSeleccionado && (
-                <div className="border rounded-md overflow-hidden max-h-44 overflow-y-auto">
-                  {resultadosProd.map((p) => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      onClick={() => {
-                        setItemSeleccionado(p);
-                        setItemCantidad(1);
-                        setItemPrecio(parseFloat(String(p.precioVenta)) || 0);
-                        setResultadosProd([]);
-                        setBusquedaProd(p.nombre);
-                      }}
-                      className="w-full text-left px-3 py-2.5 hover:bg-muted/60 text-sm border-b last:border-b-0 flex justify-between"
-                    >
-                      <span>
-                        {p.nombre}
-                        {p.marca ? ` — ${p.marca}` : ''}
-                        {p.modelo ? ` ${p.modelo}` : ''}
-                      </span>
-                      {p.esServicio
-                        ? <span className="text-xs text-muted-foreground">Servicio</span>
-                        : <span className="text-xs text-muted-foreground">Stock: {p.stockActual}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {itemSeleccionado && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {itemSeleccionado.nombre}
-                  </Badge>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setItemSeleccionado(null);
-                      setBusquedaProd('');
-                    }}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                  {itemSeleccionado.esServicio
-                    ? <span className="text-xs text-muted-foreground">Servicio</span>
-                    : <span className="text-xs text-muted-foreground">Stock disponible: {itemSeleccionado.stockActual}</span>}
-                </div>
-              )}
+          <Separator />
+
+          {/* Totales */}
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-semibold">S/ {fmt(subtotalOS)}</span>
             </div>
 
-            {/* Cantidad y precio */}
-            {itemSeleccionado && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Cantidad</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={itemCantidad}
-                    onChange={(e) => setItemCantidad(parseInt(e.target.value) || 1)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Precio unit. (S/)</label>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Pago a cuenta</span>
+              {editandoPago ? (
+                <div className="flex items-center gap-1">
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={itemPrecio}
-                    disabled
+                    value={pagoInput}
+                    onChange={(e) => setPagoInput(e.target.value)}
+                    className="h-6 w-24 text-xs text-right"
+                    autoFocus
                   />
+                  <button
+                    onClick={handleGuardarPago}
+                    disabled={guardandoPago}
+                    className="text-green-600 hover:text-green-700"
+                  >
+                    {guardandoPago ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setEditandoPago(false)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setAddItemOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleAgregarItem}
-                disabled={!itemSeleccionado || itemPrecio <= 0 || agregandoItem}
-              >
-                {agregandoItem && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Agregar
-              </Button>
+              ) : (
+                <button
+                  className="font-semibold hover:underline text-sm"
+                  onClick={() => {
+                    setPagoInput(fmt(pagoACuenta));
+                    setEditandoPago(true);
+                  }}
+                  disabled={orden.estado === 'ENTREGADA'}
+                  title="Clic para editar"
+                >
+                  S/ {fmt(pagoACuenta)}
+                </button>
+              )}
             </div>
           </div>
+
+          <Separator />
+
+          <div className="flex justify-between items-end pt-1">
+            <span className="font-black text-sm">SALDO</span>
+            <p
+              className={cn(
+                'text-2xl font-black',
+                saldoPendiente > 0 ? 'text-destructive' : 'text-green-600'
+              )}
+            >
+              S/ {fmt(saldoPendiente)}
+            </p>
+          </div>
+
+          {saldoPendiente === 0 && subtotalOS > 0 && (
+            <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Pagado completo
+            </p>
+          )}
+
+          {saldoPendiente > 0 && (
+            <div className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 dark:bg-red-900/10">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                PAGO PENDIENTE
+              </span>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Documentos PDF */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              Documentos
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" className="text-xs gap-1" asChild>
+                <Link to={`/ordenes-servicio/${id}/pdf`} target="_blank">
+                  <FileText className="h-3 w-3" /> Global
+                </Link>
+              </Button>
+              {equipoActivoId && (
+                <Button variant="outline" size="sm" className="text-xs gap-1" asChild>
+                  <Link
+                    to={`/ordenes-servicio/${id}/pdf?equipo=${equipoActivoId}`}
+                    target="_blank"
+                  >
+                    <FileText className="h-3 w-3" /> Equipo
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Botón ENTREGADA */}
+          {orden.estado === 'LISTA' && (
+            <>
+              <Button
+                className="w-full gap-2"
+                disabled={!puedeEntregarSe || marcandoEntregada}
+                onClick={handleMarcarEntregada}
+              >
+                {marcandoEntregada ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Marcar como Entregada
+              </Button>
+              {saldoPendiente > 0 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Registra el pago completo para poder entregar la orden.
+                </p>
+              )}
+            </>
+          )}
+
+          {orden.estado === 'ENTREGADA' && (
+            <div className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/10">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                ENTREGADA
+              </span>
+            </div>
+          )}
+
+          {orden.estado === 'CANCELADA' && (
+            <div className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-50 dark:bg-red-900/10">
+              <X className="h-4 w-4 text-red-600" />
+              <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                CANCELADA
+              </span>
+            </div>
+          )}
+
+        </div>
+      </aside>
+
+      {/* DIALOG: Agregar ítem */}
+      <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Agregar ítem</DialogTitle>
+            <DialogDescription>
+              Selecciona un repuesto o servicio del inventario para este equipo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Producto / Servicio</label>
+              <Input
+                placeholder="Buscar por nombre..."
+                value={busquedaProducto}
+                onChange={(e) => {
+                  setBusquedaProducto(e.target.value);
+                  buscarProductos(e.target.value);
+                }}
+              />
+              <div className="border rounded-md max-h-44 overflow-y-auto">
+                {buscandoProductos ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : productos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-3">
+                    {busquedaProducto
+                      ? 'Sin resultados.'
+                      : 'Escribe para buscar...'}
+                  </p>
+                ) : (
+                  productos.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setItemForm((prev) => ({
+                          ...prev,
+                          productoId: p.id,
+                          productoNombre: p.nombre,
+                          precioUnitario: String(p.precioVenta),
+                        }));
+                        setBusquedaProducto(p.nombre);
+                        setProductos([]);
+                      }}
+                      className={cn(
+                        'w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors border-b last:border-b-0 flex items-center justify-between gap-2',
+                        itemForm.productoId === p.id && 'bg-primary/10 text-primary'
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <span className="font-medium">{p.nombre}</span>
+                        {p.esServicio && (
+                          <span className="ml-1 text-[10px] text-muted-foreground border rounded px-1">
+                            servicio
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        S/ {fmt(p.precioVenta)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Cantidad</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={itemForm.cantidad}
+                  onChange={(e) =>
+                    setItemForm((p) => ({ ...p, cantidad: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Precio unitario (S/)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={itemForm.precioUnitario}
+                  onChange={(e) =>
+                    setItemForm((p) => ({ ...p, precioUnitario: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            {itemForm.productoId && itemForm.cantidad && itemForm.precioUnitario && (
+              <p className="text-sm text-muted-foreground">
+                Subtotal:{' '}
+                <span className="font-semibold text-foreground">
+                  S/{' '}
+                  {fmt(
+                    parseInt(itemForm.cantidad) * parseFloat(itemForm.precioUnitario)
+                  )}
+                </span>
+              </p>
+            )}
+
+            {itemError && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-sm">{itemError}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setItemDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAgregarItem} disabled={guardandoItem}>
+              {guardandoItem && (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              )}
+              <Plus className="h-4 w-4 mr-1.5" />
+              Agregar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* DIALOG: Agregar otro equipo */}
+      <Dialog
+        open={agregarEquipoDialogOpen}
+        onOpenChange={setAgregarEquipoDialogOpen}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>Agregar equipo a la orden</DialogTitle>
+            <DialogDescription>
+              Selecciona un equipo del cliente y describe el problema reportado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-6 mt-2 overflow-hidden flex-1 min-h-0">
+
+            {/* Columna izquierda: selección */}
+            <div className="flex flex-col gap-3 overflow-hidden">
+              <label className="text-sm font-medium shrink-0">
+                Equipo <span className="text-destructive">*</span>
+              </label>
+              <div className="flex-1 overflow-y-auto min-h-0 border rounded-md">
+                {equiposCliente.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-3">
+                    Sin equipos registrados para este cliente.
+                  </p>
+                ) : (
+                  equiposCliente.map((eq) => (
+                    <button
+                      type="button"
+                      key={eq.id}
+                      onClick={() =>
+                        setEquipoEntrada((p) => ({ ...p, equipoId: eq.id }))
+                      }
+                      className={cn(
+                        'w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0',
+                        equipoEntrada.equipoId === eq.id &&
+                          'bg-primary/10 text-primary font-medium'
+                      )}
+                    >
+                      <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-medium">{eq.tipoEquipo}</span>
+                        {(eq.marca || eq.modelo) && (
+                          <span className="text-muted-foreground font-normal">
+                            {' '}
+                            {[eq.marca, eq.modelo].filter(Boolean).join(' ')}
+                          </span>
+                        )}
+                        {eq.numeroSerie && (
+                          <p className="text-xs text-muted-foreground font-mono">
+                            S/N: {eq.numeroSerie}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {!mostrarFormEquipoNuevo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-xs h-8"
+                  onClick={() => setMostrarFormEquipoNuevo(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Registrar nuevo equipo
+                </Button>
+              ) : (
+                <div className="border rounded-md p-3 space-y-2 bg-muted/20 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold">Nuevo equipo</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMostrarFormEquipoNuevo(false);
+                        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                        setErrorNuevoEquipo(null);
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                  <Input
+                    value={formNuevoEquipo.tipoEquipo}
+                    onChange={(e) =>
+                      setFormNuevoEquipo((p) => ({
+                        ...p,
+                        tipoEquipo: e.target.value,
+                      }))
+                    }
+                    placeholder="Tipo de equipo *"
+                    className="h-8 text-xs"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={formNuevoEquipo.marca}
+                      onChange={(e) =>
+                        setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))
+                      }
+                      placeholder="Marca"
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      value={formNuevoEquipo.modelo}
+                      onChange={(e) =>
+                        setFormNuevoEquipo((p) => ({
+                          ...p,
+                          modelo: e.target.value,
+                        }))
+                      }
+                      placeholder="Modelo"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <Input
+                    value={formNuevoEquipo.numeroSerie}
+                    onChange={(e) =>
+                      setFormNuevoEquipo((p) => ({
+                        ...p,
+                        numeroSerie: e.target.value,
+                      }))
+                    }
+                    placeholder="N° de serie (opcional)"
+                    className="h-8 text-xs font-mono"
+                  />
+                  {errorNuevoEquipo && (
+                    <Alert variant="destructive" className="py-2">
+                      <AlertDescription className="text-xs">
+                        {errorNuevoEquipo}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs"
+                      onClick={() => {
+                        setMostrarFormEquipoNuevo(false);
+                        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                      }}
+                      disabled={submittingNuevoEquipo}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1 h-7 text-xs"
+                      onClick={handleCrearEquipoInline}
+                      disabled={submittingNuevoEquipo}
+                    >
+                      {submittingNuevoEquipo && (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      )}
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {equipoEntrada.equipoId && (
+                <p className="text-xs text-green-600 font-medium shrink-0">
+                  ✓{' '}
+                  {(() => {
+                    const eq = equiposCliente.find(
+                      (e) => e.id === equipoEntrada.equipoId
+                    );
+                    return eq
+                      ? [eq.tipoEquipo, eq.marca, eq.modelo]
+                          .filter(Boolean)
+                          .join(' ')
+                      : '';
+                  })()}
+                </p>
+              )}
+            </div>
+
+            {/* Columna derecha: descripción */}
+            <div className="flex flex-col gap-4 overflow-y-auto">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Problema reportado{' '}
+                  <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  value={equipoEntrada.problemaReportado}
+                  onChange={(e) =>
+                    setEquipoEntrada((p) => ({
+                      ...p,
+                      problemaReportado: e.target.value,
+                    }))
+                  }
+                  placeholder="Describir el problema..."
+                  rows={5}
+                  className="resize-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Diagnóstico técnico</label>
+                <Textarea
+                  value={equipoEntrada.diagnosticoTecnico}
+                  onChange={(e) =>
+                    setEquipoEntrada((p) => ({
+                      ...p,
+                      diagnosticoTecnico: e.target.value,
+                    }))
+                  }
+                  placeholder="Diagnóstico preliminar (opcional)..."
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Costo estimado (S/)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={equipoEntrada.costoEstimado}
+                  onChange={(e) =>
+                    setEquipoEntrada((p) => ({
+                      ...p,
+                      costoEstimado: e.target.value,
+                    }))
+                  }
+                  placeholder="0.00"
+                />
+              </div>
+              {entradaEquipoError && (
+                <Alert variant="destructive">
+                  <AlertDescription className="text-sm">
+                    {entradaEquipoError}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 mt-4 shrink-0 border-t pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setAgregarEquipoDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarAgregarEquipo}
+              disabled={agregarEquipoLoading}
+            >
+              {agregarEquipoLoading && (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              )}
+              <Plus className="h-4 w-4 mr-1.5" />
+              Agregar a la Orden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
