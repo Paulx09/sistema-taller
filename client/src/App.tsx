@@ -11,6 +11,7 @@ import { VerificarGarantiaPage } from '@/pages/VerificarGarantiaPage';
 import { ClientesPage } from '@/pages/ClientesPage';
 import { OrdenesServicioPage } from '@/pages/OrdenesServicioPage';
 import { OrdenServicioDetalle } from '@/pages/OrdenServicioDetalle';
+import { OrdenServicioPDF } from '@/pages/OrdenServicioPDF';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
@@ -45,6 +46,16 @@ function App() {
             <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
             <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
           </Route>
+
+          {/* PDF — standalone, sin layout */}
+          <Route
+            path="ordenes-servicio/:id/pdf"
+            element={
+              <ProtectedRoute>
+                <OrdenServicioPDF />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Ruta por defecto - redirige al dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

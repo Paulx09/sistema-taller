@@ -39,6 +39,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { EstadoBadge } from '@/components/EstadoBadge';
+import { pdf } from '@react-pdf/renderer';
+import { GlobalPDFDoc, EquipoPDFDoc } from '@/pages/OrdenServicioPDF';
 import { ordenServicioService } from '@/services/orden-servicio.service';
 import { usuarioService } from '@/services/usuario.service';
 import { clienteService } from '@/services/cliente.service';
@@ -166,6 +168,9 @@ export function OrdenServicioDetalle() {
 
   // marcar entregada
   const [marcandoEntregada, setMarcandoEntregada] = useState(false);
+
+  // descarga PDF
+  const [descargandoPDF, setDescargandoPDF] = useState(false);
 
   // Dialog: agregar ítem
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -318,6 +323,29 @@ export function OrdenServicioDetalle() {
       //
     } finally {
       setGuardandoPago(false);
+    }
+  }
+
+  async function handleDownloadPDF(soloEquipo: boolean) {
+    if (!orden) return;
+    setDescargandoPDF(true);
+    try {
+      const doc = soloEquipo && equipoActivo
+        ? <EquipoPDFDoc orden={orden} equipoOrden={equipoActivo} />
+        : <GlobalPDFDoc orden={orden} />;
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${orden.codigoFormateado}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // silencioso
+    } finally {
+      setDescargandoPDF(false);
     }
   }
 
@@ -695,21 +723,32 @@ export function OrdenServicioDetalle() {
             </h1>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/ordenes-servicio/${id}/pdf`} target="_blank">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={descargandoPDF}
+              onClick={() => handleDownloadPDF(false)}
+            >
+              {descargandoPDF ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
                 <FileText className="h-4 w-4 mr-1.5" />
-                PDF global
-              </Link>
+              )}
+              PDF global
             </Button>
             {equipoActivo && (
-              <Button variant="outline" size="sm" asChild>
-                <Link
-                  to={`/ordenes-servicio/${id}/pdf?equipo=${equipoActivoId}`}
-                  target="_blank"
-                >
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={descargandoPDF}
+                onClick={() => handleDownloadPDF(true)}
+              >
+                {descargandoPDF ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
                   <FileText className="h-4 w-4 mr-1.5" />
-                  PDF equipo
-                </Link>
+                )}
+                PDF equipo
               </Button>
             )}
           </div>
