@@ -142,7 +142,9 @@ export function MainLayout() {
               <span className="material-symbols-outlined">menu</span>
             </button>
             <div className="hidden sm:flex items-center text-sm text-muted-foreground">
-              <span className="hover:text-primary cursor-pointer transition-colors">Inicio</span>
+              <span className="hover:text-primary cursor-pointer transition-colors flex items-center gap-1" onClick={() => navigate(-1)}>
+                Atrás
+              </span>
               <span className="material-symbols-outlined text-[16px] mx-2 text-slate-400">chevron_right</span>
               <span className="text-foreground font-medium">{getPageTitle()}</span>
             </div>
