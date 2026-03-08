@@ -220,8 +220,8 @@ export function ComprasPage() {
   };
 
   // Actualizar cantidad
-  const actualizarCantidad = (productoId: string, cantidad: number) => {
-    if (cantidad <= 0) {
+  const actualizarCantidad = (productoId: string, cantidad: number, soloActualizar = false) => {
+    if (cantidad <= 0 && !soloActualizar) {
       setDetalles(detalles.filter((d) => d.producto.id !== productoId));
     } else {
       const item = detalles.find((d) => d.producto.id === productoId);
@@ -656,12 +656,23 @@ export function ComprasPage() {
                           <label className="text-xs text-muted-foreground">Cantidad</label>
                           <Input
                             type="text"
-                            value={d.cantidad}
+                            value={d.cantidad || ''}
                             onChange={(e) => {
                               const value = e.target.value;
-                              // Permitir solo números enteros
-                              if (/^\d*$/.test(value) || value === '') {
-                                actualizarCantidad(d.producto.id, Number.parseInt(value) || 0);
+                              if (/^\d*$/.test(value)) {
+                                const num = Number.parseInt(value);
+                                if (value === '' || num === 0) {
+                                  // Permitir campo vacío como estado intermedio sin eliminar el ítem
+                                  actualizarCantidad(d.producto.id, 0, true);
+                                } else {
+                                  actualizarCantidad(d.producto.id, num);
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const num = Number.parseInt(e.target.value);
+                              if (!num || num <= 0) {
+                                actualizarCantidad(d.producto.id, 1);
                               }
                             }}
                             className="h-8"
