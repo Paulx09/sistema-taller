@@ -3,6 +3,7 @@ import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, His
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { crearVenta, listarVentasHoy, listarVentas } from '@/services/venta.service';
@@ -688,15 +689,16 @@ export function VentasPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Método de Pago</label>
-                    <select
-                      value={metodoPago}
-                      onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {METODOS_PAGO.map((m) => (
-                        <option key={m.value} value={m.value}>{m.label}</option>
-                      ))}
-                    </select>
+                    <Select value={metodoPago} onValueChange={(v) => setMetodoPago(v as MetodoPago)}>
+                      <SelectTrigger className="w-full bg-background text-sm h-9">
+                        <SelectValue placeholder="Método de pago" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {METODOS_PAGO.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
