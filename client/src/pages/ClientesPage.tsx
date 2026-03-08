@@ -72,6 +72,7 @@ export function ClientesPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formCliente, setFormCliente] = useState<CrearClienteDto>(clienteVacio);
+  const [formErrors, setFormErrors] = useState<{ nombre?: string; telefono?: string }>({});
 
   // ── Dialog equipos ─────────────────────────────────────────────────────────
   const [equiposDialogOpen, setEquiposDialogOpen] = useState(false);
@@ -112,6 +113,7 @@ export function ClientesPage() {
     setEditingCliente(null);
     setFormCliente(clienteVacio);
     setError(null);
+    setFormErrors({});
     setSheetOpen(true);
   };
 
@@ -124,11 +126,20 @@ export function ClientesPage() {
       direccion: cliente.direccion || '',
     });
     setError(null);
+    setFormErrors({});
     setSheetOpen(true);
   };
 
   const handleSubmitCliente = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: { nombre?: string; telefono?: string } = {};
+    if (!formCliente.nombre.trim()) errors.nombre = 'El nombre es requerido';
+    if (!formCliente.telefono?.trim()) errors.telefono = 'El teléfono es requerido';
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     setSubmitting(true);
     setError(null);
     try {
@@ -153,6 +164,12 @@ export function ClientesPage() {
   };
 
   const handleEliminar = async (id: string) => {
+    const cliente = clientes.find((c) => c.id === id);
+    if (cliente && (cliente._count?.ordenes ?? 0) > 0) {
+      setError('No se puede eliminar un cliente con órdenes registradas.');
+      setDeleteConfirmId(null);
+      return;
+    }
     setSubmitting(true);
     try {
       await clienteService.delete(id);
@@ -398,7 +415,13 @@ export function ClientesPage() {
                           <Button size="sm" variant="ghost" onClick={() => handleEditar(cliente)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setDeleteConfirmId(cliente.id)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteConfirmId(cliente.id)}
+                            disabled={(cliente._count?.ordenes ?? 0) > 0}
+                            title={(cliente._count?.ordenes ?? 0) > 0 ? 'No se puede eliminar: tiene órdenes registradas' : 'Eliminar cliente'}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -430,11 +453,18 @@ export function ClientesPage() {
                 Nombre completo <span className="text-destructive">*</span>
               </label>
               <Input
-                required
                 value={formCliente.nombre}
-                onChange={(e) => setFormCliente({ ...formCliente, nombre: e.target.value })}
+                onChange={(e) => {
+                  setFormCliente({ ...formCliente, nombre: e.target.value });
+                  if (e.target.value.trim()) setFormErrors((prev) => ({ ...prev, nombre: undefined }));
+                }}
                 placeholder="Ej: Juan Pérez García"
+                className={formErrors.nombre ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              {formErrors.nombre
+                ? <p className="text-xs text-destructive">{formErrors.nombre}</p>
+                : <p className="text-xs text-muted-foreground">Nombre completo del cliente. Obligatorio.</p>
+              }
             </div>
 
             <div className="space-y-2">
@@ -449,14 +479,24 @@ export function ClientesPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Teléfono</label>
+              <label className="text-sm font-medium">
+                Teléfono <span className="text-destructive">*</span>
+              </label>
               <Input
                 type="tel"
                 value={formCliente.telefono || ''}
-                onChange={(e) => setFormCliente({ ...formCliente, telefono: e.target.value })}
+                onChange={(e) => {
+                  setFormCliente({ ...formCliente, telefono: e.target.value });
+                  if (e.target.value.trim()) setFormErrors((prev) => ({ ...prev, telefono: undefined }));
+                }}
                 placeholder="999 888 777"
                 maxLength={20}
+                className={formErrors.telefono ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              {formErrors.telefono
+                ? <p className="text-xs text-destructive">{formErrors.telefono}</p>
+                : <p className="text-xs text-muted-foreground">Número de contacto principal. Obligatorio.</p>
+              }
             </div>
 
             <div className="space-y-2">
