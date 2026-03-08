@@ -102,6 +102,7 @@ export function ComprasPage() {
   const [ubicaciones, setUbicaciones] = useState<{ id: string; nombre: string }[]>([]);
   const [ubicacionSinClasificar, setUbicacionSinClasificar] = useState<string>('');
   const [creandoProducto, setCreandoProducto] = useState(false);
+  const [erroresProducto, setErroresProducto] = useState<{ nombre?: string; categoriaId?: string; ubicacionId?: string }>({});
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: '',
     categoriaId: '',
@@ -373,18 +374,15 @@ export function ComprasPage() {
 
   // Crear producto rápido
   const handleCrearProductoRapido = async () => {
-    if (!nuevoProducto.nombre.trim()) {
-      toast({ title: 'El nombre del producto es obligatorio', variant: 'destructive' });
+    const errores: { nombre?: string; categoriaId?: string; ubicacionId?: string } = {};
+    if (!nuevoProducto.nombre.trim()) errores.nombre = 'El nombre del producto es obligatorio';
+    if (!nuevoProducto.categoriaId) errores.categoriaId = 'Debe seleccionar una categoría';
+    if (!nuevoProducto.ubicacionId) errores.ubicacionId = 'Debe seleccionar una ubicación';
+    if (Object.keys(errores).length > 0) {
+      setErroresProducto(errores);
       return;
     }
-    if (!nuevoProducto.categoriaId) {
-      toast({ title: 'Debe seleccionar una categoría', variant: 'destructive' });
-      return;
-    }
-    if (!nuevoProducto.ubicacionId) {
-      toast({ title: 'Debe seleccionar una ubicación', variant: 'destructive' });
-      return;
-    }
+    setErroresProducto({});
 
     // Usar valores mínimos temporales (se actualizarán con la compra)
     const stockMinimo = Number.parseInt(nuevoProducto.stockMinimo || '1');
@@ -436,6 +434,7 @@ export function ComprasPage() {
         garantiaProveedorMeses: '',
         garantiaClienteMeses: '',
       });
+      setErroresProducto({});
       setCrearProductoDialogOpen(false);
 
       // Recargar lista de productos
@@ -600,7 +599,7 @@ export function ComprasPage() {
                 <label className="text-sm font-medium mb-1 block">Número de Factura *</label>
                 <Input
                   value={numeroFactura}
-                  onChange={(e) => setNumeroFactura(e.target.value)}
+                  onChange={(e) => setNumeroFactura(e.target.value.toUpperCase())}
                   placeholder="Ej: F001-00001234"
                 />
               </div>
@@ -1037,7 +1036,7 @@ export function ComprasPage() {
       </Dialog>
 
       {/* Dialog: Crear Producto Rápido */}
-      <Dialog open={crearProductoDialogOpen} onOpenChange={setCrearProductoDialogOpen}>
+      <Dialog open={crearProductoDialogOpen} onOpenChange={(open) => { setCrearProductoDialogOpen(open); if (!open) setErroresProducto({}); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Crear Producto Rápido</DialogTitle>
@@ -1053,9 +1052,11 @@ export function ComprasPage() {
               </label>
               <Input
                 value={nuevoProducto.nombre}
-                onChange={(e) => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })}
+                onChange={(e) => { setNuevoProducto({ ...nuevoProducto, nombre: e.target.value }); if (erroresProducto.nombre) setErroresProducto((p) => ({ ...p, nombre: undefined })); }}
                 placeholder="Ej: Teclado Mecánico RGB"
+                className={erroresProducto.nombre ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              {erroresProducto.nombre && <p className="text-xs text-destructive">{erroresProducto.nombre}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1083,9 +1084,9 @@ export function ComprasPage() {
               </label>
               <Select
                 value={nuevoProducto.categoriaId}
-                onValueChange={(value) => setNuevoProducto({ ...nuevoProducto, categoriaId: value })}
+                onValueChange={(value) => { setNuevoProducto({ ...nuevoProducto, categoriaId: value }); if (erroresProducto.categoriaId) setErroresProducto((p) => ({ ...p, categoriaId: undefined })); }}
               >
-                <SelectTrigger>
+                <SelectTrigger className={erroresProducto.categoriaId ? 'border-destructive focus:ring-destructive' : ''}>
                   <SelectValue placeholder="Seleccione categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1096,6 +1097,7 @@ export function ComprasPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {erroresProducto.categoriaId && <p className="text-xs text-destructive">{erroresProducto.categoriaId}</p>}
             </div>
 
             <div className="space-y-2">
@@ -1104,9 +1106,9 @@ export function ComprasPage() {
               </label>
               <Select
                 value={nuevoProducto.ubicacionId}
-                onValueChange={(value) => setNuevoProducto({ ...nuevoProducto, ubicacionId: value })}
+                onValueChange={(value) => { setNuevoProducto({ ...nuevoProducto, ubicacionId: value }); if (erroresProducto.ubicacionId) setErroresProducto((p) => ({ ...p, ubicacionId: undefined })); }}
               >
-                <SelectTrigger>
+                <SelectTrigger className={erroresProducto.ubicacionId ? 'border-destructive focus:ring-destructive' : ''}>
                   <SelectValue placeholder="Seleccione ubicación" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1117,6 +1119,7 @@ export function ComprasPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {erroresProducto.ubicacionId && <p className="text-xs text-destructive">{erroresProducto.ubicacionId}</p>}
             </div>
 
             <div className="space-y-2">
