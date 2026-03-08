@@ -172,6 +172,7 @@ export function OrdenServicioDetalle() {
   // edición inline del equipo activo
   const [editandoEquipo, setEditandoEquipo] = useState(false);
   const [formEquipo, setFormEquipo] = useState<ActualizarEquipoOrdenDto>({});
+  const [costoEstimadoStr, setCostoEstimadoStr] = useState('');
   const [guardandoEquipo, setGuardandoEquipo] = useState(false);
 
   // cambio de estado del equipo
@@ -287,6 +288,7 @@ export function OrdenServicioDetalle() {
           ? parseFloat(equipoActivo.costoEstimado)
           : null,
       });
+      setCostoEstimadoStr(equipoActivo.costoEstimado ? String(Number.parseFloat(equipoActivo.costoEstimado)) : '');
       setEditandoEquipo(false);
     }
   }, [equipoActivo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -296,10 +298,11 @@ export function OrdenServicioDetalle() {
     if (!id || !equipoActivoId) return;
     setGuardandoEquipo(true);
     try {
+      const parsedCosto = costoEstimadoStr === '' ? null : Number.parseFloat(costoEstimadoStr);
       const updated = await ordenServicioService.actualizarEquipo(
         id,
         equipoActivoId,
-        formEquipo
+        { ...formEquipo, costoEstimado: (parsedCosto !== null && !Number.isNaN(parsedCosto)) ? parsedCosto : null }
       );
       setOrden(updated);
       setEditandoEquipo(false);
@@ -1010,18 +1013,15 @@ export function OrdenServicioDetalle() {
                       Costo estimado (S/)
                     </label>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formEquipo.costoEstimado ?? ''}
-                      onChange={(e) =>
-                        setFormEquipo((p) => ({
-                          ...p,
-                          costoEstimado: e.target.value
-                            ? parseFloat(e.target.value)
-                            : null,
-                        }))
-                      }
+                      type="text"
+                      inputMode="decimal"
+                      value={costoEstimadoStr}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\d*\.?\d*$/.test(value)) {
+                          setCostoEstimadoStr(value);
+                        }
+                      }}
                       placeholder="0.00"
                       className="max-w-xs"
                     />
