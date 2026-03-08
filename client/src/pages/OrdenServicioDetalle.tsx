@@ -1501,12 +1501,15 @@ export function OrdenServicioDetalle() {
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Cantidad</label>
                 <Input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="numeric"
                   value={itemForm.cantidad}
-                  onChange={(e) =>
-                    setItemForm((p) => ({ ...p, cantidad: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*$/.test(value)) {
+                      setItemForm((p) => ({ ...p, cantidad: value }));
+                    }
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
