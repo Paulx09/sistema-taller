@@ -192,6 +192,7 @@ export function OrdenServicioDetalle() {
   const [editandoPago, setEditandoPago] = useState(false);
   const [pagoInput, setPagoInput] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
+  const [pagoError, setPagoError] = useState<string | null>(null);
 
   // marcar entregada
   const [marcandoEntregada, setMarcandoEntregada] = useState(false);
@@ -365,10 +366,16 @@ export function OrdenServicioDetalle() {
 
   async function handleGuardarPago() {
     if (!id) return;
+    const valor = Number.parseFloat(pagoInput) || 0;
+    if (valor > subtotalOS) {
+      setPagoError(`El pago a cuenta (S/ ${fmt(valor)}) no puede superar el total (S/ ${fmt(subtotalOS)}).`);
+      return;
+    }
+    setPagoError(null);
     setGuardandoPago(true);
     try {
       const updated = await ordenServicioService.update(id, {
-        pagoACuenta: parseFloat(pagoInput) || 0,
+        pagoACuenta: valor,
       });
       setOrden(updated);
       setEditandoPago(false);
@@ -1244,7 +1251,7 @@ export function OrdenServicioDetalle() {
       </main>
 
       {/* PANEL DERECHO */}
-      <aside className="w-72 shrink-0 border-l overflow-y-auto bg-card">
+      <aside className="w-85 shrink-0 border-l overflow-y-auto bg-card">
 
         {/* Header */}
         <div className="bg-primary text-primary-foreground px-5 py-4 sticky top-0 z-10">
@@ -1300,32 +1307,40 @@ export function OrdenServicioDetalle() {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Pago a cuenta</span>
               {editandoPago ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="text"
-                    min="0"
-                    value={pagoInput}
-                    onChange={(e) => setPagoInput(e.target.value)}
-                    className="h-6 w-24 text-xs text-right"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleGuardarPago}
-                    disabled={guardandoPago}
-                    className="text-green-600 hover:text-green-700"
-                  >
-                    {guardandoPago ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setEditandoPago(false)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="text"
+                      min="0"
+                      value={pagoInput}
+                      onChange={(e) => {
+                        setPagoInput(e.target.value);
+                        setPagoError(null);
+                      }}
+                      className="h-6 w-24 text-xs text-right"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleGuardarPago}
+                      disabled={guardandoPago}
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      {guardandoPago ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { setEditandoPago(false); setPagoError(null); }}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {pagoError && (
+                    <p className="text-[10px] text-destructive max-w-[12rem] text-right leading-tight">{pagoError}</p>
+                  )}
                 </div>
               ) : (
                 <button
@@ -1357,7 +1372,14 @@ export function OrdenServicioDetalle() {
             </p>
           </div>
 
-          {saldoPendiente === 0 && subtotalOS > 0 && (
+          {pagoACuenta > subtotalOS && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              El pago a cuenta (S/ {fmt(pagoACuenta)}) no puede superar el total (S/ {fmt(subtotalOS)}).
+            </p>
+          )}
+
+          {saldoPendiente === 0 && subtotalOS > 0 && pagoACuenta <= subtotalOS && (
             <p className="text-xs text-green-600 font-medium flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" /> Pagado completo
             </p>
