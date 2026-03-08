@@ -89,6 +89,13 @@ const productoSchema = z.object({
     const precioV = Number.parseFloat(data.precioVenta || '0');
     const precioC = Number.parseFloat(data.precioCompra || '0');
 
+    if (!data.ubicacionId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Requerido para productos físicos',
+        path: ['ubicacionId'],
+      });
+    }
     if (stockMin < 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
