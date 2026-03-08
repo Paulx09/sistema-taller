@@ -17,6 +17,8 @@ import {
   WrenchIcon,
   PackageCheck,
   User,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,7 +91,7 @@ const ESTADO_EQUIPO_CONFIG: Record<
       'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
   },
   CANCELADA: {
-    label: 'Cancelada',
+    label: 'Cancelar Orden',
     icon: <X className="h-3.5 w-3.5" />,
     className:
       'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
@@ -121,7 +123,7 @@ function EquipoBadge({ estado }: { estado: EstadoEquipoOrden }) {
 
 // ─── constantes vacías ─────────────────────────────────────────────────────────
 
-const EQUIPO_NUEVO_VACIO = { tipoEquipo: '', marca: '', modelo: '', numeroSerie: '' };
+const EQUIPO_NUEVO_VACIO = { tipoEquipo: '', marca: '', modelo: '', numeroSerie: '', contrasenaPatron: '' };
 
 const EQUIPO_ENTRADA_VACIO = {
   equipoId: '',
@@ -194,6 +196,7 @@ export function OrdenServicioDetalle() {
   const [formNuevoEquipo, setFormNuevoEquipo] = useState({ ...EQUIPO_NUEVO_VACIO });
   const [submittingNuevoEquipo, setSubmittingNuevoEquipo] = useState(false);
   const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
+  const [verContrasenaEquipo, setVerContrasenaEquipo] = useState(false);
   const [entradaEquipoError, setEntradaEquipoError] = useState<string | null>(null);
   const [agregarEquipoLoading, setAgregarEquipoLoading] = useState(false);
 
@@ -471,6 +474,18 @@ export function OrdenServicioDetalle() {
       setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
       return;
     }
+    if (!formNuevoEquipo.marca?.trim()) {
+      setErrorNuevoEquipo('La marca es obligatoria.');
+      return;
+    }
+    if (!formNuevoEquipo.modelo?.trim()) {
+      setErrorNuevoEquipo('El modelo es obligatorio.');
+      return;
+    }
+    if (!formNuevoEquipo.numeroSerie?.trim()) {
+      setErrorNuevoEquipo('El número de serie es obligatorio.');
+      return;
+    }
     setSubmittingNuevoEquipo(true);
     try {
       const eq = await clienteService.crearEquipo(orden.clienteId, {
@@ -478,6 +493,7 @@ export function OrdenServicioDetalle() {
         marca: formNuevoEquipo.marca || null,
         modelo: formNuevoEquipo.modelo || null,
         numeroSerie: formNuevoEquipo.numeroSerie || null,
+        contrasenaPatron: formNuevoEquipo.contrasenaPatron?.trim() || null,
       });
       setEquiposCliente((prev) => [...prev, eq]);
       setEquipoEntrada((prev) => ({ ...prev, equipoId: eq.id }));
@@ -1140,9 +1156,8 @@ export function OrdenServicioDetalle() {
               {editandoPago ? (
                 <div className="flex items-center gap-1">
                   <Input
-                    type="number"
+                    type="text"
                     min="0"
-                    step="0.01"
                     value={pagoInput}
                     onChange={(e) => setPagoInput(e.target.value)}
                     className="h-6 w-24 text-xs text-right"
@@ -1471,49 +1486,87 @@ export function OrdenServicioDetalle() {
                       <X className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </div>
-                  <Input
-                    value={formNuevoEquipo.tipoEquipo}
-                    onChange={(e) =>
-                      setFormNuevoEquipo((p) => ({
-                        ...p,
-                        tipoEquipo: e.target.value,
-                      }))
-                    }
-                    placeholder="Tipo de equipo *"
-                    className="h-8 text-xs"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Tipo de equipo <span className="text-destructive">*</span></label>
                     <Input
-                      value={formNuevoEquipo.marca}
-                      onChange={(e) =>
-                        setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))
-                      }
-                      placeholder="Marca"
-                      className="h-8 text-xs"
-                    />
-                    <Input
-                      value={formNuevoEquipo.modelo}
+                      value={formNuevoEquipo.tipoEquipo}
                       onChange={(e) =>
                         setFormNuevoEquipo((p) => ({
                           ...p,
-                          modelo: e.target.value,
+                          tipoEquipo: e.target.value,
                         }))
                       }
-                      placeholder="Modelo"
+                      placeholder="Laptop, Celular, PC..."
                       className="h-8 text-xs"
                     />
                   </div>
-                  <Input
-                    value={formNuevoEquipo.numeroSerie}
-                    onChange={(e) =>
-                      setFormNuevoEquipo((p) => ({
-                        ...p,
-                        numeroSerie: e.target.value,
-                      }))
-                    }
-                    placeholder="N° de serie (opcional)"
-                    className="h-8 text-xs font-mono"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Marca <span className="text-destructive">*</span></label>
+                      <Input
+                        value={formNuevoEquipo.marca}
+                        onChange={(e) =>
+                          setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))
+                        }
+                        placeholder="HP, Samsung..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Modelo <span className="text-destructive">*</span></label>
+                      <Input
+                        value={formNuevoEquipo.modelo}
+                        onChange={(e) =>
+                          setFormNuevoEquipo((p) => ({
+                            ...p,
+                            modelo: e.target.value,
+                          }))
+                        }
+                        placeholder="Pavilion, A15..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">N de serie <span className="text-destructive">*</span></label>
+                      <Input
+                        value={formNuevoEquipo.numeroSerie}
+                        onChange={(e) =>
+                          setFormNuevoEquipo((p) => ({
+                            ...p,
+                            numeroSerie: e.target.value,
+                          }))
+                        }
+                        placeholder="Requerido"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Clave / Patrón</label>
+                      <div className="relative">
+                        <Input
+                          type={verContrasenaEquipo ? 'text' : 'password'}
+                          value={formNuevoEquipo.contrasenaPatron || ''}
+                          onChange={(e) =>
+                            setFormNuevoEquipo((p) => ({
+                              ...p,
+                              contrasenaPatron: e.target.value,
+                            }))
+                          }
+                          placeholder="Opcional"
+                          className="h-8 text-xs pr-8"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setVerContrasenaEquipo((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {verContrasenaEquipo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   {errorNuevoEquipo && (
                     <Alert variant="destructive" className="py-2">
                       <AlertDescription className="text-xs">

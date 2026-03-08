@@ -1001,7 +1001,7 @@ export function OrdenesServicioPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">Contrasena / patron</label>
+                      <label className="text-xs font-medium">Clave / Patrón</label>
                       <div className="relative">
                         <Input
                           type={verContrasenaEquipo ? 'text' : 'password'}
