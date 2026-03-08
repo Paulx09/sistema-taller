@@ -224,6 +224,18 @@ export function OrdenesServicioPage() {
       setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
       return;
     }
+    if (!formNuevoEquipo.marca?.trim()) {
+      setErrorNuevoEquipo('La marca es obligatoria.');
+      return;
+    }
+    if (!formNuevoEquipo.modelo?.trim()) {
+      setErrorNuevoEquipo('El modelo es obligatorio.');
+      return;
+    }
+    if (!formNuevoEquipo.numeroSerie?.trim()) {
+      setErrorNuevoEquipo('El número de serie es obligatorio.');
+      return;
+    }
     setSubmittingNuevoEquipo(true);
     setErrorNuevoEquipo(null);
     try {
@@ -959,7 +971,7 @@ export function OrdenesServicioPage() {
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">Marca</label>
+                      <label className="text-xs font-medium">Marca <span className="text-destructive">*</span></label>
                       <Input
                         value={formNuevoEquipo.marca || ''}
                         onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))}
@@ -968,7 +980,7 @@ export function OrdenesServicioPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">Modelo</label>
+                      <label className="text-xs font-medium">Modelo <span className="text-destructive">*</span></label>
                       <Input
                         value={formNuevoEquipo.modelo || ''}
                         onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, modelo: e.target.value }))}
@@ -980,11 +992,11 @@ export function OrdenesServicioPage() {
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">N de serie</label>
+                      <label className="text-xs font-medium">N de serie <span className="text-destructive">*</span></label>
                       <Input
                         value={formNuevoEquipo.numeroSerie || ''}
                         onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, numeroSerie: e.target.value }))}
-                        placeholder="Opcional"
+                        placeholder="Requerido"
                         className="h-8 text-xs font-mono"
                       />
                     </div>
