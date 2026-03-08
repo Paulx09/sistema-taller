@@ -290,6 +290,10 @@ export function OrdenesServicioPage() {
       setErrorNuevoCliente('El nombre es obligatorio.');
       return;
     }
+    if (!formNuevoCliente.telefono.trim()) {
+      setErrorNuevoCliente('El teléfono es obligatorio.');
+      return;
+    }
     setSubmittingNuevoCliente(true);
     setErrorNuevoCliente(null);
     try {
@@ -1148,7 +1152,9 @@ export function OrdenesServicioPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Telefono</label>
+              <label className="text-sm font-medium">
+                Telefono <span className="text-destructive">*</span>
+              </label>
               <Input
                 type="tel"
                 value={formNuevoCliente.telefono}
