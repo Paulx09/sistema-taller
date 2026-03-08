@@ -272,7 +272,10 @@ export function OrdenServicioDetalle() {
     orden?.equipos?.find((e) => e.id === equipoActivoId) ?? null;
 
   const subtotalOS =
-    orden?.equipos?.reduce((acc, eq) => acc + parseFloat(eq.subtotal ?? '0'), 0) ?? 0;
+    orden?.equipos?.reduce(
+      (acc, eq) => (eq.estado === 'CANCELADA' ? acc : acc + parseFloat(eq.subtotal ?? '0')),
+      0
+    ) ?? 0;
 
   const pagoACuenta = parseFloat(orden?.pagoACuenta ?? '0');
   const saldoPendiente = Math.max(0, subtotalOS - pagoACuenta);
@@ -934,7 +937,9 @@ export function OrdenServicioDetalle() {
                     className="gap-1.5 h-7 text-xs"
                     onClick={() => setEditandoEquipo(true)}
                     disabled={
-                      orden.estado === 'ENTREGADA' || orden.estado === 'CANCELADA'
+                      orden.estado === 'ENTREGADA' ||
+                      orden.estado === 'CANCELADA' ||
+                      equipoActivo.estado === 'CANCELADA'
                     }
                   >
                     <Pencil className="h-3 w-3" /> Editar
@@ -1044,16 +1049,18 @@ export function OrdenServicioDetalle() {
                   <PackageCheck className="h-4 w-4 text-primary" />
                   Repuestos y Mano de Obra
                 </h2>
-                {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1.5 h-7 text-xs"
-                    onClick={abrirItemDialog}
-                  >
-                    <Plus className="h-3 w-3" /> Agregar ítem
-                  </Button>
-                )}
+                {orden.estado !== 'ENTREGADA' &&
+                  orden.estado !== 'CANCELADA' &&
+                  equipoActivo.estado !== 'CANCELADA' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 h-7 text-xs"
+                      onClick={abrirItemDialog}
+                    >
+                      <Plus className="h-3 w-3" /> Agregar ítem
+                    </Button>
+                  )}
               </div>
 
               <div className="overflow-x-auto">
@@ -1094,7 +1101,9 @@ export function OrdenServicioDetalle() {
                               )}
                             </td>
                             <td className="px-3 py-3 text-center">
-                              {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' ? (
+                              {orden.estado !== 'ENTREGADA' &&
+                              orden.estado !== 'CANCELADA' &&
+                              equipoActivo.estado !== 'CANCELADA' ? (
                                 <div className="flex flex-col items-center gap-1">
                                   <div className="flex items-center justify-center gap-1">
                                     <button
@@ -1147,7 +1156,8 @@ export function OrdenServicioDetalle() {
                             </td>
                             <td className="px-2 py-3 text-center">
                               {orden.estado !== 'ENTREGADA' &&
-                                orden.estado !== 'CANCELADA' && (
+                                orden.estado !== 'CANCELADA' &&
+                                equipoActivo.estado !== 'CANCELADA' && (
                                   <button
                                     onClick={() => handleQuitarItem(item.id)}
                                     className="text-muted-foreground hover:text-destructive transition-colors"
@@ -1219,7 +1229,9 @@ export function OrdenServicioDetalle() {
                   </div>
                 )}
 
-                {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' && (
+                {orden.estado !== 'ENTREGADA' &&
+                  orden.estado !== 'CANCELADA' &&
+                  equipoActivo.estado !== 'CANCELADA' && (
                   <div className="space-y-2">
                     <Textarea
                       rows={3}
@@ -1272,23 +1284,29 @@ export function OrdenServicioDetalle() {
               {orden.equipos!.map((eq) => {
                 const sub = parseFloat(eq.subtotal ?? '0');
                 const activo = eq.id === equipoActivoId;
+                const cancelado = eq.estado === 'CANCELADA';
                 return (
                   <div
                     key={eq.id}
                     onClick={() => setEquipoActivoId(eq.id)}
                     className={cn(
                       'flex items-center justify-between text-xs py-1.5 px-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
-                      activo && 'bg-muted/60 font-semibold'
+                      activo && 'bg-muted/60 font-semibold',
+                      cancelado && 'opacity-50'
                     )}
                   >
-                    <span className="truncate text-muted-foreground max-w-[9.5rem]">
+                    <span className={cn('truncate text-muted-foreground max-w-[9rem]', cancelado && 'line-through')}>
                       {[eq.equipo?.tipoEquipo, eq.equipo?.marca]
                         .filter(Boolean)
                         .join(' ')}
                     </span>
-                    <span className="font-semibold shrink-0 ml-2">
-                      S/ {fmt(sub)}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {cancelado ? (
+                        <span className="text-[10px] font-medium text-red-500 italic">Cancelado</span>
+                      ) : (
+                        <span className="font-semibold">S/ {fmt(sub)}</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
