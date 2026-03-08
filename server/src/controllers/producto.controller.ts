@@ -124,9 +124,7 @@ export class ProductoController {
   // POST /api/productos
   async crear(req: Request, res: Response, next: NextFunction) {
     try {
-      // TODO: Obtener usuarioId del JWT cuando se implemente autenticación
-      // Por ahora, usar el admin del seed
-      const usuarioId = '78de9010-8b8b-4f6e-b3a7-40b4ff746404'; // UUID del admin del último seed
+      const usuarioId = req.userId as string;
 
       const producto = await productoService.crear(req.body, usuarioId);
 

@@ -7,7 +7,7 @@ const equipoOrdenInputSchema = z.object({
   problemaReportado: z.string().min(1, 'El problema reportado es requerido').trim(),
   diagnosticoTecnico: z.string().trim().optional().nullable(),
   observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
-  costoEstimado: z.number().positive('El costo estimado debe ser positivo').optional().nullable(),
+  costoEstimado: z.number().nonnegative('El costo estimado no puede ser negativo').optional().nullable(),
 });
 
 // Crear orden
@@ -30,14 +30,14 @@ const agregarEquipoSchema = z.object({
   problemaReportado: z.string().min(1, 'El problema reportado es requerido').trim(),
   diagnosticoTecnico: z.string().trim().optional().nullable(),
   observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
-  costoEstimado: z.number().positive('El costo estimado debe ser positivo').optional().nullable(),
+  costoEstimado: z.number().nonnegative('El costo estimado no puede ser negativo').optional().nullable(),
 });
 
 const actualizarEquipoSchema = z.object({
   problemaReportado: z.string().min(1).trim().optional(),
   diagnosticoTecnico: z.string().trim().optional().nullable(),
   observacionesEsteticas: z.record(z.string(), z.any()).optional().nullable(),
-  costoEstimado: z.number().positive().optional().nullable(),
+  costoEstimado: z.number().nonnegative().optional().nullable(),
 });
 
 // Cambiar estado de un equipo
