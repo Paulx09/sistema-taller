@@ -120,6 +120,15 @@ export const ordenServicioService = {
     return response.data.data;
   },
 
+  // PATCH /api/ordenes-servicio/:id/items/:itemId (actualizar cantidad)
+  async actualizarItemCantidad(id: string, itemId: string, cantidad: number): Promise<OrdenServicio> {
+    const response = await api.patch<ApiResponse<OrdenServicio>>(
+      `/ordenes-servicio/${id}/items/${itemId}`,
+      { cantidad }
+    );
+    return response.data.data;
+  },
+
   // DELETE /api/ordenes-servicio/:id/items/:itemId
   async quitarItem(id: string, itemId: string): Promise<OrdenServicio> {
     const response = await api.delete<ApiResponse<OrdenServicio>>(

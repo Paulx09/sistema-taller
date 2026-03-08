@@ -509,6 +509,7 @@ export interface ItemOrden {
     sku: string | null;
     esServicio: boolean;
     imagenUrl: string | null;
+    stockActual: number;
   };
 }
 

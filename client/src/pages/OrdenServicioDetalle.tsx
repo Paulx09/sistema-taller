@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight,
   Laptop,
+  Minus,
   Plus,
   Trash2,
   Save,
@@ -210,6 +211,11 @@ export function OrdenServicioDetalle() {
   }>({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '' });
   const [guardandoItem, setGuardandoItem] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
+
+  // Edición inline de cantidad en la tabla
+  const [editandoCantidad, setEditandoCantidad] = useState<{ itemId: string; valor: string } | null>(null);
+  const [guardandoCantidad, setGuardandoCantidad] = useState(false);
+  const [cantidadError, setCantidadError] = useState<string | null>(null);
 
   // Dialog: agregar otro equipo
   const [agregarEquipoDialogOpen, setAgregarEquipoDialogOpen] = useState(false);
@@ -434,6 +440,48 @@ export function OrdenServicioDetalle() {
     }
   }
 
+  async function handleGuardarCantidad(item: import('@/types').ItemOrden, cantidad?: number) {
+    if (!id) return;
+    const nuevaCantidad = cantidad ?? (
+      editandoCantidad?.itemId === item.id
+        ? Number.parseInt(editandoCantidad.valor)
+        : item.cantidad
+    );
+    if (!nuevaCantidad || nuevaCantidad < 1) {
+      setCantidadError('Ingresa una cantidad válida.');
+      setEditandoCantidad({ itemId: item.id, valor: String(nuevaCantidad) });
+      return;
+    }
+    if (nuevaCantidad === item.cantidad) {
+      setEditandoCantidad(null);
+      return;
+    }
+    // Validar stock para productos físicos en el cliente antes de enviar
+    if (item.producto && !item.producto.esServicio) {
+      const stockDisponible = item.producto.stockActual + item.cantidad;
+      if (nuevaCantidad > stockDisponible) {
+        setCantidadError(`Stock insuficiente. Disponible: ${stockDisponible}`);
+        setEditandoCantidad({ itemId: item.id, valor: String(nuevaCantidad) });
+        return;
+      }
+    }
+    setGuardandoCantidad(true);
+    try {
+      const updated = await ordenServicioService.actualizarItemCantidad(id, item.id, nuevaCantidad);
+      setOrden(updated);
+      setEditandoCantidad(null);
+      setCantidadError(null);
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'No se pudo actualizar la cantidad.';
+      setCantidadError(msg);
+      setEditandoCantidad({ itemId: item.id, valor: String(nuevaCantidad) });
+    } finally {
+      setGuardandoCantidad(false);
+    }
+  }
+
   // Dialog agregar ítem
   async function buscarProductos(q: string) {
     setBuscandoProductos(true);
@@ -459,6 +507,12 @@ export function OrdenServicioDetalle() {
     if (!id || !equipoActivoId) return;
     if (!itemForm.productoId) {
       setItemError('Selecciona un producto.');
+      return;
+    }
+    // Bloquear si el producto ya está registrado en este equipo
+    const duplicado = equipoActivo?.items?.some((it) => it.productoId === itemForm.productoId);
+    if (duplicado) {
+      setItemError('Este producto ya está registrado. Ajuste la cantidad.');
       return;
     }
     const cant = parseInt(itemForm.cantidad);
@@ -1001,7 +1055,7 @@ export function OrdenServicioDetalle() {
                     <tr className="bg-muted/30 text-xs font-semibold uppercase text-muted-foreground">
                       <th className="px-5 py-3 text-left">Descripción</th>
                       <th className="px-5 py-3 text-center">Cant.</th>
-                      <th className="px-5 py-3 text-right">Unitario</th>
+                      <th className="px-5 py-3 text-right">P. Unitario</th>
                       <th className="px-5 py-3 text-right">Subtotal</th>
                       <th className="px-2 py-3 w-10" />
                     </tr>
@@ -1017,36 +1071,87 @@ export function OrdenServicioDetalle() {
                         </td>
                       </tr>
                     ) : (
-                      equipoActivo.items!.map((item) => (
-                        <tr key={item.id} className="hover:bg-muted/20">
-                          <td className="px-5 py-3 font-medium">
-                            {item.producto?.nombre ?? '—'}
-                            {item.producto?.esServicio && (
-                              <span className="ml-1.5 text-[10px] text-muted-foreground border rounded px-1">
-                                servicio
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3 text-center">{item.cantidad}</td>
-                          <td className="px-5 py-3 text-right">
-                            S/ {fmt(item.precioUnitario)}
-                          </td>
-                          <td className="px-5 py-3 text-right font-semibold">
-                            S/ {fmt(item.subtotal)}
-                          </td>
-                          <td className="px-2 py-3 text-center">
-                            {orden.estado !== 'ENTREGADA' &&
-                              orden.estado !== 'CANCELADA' && (
-                                <button
-                                  onClick={() => handleQuitarItem(item.id)}
-                                  className="text-muted-foreground hover:text-destructive transition-colors"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                      equipoActivo.items!.map((item) => {
+                        const esServicio = item.producto?.esServicio ?? false;
+                        const stockDisponible = esServicio
+                          ? null
+                          : (item.producto?.stockActual ?? 0) + item.cantidad;
+                        return (
+                          <tr key={item.id} className="hover:bg-muted/20">
+                            <td className="px-5 py-3 font-medium">
+                              {item.producto?.nombre ?? '—'}
+                              {esServicio && (
+                                <span className="ml-1.5 text-[10px] text-muted-foreground border rounded px-1">
+                                  servicio
+                                </span>
                               )}
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              {orden.estado !== 'ENTREGADA' && orden.estado !== 'CANCELADA' ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={() => handleGuardarCantidad(item, item.cantidad - 1)}
+                                      disabled={guardandoCantidad || item.cantidad <= 1}
+                                      className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors disabled:opacity-40"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </button>
+                                    <input
+                                      type="text"
+                                      value={editandoCantidad?.itemId === item.id ? editandoCantidad.valor : String(item.cantidad)}
+                                      onChange={(e) => {
+                                        setEditandoCantidad({ itemId: item.id, valor: e.target.value });
+                                        setCantidadError(null);
+                                      }}
+                                      onBlur={() => {
+                                        if (editandoCantidad?.itemId === item.id) handleGuardarCantidad(item);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && editandoCantidad?.itemId === item.id) handleGuardarCantidad(item);
+                                        if (e.key === 'Escape') { setEditandoCantidad(null); setCantidadError(null); }
+                                      }}
+                                      className="w-10 text-center text-sm border border-border rounded bg-background py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                                    />
+                                    <button
+                                      onClick={() => handleGuardarCantidad(item, item.cantidad + 1)}
+                                      disabled={guardandoCantidad || (stockDisponible !== null && item.cantidad >= stockDisponible)}
+                                      className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors disabled:opacity-40"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {stockDisponible !== null && (
+                                    <span className="text-[10px] text-muted-foreground">Máx: {stockDisponible}</span>
+                                  )}
+                                  {cantidadError && editandoCantidad?.itemId === item.id && (
+                                    <span className="text-[10px] text-destructive max-w-[10rem] text-center">{cantidadError}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                item.cantidad
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              S/ {fmt(item.precioUnitario)}
+                            </td>
+                            <td className="px-5 py-3 text-right font-semibold">
+                              S/ {fmt(item.subtotal)}
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              {orden.estado !== 'ENTREGADA' &&
+                                orden.estado !== 'CANCELADA' && (
+                                  <button
+                                    onClick={() => handleQuitarItem(item.id)}
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                   {(equipoActivo.items ?? []).length > 0 && (
@@ -1353,6 +1458,9 @@ export function OrdenServicioDetalle() {
                       key={p.id}
                       type="button"
                       onClick={() => {
+                        const duplicado = equipoActivo?.items?.some(
+                          (it) => it.productoId === p.id
+                        );
                         setItemForm((prev) => ({
                           ...prev,
                           productoId: p.id,
@@ -1361,6 +1469,11 @@ export function OrdenServicioDetalle() {
                         }));
                         setBusquedaProducto(p.nombre);
                         setProductos([]);
+                        if (duplicado) {
+                          setItemError('Este producto ya está registrado. Ajuste la cantidad.');
+                        } else {
+                          setItemError(null);
+                        }
                       }}
                       className={cn(
                         'w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors border-b last:border-b-0 flex items-center justify-between gap-2',

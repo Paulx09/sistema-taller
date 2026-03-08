@@ -464,8 +464,8 @@ export function OrdenesServicioPage() {
         </Popover>
 
         <Button
-          variant="ghost"
-          size="sm"
+          variant="outline"
+          className="h-9 text-sm"
           onClick={() => {
             setFechaDesde(undefined);
             setFechaHasta(undefined);
@@ -473,7 +473,8 @@ export function OrdenesServicioPage() {
           }}
           title="Limpiar filtros"
         >
-          <RotateCcw className="h-4 w-4" />
+          <X className="h-4 w-4 mr-1" />
+          Limpiar
         </Button>
         <Badge variant="outline" className="h-9 px-4 flex items-center">
           Total: {total}
