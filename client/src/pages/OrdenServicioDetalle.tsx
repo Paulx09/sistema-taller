@@ -41,6 +41,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { EstadoBadge } from '@/components/EstadoBadge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { pdf } from '@react-pdf/renderer';
 import { GlobalPDFDoc, EquipoPDFDoc } from '@/pages/OrdenServicioPDF';
 import { ordenServicioService } from '@/services/orden-servicio.service';
@@ -91,18 +101,25 @@ const ESTADO_EQUIPO_CONFIG: Record<
       'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
   },
   CANCELADA: {
-    label: 'Cancelar Orden',
+    label: 'Cancelada',
     icon: <X className="h-3.5 w-3.5" />,
     className:
       'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
   },
 };
 
+function getTransicionLabel(from: EstadoEquipoOrden, to: EstadoEquipoOrden): string {
+  if (to === 'CANCELADA') return 'Cancelar Orden';
+  if (from === 'RECIBIDA' && to === 'EN_REPARACION') return 'Iniciar Reparación';
+  if (from === 'LISTA' && to === 'EN_REPARACION') return 'Volver a Reparación';
+  return ESTADO_EQUIPO_CONFIG[to].label;
+}
+
 /** Transiciones válidas desde un estado de equipo */
 const TRANSICIONES: Record<EstadoEquipoOrden, EstadoEquipoOrden[]> = {
   RECIBIDA: ['EN_REPARACION', 'CANCELADA'],
   EN_REPARACION: ['LISTA', 'CANCELADA'],
-  LISTA: ['CANCELADA'],
+  LISTA: ['EN_REPARACION', 'CANCELADA'],
   CANCELADA: [],
 };
 
@@ -158,6 +175,12 @@ export function OrdenServicioDetalle() {
 
   // cambio de estado del equipo
   const [cambiandoEstadoEquipo, setCambiandoEstadoEquipo] = useState(false);
+  const [confirmEstado, setConfirmEstado] = useState<{
+    open: boolean;
+    estado: EstadoEquipoOrden | null;
+    titulo: string;
+    descripcion: string;
+  }>({ open: false, estado: null, titulo: '', descripcion: '' });
 
   // técnico
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -278,6 +301,24 @@ export function OrdenServicioDetalle() {
       //
     } finally {
       setGuardandoEquipo(false);
+    }
+  }
+
+  function handleSolicitarCambioEstado(sig: EstadoEquipoOrden) {
+    const estadoActual = equipoActivo?.estado;
+    const necesitaConfirm =
+      sig === 'CANCELADA' ||
+      (sig === 'EN_REPARACION' && estadoActual === 'RECIBIDA');
+    if (necesitaConfirm) {
+      const titulo =
+        sig === 'CANCELADA' ? '¿Cancelar este equipo?' : '¿Iniciar la reparación?';
+      const descripcion =
+        sig === 'CANCELADA'
+          ? 'Esta acción no se puede deshacer. El equipo quedará cancelado permanentemente.'
+          : '¿Estás seguro de que deseas iniciar la reparación de este equipo?';
+      setConfirmEstado({ open: true, estado: sig, titulo, descripcion });
+    } else {
+      handleCambiarEstadoEquipo(sig);
     }
   }
 
@@ -801,13 +842,13 @@ export function OrdenServicioDetalle() {
                           size="sm"
                           variant={sig === 'CANCELADA' ? 'destructive' : 'default'}
                           disabled={cambiandoEstadoEquipo}
-                          onClick={() => handleCambiarEstadoEquipo(sig)}
+                          onClick={() => handleSolicitarCambioEstado(sig)}
                           className="text-xs"
                         >
                           {cambiandoEstadoEquipo && (
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                           )}
-                          {ESTADO_EQUIPO_CONFIG[sig].label}
+                          {getTransicionLabel(equipoActivo.estado, sig)}
                         </Button>
                       ))}
                     </div>
@@ -1702,6 +1743,40 @@ export function OrdenServicioDetalle() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* DIALOG: Confirmación cambio de estado */}
+      <AlertDialog
+        open={confirmEstado.open}
+        onOpenChange={(open) =>
+          setConfirmEstado((prev) => ({ ...prev, open }))
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmEstado.titulo}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmEstado.descripcion}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                confirmEstado.estado === 'CANCELADA'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : undefined
+              }
+              onClick={() => {
+                if (confirmEstado.estado) {
+                  handleCambiarEstadoEquipo(confirmEstado.estado);
+                }
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
