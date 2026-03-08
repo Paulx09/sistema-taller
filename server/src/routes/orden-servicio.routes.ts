@@ -47,6 +47,9 @@ router.patch('/:id/equipos/:equipoOrdenId/estado', ordenServicioValidator.valida
 // POST /api/ordenes-servicio/:id/equipos/:equipoOrdenId/items
 router.post('/:id/equipos/:equipoOrdenId/items', ordenServicioValidator.validateId, ordenServicioValidator.agregarItem, ordenServicioController.agregarItem.bind(ordenServicioController));
 
+// PATCH /api/ordenes-servicio/:id/items/:itemId (actualizar cantidad)
+router.patch('/:id/items/:itemId', ordenServicioValidator.validateId, ordenServicioValidator.actualizarItem, ordenServicioController.actualizarItemCantidad.bind(ordenServicioController));
+
 // DELETE /api/ordenes-servicio/:id/items/:itemId
 router.delete('/:id/items/:itemId', ordenServicioValidator.validateId, ordenServicioController.quitarItem.bind(ordenServicioController));
 
