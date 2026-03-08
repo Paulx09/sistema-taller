@@ -220,7 +220,7 @@ class OrdenServicioService {
                 producto: {
                   select: {
                     id: true, nombre: true, marca: true, modelo: true,
-                    sku: true, esServicio: true, imagenUrl: true,
+                    sku: true, esServicio: true, imagenUrl: true, stockActual: true,
                   },
                 },
               },
@@ -602,6 +602,85 @@ class OrdenServicioService {
             ordenServicioId: ordenId,
           },
         });
+      }
+
+      await this.recalcularTotalesEquipo(tx, item.equipoOrdenId);
+      await this.recalcularTotalesOrden(tx, ordenId);
+    });
+
+    return this.obtenerPorId(ordenId);
+  }
+
+  // PATCH /api/ordenes-servicio/:id/items/:itemId (actualizar cantidad)
+
+  async actualizarItemCantidad(ordenId: string, itemId: string, nuevaCantidad: number, usuarioId: string) {
+    const orden = await prisma.ordenServicio.findFirst({ where: { id: ordenId, deletedAt: null } });
+    if (!orden) throw new Error('Orden de servicio no encontrada');
+
+    if (orden.estado === 'ENTREGADA' || orden.estado === 'CANCELADA') {
+      throw new Error(`No se puede modificar items de una orden en estado ${orden.estado}`);
+    }
+
+    const item = await prisma.itemOrden.findFirst({
+      where: { id: itemId },
+      include: {
+        equipoOrden: { select: { ordenId: true, estado: true } },
+        producto: { select: { esServicio: true, stockActual: true, nombre: true } },
+      },
+    });
+    if (!item || item.equipoOrden.ordenId !== ordenId) {
+      throw new Error('Item no encontrado en esta orden');
+    }
+
+    const oldCantidad = item.cantidad;
+    const diff = nuevaCantidad - oldCantidad;
+
+    if (!item.producto.esServicio && diff > 0 && item.producto.stockActual < diff) {
+      throw new Error(
+        `Stock insuficiente para "${item.producto.nombre}". Disponible: ${item.producto.stockActual}, adicional requerido: ${diff}`,
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const subtotal = new Prisma.Decimal(item.precioUnitario.toString()).mul(nuevaCantidad);
+
+      await tx.itemOrden.update({
+        where: { id: itemId },
+        data: { cantidad: nuevaCantidad, subtotal },
+      });
+
+      if (!item.producto.esServicio && diff !== 0) {
+        if (diff > 0) {
+          await tx.producto.update({
+            where: { id: item.productoId },
+            data: { stockActual: { decrement: diff } },
+          });
+          await tx.movimientoStock.create({
+            data: {
+              productoId: item.productoId,
+              usuarioId,
+              tipo: 'SALIDA',
+              cantidad: diff,
+              motivo: `Ajuste cantidad en ${this.formatCodigo(orden.codigoCorrelativo, orden.fechaEmision)}`,
+              ordenServicioId: ordenId,
+            },
+          });
+        } else {
+          await tx.producto.update({
+            where: { id: item.productoId },
+            data: { stockActual: { increment: -diff } },
+          });
+          await tx.movimientoStock.create({
+            data: {
+              productoId: item.productoId,
+              usuarioId,
+              tipo: 'ENTRADA',
+              cantidad: -diff,
+              motivo: `Ajuste cantidad en ${this.formatCodigo(orden.codigoCorrelativo, orden.fechaEmision)}`,
+              ordenServicioId: ordenId,
+            },
+          });
+        }
       }
 
       await this.recalcularTotalesEquipo(tx, item.equipoOrdenId);

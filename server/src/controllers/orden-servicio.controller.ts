@@ -266,6 +266,31 @@ class OrdenServicioController {
     }
   }
 
+  // PATCH /api/ordenes-servicio/:id/items/:itemId  (actualizar cantidad)
+  async actualizarItemCantidad(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id, itemId } = req.params as Record<string, string>;
+      const { cantidad } = req.body;
+      const usuarioId = req.userId!;
+
+      const orden = await ordenServicioService.actualizarItemCantidad(id, itemId, cantidad, usuarioId);
+
+      res.json({
+        success: true,
+        data: orden,
+        mensaje: 'Cantidad actualizada exitosamente',
+      });
+    } catch (error: any) {
+      if (error.message.includes('no encontrada') || error.message.includes('no encontrado')) {
+        return res.status(404).json({ success: false, error: error.message });
+      }
+      if (error.message.includes('Stock insuficiente') || error.message.includes('No se puede modificar')) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
+      next(error);
+    }
+  }
+
   // PATCH /api/ordenes-servicio/:id/estado  (solo ENTREGADA)
   async cambiarEstado(req: Request, res: Response, next: NextFunction) {
     try {

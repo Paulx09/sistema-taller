@@ -54,6 +54,11 @@ const agregarItemSchema = z.object({
   precioUnitario: z.number().positive('El precio unitario debe ser positivo'),
 });
 
+// Actualizar cantidad de ítem
+const actualizarItemSchema = z.object({
+  cantidad: z.number().int().positive('La cantidad debe ser un entero positivo'),
+});
+
 // Cambiar estado global de la orden (solo ENTREGADA)
 const cambiarEstadoSchema = z.object({
   estado: z.literal('ENTREGADA', { error: 'Solo se puede cambiar el estado global a ENTREGADA' }),
@@ -107,6 +112,7 @@ export const ordenServicioValidator = {
   actualizarEquipo: validate(actualizarEquipoSchema),
   cambiarEstadoEquipo: validate(cambiarEstadoEquipoSchema),
   agregarItem: validate(agregarItemSchema),
+  actualizarItem: validate(actualizarItemSchema),
   cambiarEstado: validate(cambiarEstadoSchema),
   validateId,
 };
