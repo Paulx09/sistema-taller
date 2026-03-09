@@ -34,6 +34,7 @@ import { listarProveedores } from '@/services/proveedor.service';
 import { productoService } from '@/services/producto.service';
 import { SugerenciasPrecioModal } from '@/components/SugerenciasPrecioModal';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
+import { ProveedorCombobox } from '@/components/forms/ProveedorCombobox';
 import api from '@/services/api';
 import type { Producto, Proveedor, Compra, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
 import { format } from 'date-fns';
@@ -579,21 +580,12 @@ export function ComprasPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">Proveedor *</label>
-                <Select value={proveedorId} onValueChange={setProveedorId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleccione proveedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {proveedores.map((prov) => (
-                      <SelectItem key={prov.id} value={prov.id}>
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          {prov.nombreEmpresa}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ProveedorCombobox
+                  value={proveedorId}
+                  onChange={setProveedorId}
+                  proveedores={proveedores}
+                  onProveedorCreado={(prov) => setProveedores((prev) => [...prev, prov])}
+                />
               </div>
 
               <div>
