@@ -262,7 +262,11 @@ model ProductoSerie {
   compra       Compra?      @relation(fields: [compraId], references: [id], onDelete: SetNull)
   ventaId      String?      @map("venta_id")
   venta        Venta?       @relation(fields: [ventaId], references: [id], onDelete: SetNull)
-  
+
+  // Snapshot de garantías en el momento del evento (inmutable, no se altera si se edita el producto)
+  garantiaProveedorMeses  Int?      @map("garantia_proveedor_meses")
+  garantiaClienteMeses    Int?      @map("garantia_cliente_meses")
+
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
   
