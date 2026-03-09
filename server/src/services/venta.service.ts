@@ -194,11 +194,11 @@ class VentaService {
       let gananciaTotal = new Prisma.Decimal(0);
 
       // Pre-cargar productos para cálculos y snapshot
-      const productosMap = new Map<string, { precioCompra: Prisma.Decimal; nombre: string; esServicio: boolean }>();
+      const productosMap = new Map<string, { precioCompra: Prisma.Decimal; nombre: string; esServicio: boolean; garantiaClienteMeses: number }>();
       for (const detalle of detalles) {
         const producto = await tx.producto.findUniqueOrThrow({
           where: { id: detalle.productoId },
-          select: { precioCompra: true, nombre: true, esServicio: true },
+          select: { precioCompra: true, nombre: true, esServicio: true, garantiaClienteMeses: true },
         });
         productosMap.set(detalle.productoId, producto);
       }
@@ -243,7 +243,7 @@ class VentaService {
           },
         });
 
-        // Marcar series como VENDIDO si el producto las requiere
+        // Marcar series como VENDIDO con snapshot de garantía del cliente
         if (detalle.numerosSerie && detalle.numerosSerie.length > 0) {
           for (const numeroSerie of detalle.numerosSerie) {
             await tx.productoSerie.updateMany({
@@ -255,6 +255,7 @@ class VentaService {
               data: {
                 estado: 'VENDIDO',
                 ventaId: nuevaVenta.id,
+                garantiaClienteMeses: producto.garantiaClienteMeses,
               },
             });
           }

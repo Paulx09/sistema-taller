@@ -206,6 +206,7 @@ class CompraService {
             precioCompra: true,
             precioVenta: true,
             margenReferencia: true,
+            garantiaProveedorMeses: true,
           },
         });
 
@@ -379,13 +380,14 @@ class CompraService {
             );
           }
 
-          // Registrar cada número de serie
+          // Registrar cada número de serie con snapshot de garantía del proveedor
           await tx.productoSerie.createMany({
             data: detalle.numerosSerie.map((ns) => ({
               productoId: detalle.productoId,
               compraId: nuevaCompra.id,
               numeroSerie: ns.trim().toUpperCase(),
               estado: 'DISPONIBLE' as const,
+              garantiaProveedorMeses: productoActual.garantiaProveedorMeses,
             })),
           });
         }

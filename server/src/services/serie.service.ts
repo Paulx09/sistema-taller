@@ -288,12 +288,14 @@ export const serieService = {
     }
 
     // Garantía del cliente (desde la venta)
+    // Usa el snapshot de la serie - fallback al producto para series registradas antes del fix
+    const mesesCliente = serie.garantiaClienteMeses ?? serie.producto.garantiaClienteMeses;
     let garantiaCliente = null;
-    if (serie.venta && serie.producto.garantiaClienteMeses > 0) {
+    if (serie.venta && mesesCliente > 0) {
       const fechaVenta = new Date(serie.venta.fecha);
       const fechaVencimiento = new Date(fechaVenta);
       fechaVencimiento.setMonth(
-        fechaVencimiento.getMonth() + serie.producto.garantiaClienteMeses
+        fechaVencimiento.getMonth() + mesesCliente
       );
 
       const ahora = new Date();
@@ -304,7 +306,7 @@ export const serieService = {
 
       garantiaCliente = {
         vigente,
-        mesesGarantia: serie.producto.garantiaClienteMeses,
+        mesesGarantia: mesesCliente,
         fechaVenta: fechaVenta.toISOString(),
         fechaVencimiento: fechaVencimiento.toISOString(),
         diasRestantes: vigente ? diasRestantes : 0,
@@ -313,12 +315,14 @@ export const serieService = {
     }
 
     // Garantía del proveedor (desde la compra)
+    // Usa el snapshot de la serie - fallback al producto para series registradas antes del fix
+    const mesesProveedor = serie.garantiaProveedorMeses ?? serie.producto.garantiaProveedorMeses;
     let garantiaProveedor = null;
-    if (serie.compra && serie.producto.garantiaProveedorMeses > 0) {
+    if (serie.compra && mesesProveedor > 0) {
       const fechaCompra = new Date(serie.compra.fechaCompra);
       const fechaVencimiento = new Date(fechaCompra);
       fechaVencimiento.setMonth(
-        fechaVencimiento.getMonth() + serie.producto.garantiaProveedorMeses
+        fechaVencimiento.getMonth() + mesesProveedor
       );
 
       const ahora = new Date();
@@ -329,7 +333,7 @@ export const serieService = {
 
       garantiaProveedor = {
         vigente,
-        mesesGarantia: serie.producto.garantiaProveedorMeses,
+        mesesGarantia: mesesProveedor,
         fechaCompra: fechaCompra.toISOString(),
         fechaVencimiento: fechaVencimiento.toISOString(),
         diasRestantes: vigente ? diasRestantes : 0,

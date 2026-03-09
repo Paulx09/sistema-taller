@@ -126,12 +126,26 @@ export class ProductoController {
     try {
       const usuarioId = req.userId as string;
 
-      const producto = await productoService.crear(req.body, usuarioId);
+      // Extraer series retroactivas si existen
+      const { seriesRetroactivas, ...datosProducto } = req.body;
+
+      const producto = await productoService.crear(datosProducto, usuarioId);
+
+      // Si hay series retroactivas, registrarlas vinculadas al nuevo producto
+      if (seriesRetroactivas && Array.isArray(seriesRetroactivas) && seriesRetroactivas.length > 0) {
+        try {
+          await serieService.registrarSeriesRetroactivas(producto.id, seriesRetroactivas);
+        } catch (serieError: any) {
+          throw new Error(`Producto creado pero falló el registro de series: ${serieError.message}`);
+        }
+      }
 
       res.status(201).json({
         success: true,
         data: producto,
-        mensaje: 'Producto creado exitosamente',
+        mensaje: seriesRetroactivas?.length > 0
+          ? `Producto creado y ${seriesRetroactivas.length} series registradas exitosamente`
+          : 'Producto creado exitosamente',
       });
     } catch (error) {
       next(error);
