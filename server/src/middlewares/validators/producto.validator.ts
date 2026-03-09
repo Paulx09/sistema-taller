@@ -67,6 +67,7 @@ const crearProductoSchema = z
       .min(0, 'La garantía del cliente no puede ser negativa')
       .default(0)
       .optional(),
+    seriesRetroactivas: z.array(z.string()).optional(),
   })
   .refine((data) => {
     // Permitir precios iguales si ambos son 0 (Crear Producto Rápido)
@@ -142,6 +143,7 @@ const actualizarProductoSchema = z
       .int('La garantía del cliente debe ser un número entero')
       .min(0, 'La garantía del cliente no puede ser negativa')
       .optional(),
+    seriesRetroactivas: z.array(z.string()).optional(),
   })
   .strict() // Rechaza campos no definidos
   .refine(
