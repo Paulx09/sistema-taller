@@ -33,6 +33,7 @@ import { crearCompra, listarCompras, anularCompra } from '@/services/compra.serv
 import { listarProveedores } from '@/services/proveedor.service';
 import { productoService } from '@/services/producto.service';
 import { SugerenciasPrecioModal } from '@/components/SugerenciasPrecioModal';
+import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
 import api from '@/services/api';
 import type { Producto, Proveedor, Compra, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
 import { format } from 'date-fns';
@@ -1082,21 +1083,12 @@ export function ComprasPage() {
               <label className="text-sm font-medium">
                 Categoría <span className="text-destructive">*</span>
               </label>
-              <Select
+              <CategoriaCombobox
                 value={nuevoProducto.categoriaId}
-                onValueChange={(value) => { setNuevoProducto({ ...nuevoProducto, categoriaId: value }); if (erroresProducto.categoriaId) setErroresProducto((p) => ({ ...p, categoriaId: undefined })); }}
-              >
-                <SelectTrigger className={erroresProducto.categoriaId ? 'border-destructive focus:ring-destructive' : ''}>
-                  <SelectValue placeholder="Seleccione categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categorias.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => { setNuevoProducto({ ...nuevoProducto, categoriaId: value }); if (erroresProducto.categoriaId) setErroresProducto((p) => ({ ...p, categoriaId: undefined })); }}
+                categorias={categorias}
+                onCategoriaCreada={(cat) => setCategorias((prev) => [...prev, cat])}
+              />
               {erroresProducto.categoriaId && <p className="text-xs text-destructive">{erroresProducto.categoriaId}</p>}
             </div>
 

@@ -106,7 +106,7 @@ export function ProductosPage() {
     fetchCountPendientes();
   }, [productos]); // Se actualiza cuando cambia la lista de productos
 
-  const { categorias } = useCategorias();
+  const { categorias, refetch: refetchCategorias } = useCategorias();
   const { ubicaciones } = useUbicaciones();
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -236,6 +236,7 @@ export function ProductosPage() {
                           onUpdate={updateProducto}
                           categorias={categorias}
                           ubicaciones={ubicaciones}
+                          onCategoriaCreada={() => refetchCategorias()}
                         />
                     )}
                   </SheetContent>
