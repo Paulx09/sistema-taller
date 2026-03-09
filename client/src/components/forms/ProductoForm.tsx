@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
+import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -122,6 +123,7 @@ interface ProductoFormProps {
   onUpdate: (id: string, data: ActualizarProductoDto | FormData) => Promise<Producto>;
   categorias: Categoria[];
   ubicaciones: Ubicacion[];
+  onCategoriaCreada?: (categoria: { id: string; nombre: string }) => void;
 }
 
 export function ProductoForm({
@@ -131,6 +133,7 @@ export function ProductoForm({
   onUpdate,
   categorias,
   ubicaciones,
+  onCategoriaCreada,
 }: Readonly<ProductoFormProps>) {
   const [esServicio, setEsServicio] = useState(producto?.esServicio || false);
   const [modoMargen, setModoMargen] = useState<boolean>(false); // false = Modo Precio, true = Modo Margen
@@ -510,18 +513,12 @@ export function ProductoForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Categoría *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-background border-border">
-                              <SelectValue placeholder="Seleccionar..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {categorias.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>{cat.nombre}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <CategoriaCombobox
+                          value={field.value}
+                          onChange={field.onChange}
+                          categorias={categorias}
+                          onCategoriaCreada={onCategoriaCreada}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
