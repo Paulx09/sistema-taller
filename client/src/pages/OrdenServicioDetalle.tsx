@@ -674,10 +674,10 @@ export function OrdenServicioDetalle() {
 
   // ── render principal ───────────────────────────────────────────────────────
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="grid grid-cols-[16rem_1fr_24rem] gap-3 p-3 h-[calc(100vh-4rem)]">
 
       {/* SIDEBAR */}
-      <aside className="w-64 shrink-0 flex flex-col border-r bg-card overflow-hidden">
+      <aside className="flex flex-col rounded-xl border bg-card overflow-hidden">
 
         {/* Encabezado OS */}
         <div className="p-4 border-b shrink-0">
@@ -822,10 +822,10 @@ export function OrdenServicioDetalle() {
       </aside>
 
       {/* PANEL CENTRAL */}
-      <main className="flex-1 overflow-y-auto bg-background">
+      <main className="rounded-xl border bg-background overflow-hidden flex flex-col min-h-0">
 
-        {/* Header sticky */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center justify-between gap-4">
+        {/* Header */}
+        <div className="bg-background border-b px-6 py-3 flex items-center justify-between gap-4 shrink-0">
           <div>
             <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
               <Link to="/ordenes-servicio" className="hover:text-foreground transition-colors">
@@ -878,6 +878,7 @@ export function OrdenServicioDetalle() {
           </div>
         </div>
 
+        <div className="overflow-y-auto flex-1">
         {!equipoActivo ? (
           <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
             Selecciona un equipo del panel izquierdo.
@@ -1260,13 +1261,14 @@ export function OrdenServicioDetalle() {
 
           </div>
         )}
+        </div>
       </main>
 
       {/* PANEL DERECHO */}
-      <aside className="w-85 shrink-0 border-l overflow-y-auto bg-card">
+      <aside className="rounded-xl border bg-card overflow-hidden flex flex-col min-h-0">
 
         {/* Header */}
-        <div className="bg-primary text-primary-foreground px-5 py-4 sticky top-0 z-10">
+        <div className="bg-primary text-primary-foreground px-5 py-4 shrink-0">
           <h3 className="font-bold text-base flex items-center gap-2">
             <PackageCheck className="h-4 w-4" />
             Resumen Económico
@@ -1276,7 +1278,7 @@ export function OrdenServicioDetalle() {
           </p>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* Breakdown por equipo */}
           {(orden.equipos ?? []).length > 0 && (
@@ -1322,47 +1324,56 @@ export function OrdenServicioDetalle() {
               <span className="font-semibold">S/ {fmt(subtotalOS)}</span>
             </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Pago a cuenta</span>
-              {editandoPago ? (
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="text"
-                      min="0"
-                      value={pagoInput}
-                      onChange={(e) => {
-                        setPagoInput(e.target.value);
-                        setPagoError(null);
-                      }}
-                      className="h-6 w-24 text-xs text-right"
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleGuardarPago}
-                      disabled={guardandoPago}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      {guardandoPago ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => { setEditandoPago(false); setPagoError(null); }}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  {pagoError && (
-                    <p className="text-[10px] text-destructive max-w-[12rem] text-right leading-tight">{pagoError}</p>
-                  )}
+            {editandoPago ? (
+              <div className="space-y-1.5 rounded-lg border bg-muted/40 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-xs font-medium">Pago a cuenta</span>
+                  <button
+                    onClick={() => { setEditandoPago(false); setPagoError(null); }}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Cancelar"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    min="0"
+                    value={pagoInput}
+                    onChange={(e) => {
+                      setPagoInput(e.target.value);
+                      setPagoError(null);
+                    }}
+                    className="h-8 text-sm text-right flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleGuardarPago();
+                      if (e.key === 'Escape') { setEditandoPago(false); setPagoError(null); }
+                    }}
+                  />
+                  <button
+                    onClick={handleGuardarPago}
+                    disabled={guardandoPago}
+                    className="shrink-0 text-green-600 hover:text-green-700 disabled:opacity-50"
+                    title="Guardar"
+                  >
+                    {guardandoPago ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                {pagoError && (
+                  <p className="text-[10px] text-destructive leading-tight">{pagoError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Pago a cuenta</span>
                 <button
-                  className="font-semibold hover:underline text-sm"
+                  className="font-semibold text-sm flex items-center gap-1.5 group hover:text-primary transition-colors"
                   onClick={() => {
                     setPagoInput(fmt(pagoACuenta));
                     setEditandoPago(true);
@@ -1371,9 +1382,12 @@ export function OrdenServicioDetalle() {
                   title="Clic para editar"
                 >
                   S/ {fmt(pagoACuenta)}
+                  {orden.estado !== 'ENTREGADA' && (
+                    <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                  )}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <Separator />
