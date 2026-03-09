@@ -346,6 +346,8 @@ export interface ProductoSerie {
   estado: EstadoSerie;
   compraId: string | null;
   ventaId: string | null;
+  garantiaProveedorMeses: number | null;
+  garantiaClienteMeses: number | null;
   createdAt: string;
   updatedAt: string;
   producto?: Producto;

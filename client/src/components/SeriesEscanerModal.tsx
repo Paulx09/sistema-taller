@@ -109,14 +109,6 @@ export const SeriesEscanerModal = ({
       const nuevasSeries = [...series, serieTrimmed];
       setSeries(nuevasSeries);
       setSerieActual('');
-
-      // Si completamos todas las series, llamar al callback automáticamente
-      if (nuevasSeries.length === cantidad) {
-        setTimeout(() => {
-          onSeriesCompletas(nuevasSeries);
-          onClose();
-        }, 500);
-      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al validar el número de serie');
     } finally {

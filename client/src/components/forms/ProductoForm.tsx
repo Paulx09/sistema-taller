@@ -143,6 +143,10 @@ export function ProductoForm({
   // Estados para modal de series retroactivas
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
   const [seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
+  // Ref síncrono para evitar stale closures al verificar series escaneadas
+  const seriesRetroactivasRef = useRef<string[]>([]);
+  // Guarda los datos del form cuando hay que escanear antes de guardar (nuevo producto)
+  const pendingSubmitRef = useRef<ProductoFormValues | null>(null);
   const prevRequiereSerieRef = useRef<boolean>(producto?.requiereSerie || false);
 
   const form = useForm<ProductoFormValues>({
@@ -278,16 +282,14 @@ export function ProductoForm({
   }, [producto, form]);
 
   const onSubmit = async (data: ProductoFormValues) => {
+    // NUEVO PRODUCTO: Si requiere serie y tiene stock inicial, abrir escáner ANTES de guardar
+    if (!producto && data.requiereSerie && Number.parseInt(data.stockActual || '0') > 0 && seriesRetroactivasRef.current.length === 0) {
+      pendingSubmitRef.current = data;
+      setSeriesModalOpen(true);
+      return; // Esperar a que se completen las series; handleSeriesCompletas re-lanzará el guardado
+    }
+
     try {
-      // Validar que si se activó requiereSerie con stock, se hayan registrado las series
-      if (producto && data.requiereSerie && !prevRequiereSerieRef.current) {
-        const stockActual = producto.stockActual || 0;
-        if (stockActual > 0 && seriesRetroactivas.length === 0) {
-          alert(`Este producto tiene ${stockActual} unidades en stock. Debe registrar sus números de serie antes de guardar.`);
-          return;
-        }
-      }
-      
       // Crear FormData para enviar archivo
       const formData = new FormData();
       
@@ -320,9 +322,9 @@ export function ProductoForm({
       formData.append('garantiaClienteMeses', data.garantiaClienteMeses || '0');
       if (data.padreId) formData.append('padreId', data.padreId);
       
-      // Agregar series retroactivas si existen
-      if (seriesRetroactivas.length > 0) {
-        formData.append('seriesRetroactivas', JSON.stringify(seriesRetroactivas));
+      // Agregar series retroactivas usando el ref (evita stale closures)
+      if (seriesRetroactivasRef.current.length > 0) {
+        formData.append('seriesRetroactivas', JSON.stringify(seriesRetroactivasRef.current));
       }
       
       // Agregar archivo si existe (solo si la funcionalidad está habilitada)
@@ -340,6 +342,7 @@ export function ProductoForm({
       form.reset();
       setImagenFile(null);
       setPreviewUrl(null);
+      seriesRetroactivasRef.current = [];
       setSeriesRetroactivas([]);
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -347,8 +350,16 @@ export function ProductoForm({
   };
 
   const handleSeriesCompletas = (series: string[]) => {
+    // Actualizar ref síncronamente para evitar stale closures
+    seriesRetroactivasRef.current = series;
     setSeriesRetroactivas(series);
     setSeriesModalOpen(false);
+
+    // Si había un submit pendiente (nuevo producto esperando escaneo), re-lanzar guardado
+    if (pendingSubmitRef.current !== null) {
+      pendingSubmitRef.current = null;
+      form.handleSubmit(onSubmit)();
+    }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -930,20 +941,22 @@ export function ProductoForm({
         </div>
       </form>
 
-      {/* Modal para registrar series retroactivas */}
-      {producto && seriesModalOpen && (
+      {/* Modal para registrar series retroactivas (nuevo producto o edición con stock existente) */}
+      {seriesModalOpen && (
         <SeriesEscanerModal
           isOpen={seriesModalOpen}
           onClose={() => {
             setSeriesModalOpen(false);
-            // Si cierra sin completar, desactivar requiereSerie
-            if (seriesRetroactivas.length === 0) {
+            pendingSubmitRef.current = null; // Cancelar submit pendiente si lo hay
+            // Solo desactivar requiereSerie si el usuario cerró sin completar el escaneo
+            // Usar ref en lugar de state para evitar stale closures
+            if (seriesRetroactivasRef.current.length === 0) {
               form.setValue('requiereSerie', false);
               prevRequiereSerieRef.current = false;
             }
           }}
-          productoNombre={producto.nombre}
-          cantidad={producto.stockActual}
+          productoNombre={producto?.nombre ?? form.getValues('nombre')}
+          cantidad={producto ? producto.stockActual : Number.parseInt(form.getValues('stockActual') || '0')}
           onSeriesCompletas={handleSeriesCompletas}
           modo="compra"
         />
