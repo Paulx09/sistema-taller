@@ -455,8 +455,8 @@ export function VentasPage() {
                   className={cn(
                     'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                     !categoriaFiltro
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-background text-muted-foreground border border-border hover:bg-muted'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted text-foreground border border-border hover:bg-muted/70'
                   )}
                 >
                   Todos
@@ -468,8 +468,8 @@ export function VentasPage() {
                     className={cn(
                       'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                       cat.id === categoriaFiltro
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'bg-background text-muted-foreground border border-border hover:bg-muted'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted text-foreground border border-border hover:bg-muted/70'
                     )}
                   >
                     {cat.nombre}
