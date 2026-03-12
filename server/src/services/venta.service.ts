@@ -23,6 +23,22 @@ interface FiltrosVenta {
 }
 
 class VentaService {
+  // Helpers
+
+  private formatCodigo(correlativo: number, fecha: Date): string {
+    const year = fecha.getFullYear();
+    return `VTA-${year}-${String(correlativo).padStart(4, '0')}`;
+  }
+
+  private async nextCorrelativo(tx: Prisma.TransactionClient, anio: number): Promise<number> {
+    const ultimo = await tx.venta.findFirst({
+      where: { anioCorrelativo: anio },
+      orderBy: { codigoCorrelativo: 'desc' },
+      select: { codigoCorrelativo: true },
+    });
+    return (ultimo?.codigoCorrelativo ?? 0) + 1;
+  }
+
   // GET /api/ventas — lista paginada con filtros
   async listar(filtros: FiltrosVenta = {}) {
     const { desde, hasta, skip = 0, take = 50 } = filtros;
@@ -67,7 +83,13 @@ class VentaService {
       prisma.venta.count({ where }),
     ]);
 
-    return { ventas, total };
+    return {
+      ventas: ventas.map((v) => ({
+        ...v,
+        codigoFormateado: this.formatCodigo(v.codigoCorrelativo, v.fecha),
+      })),
+      total,
+    };
   }
 
   // GET /api/ventas/hoy — ventas del día actual (para Dashboard)
@@ -110,7 +132,10 @@ class VentaService {
       throw new Error('Venta no encontrada');
     }
 
-    return venta;
+    return {
+      ...venta,
+      codigoFormateado: this.formatCodigo(venta.codigoCorrelativo, venta.fecha),
+    };
   }
 
   // POST /api/ventas — crear venta con transacción ACID
@@ -215,8 +240,14 @@ class VentaService {
       }
 
       // 2a. Crear la Venta
+      const ahora = new Date();
+      const anio = ahora.getFullYear();
+      const correlativo = await this.nextCorrelativo(tx, anio);
+
       const nuevaVenta = await tx.venta.create({
         data: {
+          codigoCorrelativo: correlativo,
+          anioCorrelativo: anio,
           usuarioId,
           clienteNombre: clienteNombre || null,
           metodoPago,
@@ -278,7 +309,7 @@ class VentaService {
               usuarioId,
               tipo: 'SALIDA',
               cantidad: detalle.cantidad,
-              motivo: `Venta #${nuevaVenta.codigoCorrelativo}`,
+              motivo: `Venta ${this.formatCodigo(nuevaVenta.codigoCorrelativo, nuevaVenta.fecha)}`,
             },
           });
         }
