@@ -43,6 +43,8 @@ export const dashboardService = {
         gananciaHoy: 0,
         productosStockBajo: 0,
         productosSinMovimiento: 0,
+        ordenesActivas: 0,
+        ordenesDetalle: { recibidas: 0, enReparacion: 0, listas: 0 },
       };
     }
   },
