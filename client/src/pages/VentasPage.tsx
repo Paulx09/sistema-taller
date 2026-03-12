@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon, QrCode, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon, QrCode, AlertTriangle, FileDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { crearVenta, listarVentasHoy, listarVentas } from '@/services/venta.service';
+import { crearVenta, listarVentasHoy, listarVentas, obtenerVenta } from '@/services/venta.service';
+import { pdf } from '@react-pdf/renderer';
+import { VentaPDFDoc } from '@/pages/VentaPDF';
 import api from '@/services/api';
 import type { Producto, Venta, DetalleVenta } from '@/types';
 import { cn } from '@/lib/utils';
@@ -84,6 +86,9 @@ export function VentasPage() {
   const [ventasHoy, setVentasHoy] = useState<Venta[]>([]);
   const [cargandoVentas, setCargandoVentas] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
+
+  // PDF descarga
+  const [descargandoPDFId, setDescargandoPDFId] = useState<string | null>(null);
 
   // Historial completo state
   const [ventasHistorial, setVentasHistorial] = useState<Venta[]>([]);
@@ -316,6 +321,27 @@ export function VentasPage() {
   const hayItemsEnPerdida = carrito.some(
     (i) => Number(i.precioUnitario) < Number(i.producto.precioCompra)
   );
+
+  // Descargar PDF de venta
+  const handleDescargarPDF = async (ventaId: string, codigo: number) => {
+    setDescargandoPDFId(ventaId);
+    try {
+      const r = await obtenerVenta(ventaId);
+      const blob = await pdf(<VentaPDFDoc venta={r.data} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `VTA-${String(codigo).padStart(5, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo generar el PDF.', variant: 'destructive' });
+    } finally {
+      setDescargandoPDFId(null);
+    }
+  };
 
   // Finalizar venta
   const finalizarVenta = async () => {
@@ -922,6 +948,20 @@ export function VentasPage() {
                               </tr>
                             </tfoot>
                           </table>
+                          <div className="flex justify-end mt-3 pt-3 border-t border-border">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs h-8"
+                              disabled={descargandoPDFId === venta.id}
+                              onClick={() => handleDescargarPDF(venta.id, venta.codigoCorrelativo)}
+                            >
+                              {descargandoPDFId === venta.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <FileDown className="h-3.5 w-3.5" />}
+                              Descargar PDF
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1159,6 +1199,20 @@ export function VentasPage() {
                                 </tr>
                               </tfoot>
                             </table>
+                            <div className="flex justify-end mt-3 pt-3 border-t border-border">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs h-8"
+                                disabled={descargandoPDFId === venta.id}
+                                onClick={() => handleDescargarPDF(venta.id, venta.codigoCorrelativo)}
+                              >
+                                {descargandoPDFId === venta.id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <FileDown className="h-3.5 w-3.5" />}
+                                Descargar PDF
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
