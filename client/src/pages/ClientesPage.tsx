@@ -630,8 +630,8 @@ export function ClientesPage() {
                           variant="ghost"
                           className="h-7 w-7 hover:text-destructive"
                           onClick={() => setDeleteEquipoId(equipo.id)}
-                          disabled={(equipo._count?.ordenes ?? 0) > 0}
-                          title={(equipo._count?.ordenes ?? 0) > 0 ? 'Tiene órdenes asociadas' : 'Eliminar equipo'}
+                          disabled={(equipo._count?.equiposOrdenes ?? 0) > 0}
+                          title={(equipo._count?.equiposOrdenes ?? 0) > 0 ? 'Tiene órdenes asociadas' : 'Eliminar equipo'}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
