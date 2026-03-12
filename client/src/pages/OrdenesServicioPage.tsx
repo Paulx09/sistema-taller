@@ -48,7 +48,6 @@ import {
   Wrench,
   Trash2,
   ExternalLink,
-  RotateCcw,
   User,
   Laptop,
   Calendar as CalendarIcon,
