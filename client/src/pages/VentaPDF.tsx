@@ -307,7 +307,7 @@ export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
           <View>
             <Text style={s.headerBrand}>SERVICIO TÉCNICO</Text>
             <Text style={s.headerBrandAccent}>José Gálvez</Text>
-            <Text style={s.headerServices}>Impresoras  •  Suministros  •  Soporte Técnico  •  Redes</Text>
+            <Text style={s.headerServices}>Venta y Soporte Técnico  •  Impresoras y Suministros  •  Servidores y Redes</Text>
             <Text style={s.headerContact}>Av. Lima 961 - José Gálvez - V.M.T</Text>
             <Text style={s.headerContact}>Cel: 960140558 - 960140542</Text>
           </View>
