@@ -1,0 +1,360 @@
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+import { productoService } from '@/services/producto.service';
+import type { Producto, AjustarStockDto } from '@/types';
+import { SeriesEscanerModal } from './SeriesEscanerModal';
+import { SeriesSeleccionModal } from './SeriesSeleccionModal';
+
+const ajustarStockSchema = z.object({
+  tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE'], {
+    message: 'Seleccione un tipo de movimiento',
+  }),
+  cantidad: z.number({ message: 'La cantidad es requerida' }).int().positive(),
+  motivo: z
+    .string()
+    .max(255, 'El motivo no puede exceder 255 caracteres')
+    .optional()
+    .or(z.literal('')),
+});
+
+type AjustarStockFormValues = z.infer<typeof ajustarStockSchema>;
+
+interface AjustarStockDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  producto: Producto;
+  onSuccess: () => void;
+}
+
+export function AjustarStockDialog({
+  open,
+  onOpenChange,
+  producto,
+  onSuccess,
+}: Readonly<AjustarStockDialogProps>) {
+  const [error, setError] = useState<string | null>(null);
+  
+  // Estados para manejo de series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [seriesSeleccionModalOpen, setSeriesSeleccionModalOpen] = useState(false);
+  const [ajustePendiente, setAjustePendiente] = useState<AjustarStockFormValues | null>(null);
+  
+  const form = useForm<AjustarStockFormValues>({
+    resolver: zodResolver(ajustarStockSchema),
+    defaultValues: {
+      tipo: 'ENTRADA',
+      cantidad: 1,
+      motivo: '',
+    },
+  });
+
+  // Limpiar error cuando se abre/cierra el diálogo
+  useEffect(() => {
+    if (!open) {
+      setError(null);
+      setAjustePendiente(null);
+      setSeriesModalOpen(false);
+      setSeriesSeleccionModalOpen(false);
+      form.reset();
+    }
+  }, [open, form]);
+
+  const ejecutarAjuste = async (data: AjustarStockFormValues, series?: string[]) => {
+    setError(null);
+    try {
+      const payload: AjustarStockDto = {
+        tipo: data.tipo,
+        cantidad: data.cantidad,
+        motivo: data.motivo || '',
+        numerosSerie: series,
+      };
+
+      await productoService.ajustarStock(producto.id, payload);
+      onSuccess();
+      form.reset();
+      setAjustePendiente(null);
+      onOpenChange(false);
+    } catch (err: unknown) {
+      console.error('Error al ajustar stock:', err);
+      
+      // Extraer mensaje de error del servidor
+      const error = err as { response?: { data?: { error?: string; details?: Array<{ campo: string; mensaje: string }> } } };
+      
+      if (error.response?.data?.details && Array.isArray(error.response.data.details)) {
+        const mensajes = error.response.data.details.map((d) => d.mensaje).join(', ');
+        setError(mensajes);
+      } else if (error.response?.data?.error) {
+        setError(error.response.data.error);
+      } else {
+        setError('Error al ajustar el stock. Por favor, intente nuevamente.');
+      }
+    }
+  };
+
+  const onSubmit = async (data: AjustarStockFormValues) => {
+    // Si el producto requiere número de serie
+    if (producto.requiereSerie) {
+      if (data.tipo === 'ENTRADA') {
+        // ENTRADA: abrir modal para escanear series nuevas
+        setAjustePendiente(data);
+        setSeriesModalOpen(true);
+        return;
+      }
+
+      if (data.tipo === 'SALIDA') {
+        // SALIDA: abrir modal para seleccionar series a retirar
+        setAjustePendiente(data);
+        setSeriesSeleccionModalOpen(true);
+        return;
+      }
+
+      if (data.tipo === 'AJUSTE') {
+        // AJUSTE: calcular diferencia y actuar en consecuencia
+        const stockActual = producto.stockActual;
+        const nuevoStock = data.cantidad;
+        const diferencia = nuevoStock - stockActual;
+
+        if (diferencia > 0) {
+          // Ajuste positivo: faltan series, abrir modal para escanear
+          const ajusteModificado = { ...data, cantidad: diferencia, tipo: 'ENTRADA' as const };
+          setAjustePendiente(ajusteModificado);
+          setSeriesModalOpen(true);
+          return;
+        } else if (diferencia < 0) {
+          // Ajuste negativo: sobran series, abrir modal para seleccionar cuáles retirar
+          const ajusteModificado = { ...data, cantidad: Math.abs(diferencia), tipo: 'SALIDA' as const };
+          setAjustePendiente(ajusteModificado);
+          setSeriesSeleccionModalOpen(true);
+          return;
+        }
+        // Si diferencia === 0, continuar con ajuste normal (no hace nada)
+      }
+    }
+
+    // Si no requiere serie o diferencia es 0, ejecutar ajuste directo
+    await ejecutarAjuste(data);
+  };
+
+  const handleSeriesCompletas = (series: string[]) => {
+    setSeriesModalOpen(false);
+    
+    // Ejecutar el ajuste pendiente con las series escaneadas
+    if (ajustePendiente) {
+      ejecutarAjuste(ajustePendiente, series);
+    }
+  };
+
+  const handleSeriesSeleccionadas = (series: string[]) => {
+    setSeriesSeleccionModalOpen(false);
+    
+    // Ejecutar el ajuste pendiente con las series seleccionadas
+    if (ajustePendiente) {
+      ejecutarAjuste(ajustePendiente, series);
+    }
+  };
+
+  const tipoSeleccionado = form.watch('tipo');
+  const cantidadSeleccionada = form.watch('cantidad');
+
+  const calcularNuevoStock = () => {
+    const stockActual = producto.stockActual;
+    switch (tipoSeleccionado) {
+      case 'ENTRADA':
+        return stockActual + cantidadSeleccionada;
+      case 'SALIDA':
+        return Math.max(0, stockActual - cantidadSeleccionada);
+      case 'AJUSTE':
+        return cantidadSeleccionada;
+      default:
+        return stockActual;
+    }
+  };
+
+  const getCantidadDescripcion = (tipo: string) => {
+    if (tipo === 'AJUSTE') return 'Cantidad exacta a establecer';
+    if (tipo === 'ENTRADA') return 'Cantidad a agregar';
+    return 'Cantidad a restar';
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ajustar Stock</DialogTitle>
+          <DialogDescription>
+            Producto: {producto.nombre} | Stock actual: {producto.stockActual}
+          </DialogDescription>
+        </DialogHeader>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="tipo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Movimiento *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione un tipo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="ENTRADA">Entrada (Agregar stock)</SelectItem>
+                      <SelectItem value="SALIDA">Salida (Reducir stock)</SelectItem>
+                      <SelectItem value="AJUSTE">Ajuste (Establecer cantidad exacta)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="cantidad"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cantidad *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="string"
+                      placeholder="0"
+                      {...field}
+                      onChange={(e) => field.onChange(Number.parseInt(e.target.value, 10) || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {getCantidadDescripcion(tipoSeleccionado)}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="motivo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Motivo</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ej: Compra de nuevo inventario" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="rounded-md bg-muted p-4">
+              <p className="text-sm">
+                <span className="font-medium">Stock actual:</span> {producto.stockActual}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Nuevo stock:</span>{' '}
+                <span
+                  className={
+                    calcularNuevoStock() < producto.stockMinimo
+                      ? 'text-red-600 font-semibold'
+                      : 'text-green-600 font-semibold'
+                  }
+                >
+                  {calcularNuevoStock()}
+                </span>
+              </p>
+              {calcularNuevoStock() < producto.stockMinimo && (
+                <p className="text-xs text-red-600 mt-1">
+                  ⚠️ El nuevo stock estará por debajo del mínimo ({producto.stockMinimo})
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Confirmar
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+    
+    {/* Modal de escaneo de series para ENTRADA */}
+    {ajustePendiente && (
+      <SeriesEscanerModal
+        isOpen={seriesModalOpen}
+        onClose={() => {
+          setSeriesModalOpen(false);
+          setAjustePendiente(null);
+        }}
+        modo="compra"
+        productoNombre={producto.nombre}
+        cantidad={ajustePendiente.cantidad}
+        onSeriesCompletas={handleSeriesCompletas}
+      />
+    )}
+    
+    {/* Modal de selección de series para SALIDA */}
+    {ajustePendiente && (
+      <SeriesSeleccionModal
+        isOpen={seriesSeleccionModalOpen}
+        onClose={() => {
+          setSeriesSeleccionModalOpen(false);
+          setAjustePendiente(null);
+        }}
+        productoId={producto.id}
+        productoNombre={producto.nombre}
+        cantidadRequerida={ajustePendiente.cantidad}
+        onSeriesSeleccionadas={handleSeriesSeleccionadas}
+      />
+    )}
+    </>
+  );
+}

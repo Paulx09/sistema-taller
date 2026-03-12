@@ -1,11 +1,68 @@
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MainLayout } from '@/layouts/MainLayout';
+import { Dashboard } from '@/pages/Dashboard';
+import { UbicacionesPage } from '@/pages/UbicacionesPage';
+import { CategoriasPage } from '@/pages/CategoriasPage';
+import { ProductosPage } from '@/pages/ProductosPage';
+import { VentasPage } from '@/pages/VentasPage';
+import { ProveedoresPage } from '@/pages/ProveedoresPage';
+import { ComprasPage } from '@/pages/ComprasPage';
+import { VerificarGarantiaPage } from '@/pages/VerificarGarantiaPage';
+import { ClientesPage } from '@/pages/ClientesPage';
+import { OrdenesServicioPage } from '@/pages/OrdenesServicioPage';
+import { OrdenServicioDetalle } from '@/pages/OrdenServicioDetalle';
+import { OrdenServicioPDF } from '@/pages/OrdenServicioPDF';
+import { LoginPage } from '@/pages/LoginPage';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ThemeProvider } from "@/components/theme-provider"
+import './App.css';
 
 function App() {
   return (
-    <h1 className="text-3xl font-bold text-green-500">
-      Sistema de Taller + Inventario
-    </h1>
-  )
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <BrowserRouter>
+        <Routes>
+          {/* Ruta pública de login */}
+          <Route path="/login" element={<LoginPage />} />
+          
+          {/* Rutas protegidas */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="ubicaciones" element={<UbicacionesPage />} />
+            <Route path="categorias" element={<CategoriasPage />} />
+            <Route path="productos" element={<ProductosPage />} />
+            <Route path="ventas" element={<VentasPage />} />
+            <Route path="proveedores" element={<ProveedoresPage />} />
+            <Route path="compras" element={<ComprasPage />} />
+            <Route path="verificar-garantia" element={<VerificarGarantiaPage />} />
+            <Route path="clientes" element={<ClientesPage />} />
+            <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
+            <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
+          </Route>
+
+          {/* PDF — standalone, sin layout */}
+          <Route
+            path="ordenes-servicio/:id/pdf"
+            element={
+              <ProtectedRoute>
+                <OrdenServicioPDF />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Ruta por defecto - redirige al dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;

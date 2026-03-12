@@ -1,13 +1,75 @@
 {
   "name": "sistema-taller",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Sistema de gestión para taller técnico",
+  "main": "electron/dist/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:all": "npm run build:server && npm run build:client && npm run build:electron",
+    "clean": "if exist dist-electron rmdir /s /q dist-electron & if exist electron\\dist rmdir /s /q electron\\dist & if exist server\\dist rmdir /s /q server\\dist & if exist client\\dist rmdir /s /q client\\dist",
+    "electron:dev": "electron .",
+    "electron:pack": "npm run build:all && electron-builder",
+    "electron:pack:clean": "npm run clean && npm run electron:pack",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "build": {
+    "appId": "com.taller.sistema",
+    "productName": "Sistema Taller",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/dist/**",
+      "server/dist/**",
+      "server/node_modules/**",
+      "server/prisma/**",
+      "client/dist/**"
+    ],
+    "asarUnpack": [
+      "server/dist/**",
+      "server/node_modules/**",
+      "server/prisma/**"
+    ],
+    "extraResources": [
+      {
+        "from": "client/dist",
+        "to": "client/dist"
+      },
+      {
+        "from": "server/.env",
+        "to": "server.env"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/assets/icon.ico",
+      "uninstallerIcon": "electron/assets/icon.ico",
+      "installerHeaderIcon": "electron/assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sistema Taller"
+    },
+    "extraMetadata": {
+      "main": "electron/dist/main.js"
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^22.0.0"
+  }
 }
+
