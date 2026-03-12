@@ -145,7 +145,7 @@ export function ProductoForm({
   
   // Estados para modal de series retroactivas
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
-  const [seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
+  const [_seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
   // Ref síncrono para evitar stale closures al verificar series escaneadas
   const seriesRetroactivasRef = useRef<string[]>([]);
   // Guarda los datos del form cuando hay que escanear antes de guardar (nuevo producto)
