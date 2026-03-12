@@ -11,6 +11,7 @@ import serieRoutes from './serie.routes';
 import clienteRoutes from './cliente.routes';
 import equipoClienteRoutes from './equipo-cliente.routes';
 import ordenServicioRoutes from './orden-servicio.routes';
+import backupRoutes from './backup.routes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/series', serieRoutes);
 router.use('/clientes', clienteRoutes);
 router.use('/equipos', equipoClienteRoutes);
 router.use('/ordenes-servicio', ordenServicioRoutes);
+router.use('/backup', backupRoutes);
 
 export default router;
