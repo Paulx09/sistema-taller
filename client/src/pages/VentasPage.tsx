@@ -160,7 +160,7 @@ export function VentasPage() {
         const search = busquedaCliente.toLowerCase();
         ventas = ventas.filter(v => 
           v.clienteNombre?.toLowerCase().includes(search) ||
-          v.codigoCorrelativo?.toString().includes(search)
+          v.codigoFormateado?.toLowerCase().includes(search)
         );
       }
       
@@ -320,7 +320,7 @@ export function VentasPage() {
   );
 
   // Descargar PDF de venta
-  const handleDescargarPDF = async (ventaId: string, codigo: number) => {
+  const handleDescargarPDF = async (ventaId: string, codigo: string) => {
     setDescargandoPDFId(ventaId);
     try {
       const r = await obtenerVenta(ventaId);
@@ -328,7 +328,7 @@ export function VentasPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `VTA-${String(codigo).padStart(5, '0')}.pdf`;
+      a.download = `${codigo}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -933,7 +933,7 @@ export function VentasPage() {
                               variant="outline"
                               className="gap-1.5 text-xs h-8"
                               disabled={descargandoPDFId === venta.id}
-                              onClick={() => handleDescargarPDF(venta.id, venta.codigoCorrelativo)}
+                              onClick={() => handleDescargarPDF(venta.id, venta.codigoFormateado)}
                             >
                               {descargandoPDFId === venta.id
                                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1174,7 +1174,7 @@ export function VentasPage() {
                                 variant="outline"
                                 className="gap-1.5 text-xs h-8"
                                 disabled={descargandoPDFId === venta.id}
-                                onClick={() => handleDescargarPDF(venta.id, venta.codigoCorrelativo)}
+                                onClick={() => handleDescargarPDF(venta.id, venta.codigoFormateado)}
                               >
                                 {descargandoPDFId === venta.id
                                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

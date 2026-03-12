@@ -85,6 +85,8 @@ export interface MovimientoStock {
 export interface Venta {
   id: string;
   codigoCorrelativo: number;
+  anioCorrelativo: number;
+  codigoFormateado: string;
   fecha: string;
   usuarioId: string;
   clienteNombre: string | null;

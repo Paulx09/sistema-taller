@@ -26,8 +26,8 @@ function formatDate(iso: string): string {
   });
 }
 
-function formatCodigoVenta(n: number): string {
-  return `VTA-${String(n).padStart(5, '0')}`;
+function formatCodigoVenta(venta: Pick<Venta, 'codigoCorrelativo' | 'anioCorrelativo' | 'codigoFormateado'>): string {
+  return venta.codigoFormateado ?? `VTA-${venta.anioCorrelativo}-${String(venta.codigoCorrelativo).padStart(4, '0')}`;
 }
 
 const METODOS_PAGO_LABEL: Record<string, string> = {
@@ -297,7 +297,7 @@ const s = StyleSheet.create({
 
 export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
   const total = Number.parseFloat(venta.total);
-  const codigo = formatCodigoVenta(venta.codigoCorrelativo);
+  const codigo = formatCodigoVenta(venta);
 
   return (
     <Document>
@@ -445,12 +445,12 @@ export function VentaPDF() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${formatCodigoVenta(venta.codigoCorrelativo)}.pdf`;
+        a.download = `${formatCodigoVenta(venta)}.pdf`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        setCodigo(formatCodigoVenta(venta.codigoCorrelativo));
+        setCodigo(formatCodigoVenta(venta));
         setEstado('descargado');
       })
       .catch(() => setEstado('error'));
