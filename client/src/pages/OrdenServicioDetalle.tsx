@@ -772,15 +772,23 @@ export function OrdenServicioDetalle() {
             </div>
           </div>
           {orden.cliente?.telefono && (
-            <a
-              href={`https://wa.me/51${orden.cliente.telefono.replace(/\D/g, '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-bold transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                const url = `https://wa.me/51${orden.cliente!.telefono!.replace(/\D/g, '')}`;
+                // En Electron usa shell.openExternal (navegador del SO)
+                // En desarrollo usa window.open normal
+                if (typeof window !== 'undefined' && (window as any).electronAPI?.openExternal) {
+                  (window as any).electronAPI.openExternal(url);
+                } else {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-bold transition-colors cursor-pointer"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               WhatsApp
-            </a>
+            </button>
           )}
           <Link
             to="/clientes"
