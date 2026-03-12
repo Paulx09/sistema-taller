@@ -66,6 +66,15 @@ class OrdenServicioService {
     return `OS-${year}-${String(correlativo).padStart(4, '0')}`;
   }
 
+  private async nextCorrelativo(tx: Prisma.TransactionClient, anio: number): Promise<number> {
+    const ultimo = await tx.ordenServicio.findFirst({
+      where: { anioCorrelativo: anio },
+      orderBy: { codigoCorrelativo: 'desc' },
+      select: { codigoCorrelativo: true },
+    });
+    return (ultimo?.codigoCorrelativo ?? 0) + 1;
+  }
+
   /**
    * Recalcula subtotal y ganancia de un EquipoOrden sumando sus items.
    * Debe ejecutarse dentro de una transaccion.
@@ -269,8 +278,14 @@ class OrdenServicioService {
     }
 
     const nuevaOrden = await prisma.$transaction(async (tx) => {
+      const ahora = new Date();
+      const anio = ahora.getFullYear();
+      const correlativo = await this.nextCorrelativo(tx, anio);
+
       const orden = await tx.ordenServicio.create({
         data: {
+          codigoCorrelativo: correlativo,
+          anioCorrelativo: anio,
           clienteId: data.clienteId,
           usuarioRegistroId: data.usuarioRegistroId,
           usuarioTecnicoId: data.usuarioTecnicoId ?? null,
