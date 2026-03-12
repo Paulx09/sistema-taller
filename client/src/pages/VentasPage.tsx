@@ -311,10 +311,7 @@ export function VentasPage() {
   };
 
   // Cálculos
-  // El precio de venta ya incluye IGV. Subtotal = total / 1.18
-  const totalConIgv = carrito.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
-  const subtotalSinIgv = totalConIgv / 1.18;
-  const igv = totalConIgv - subtotalSinIgv;
+  const total = carrito.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
   const gananciaProyectada = carrito.reduce(
     (s, i) => s + (i.precioUnitario - i.producto.precioCompra) * i.cantidad, 0
   );
@@ -759,19 +756,11 @@ export function VentasPage() {
                     )}>{fmt(gananciaProyectada)}</span>
                   </div>
 
-                  {/* Subtotal, IGV, Total */}
+                  {/* Total */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Subtotal (sin IGV)</span>
-                      <span>{fmt(subtotalSinIgv)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>IGV (18%)</span>
-                      <span>{fmt(igv)}</span>
-                    </div>
                     <div className="flex justify-between items-baseline pt-1.5 border-t border-border">
                       <span className="text-lg font-bold">Total a Pagar</span>
-                      <span className="text-2xl font-bold tracking-tight">{fmt(totalConIgv)}</span>
+                      <span className="text-2xl font-bold tracking-tight">{fmt(total)}</span>
                     </div>
                   </div>
                 </>
@@ -856,8 +845,6 @@ export function VentasPage() {
                 {ventasHoy.map((venta) => {
                   const total = parseFloat(venta.total);
                   const ganancia = parseFloat(venta.gananciaTotal);
-                  const subtotalSinIgvV = total / 1.18;
-                  const igvV = total - subtotalSinIgvV;
                   const isExpanded = expandida === venta.id;
 
                   return (
@@ -934,14 +921,6 @@ export function VentasPage() {
                               ))}
                             </tbody>
                             <tfoot className="border-t border-border mt-1">
-                              <tr className="text-xs text-muted-foreground">
-                                <td colSpan={3} className="pt-2 text-right">Subtotal (sin IGV)</td>
-                                <td className="pt-2 text-right">{fmt(subtotalSinIgvV)}</td>
-                              </tr>
-                              <tr className="text-xs text-muted-foreground">
-                                <td colSpan={3} className="text-right">IGV (18%)</td>
-                                <td className="text-right">{fmt(igvV)}</td>
-                              </tr>
                               <tr className="font-bold">
                                 <td colSpan={3} className="pt-1.5 text-right">Total</td>
                                 <td className="pt-1.5 text-right">{fmt(total)}</td>
@@ -1105,8 +1084,6 @@ export function VentasPage() {
                   {ventasHistorial.map((venta) => {
                     const total = parseFloat(venta.total);
                     const ganancia = parseFloat(venta.gananciaTotal);
-                    const subtotalSinIgvV = total / 1.18;
-                    const igvV = total - subtotalSinIgvV;
                     const isExpanded = expandida === venta.id;
 
                     return (
@@ -1185,14 +1162,6 @@ export function VentasPage() {
                                 ))}
                               </tbody>
                               <tfoot className="border-t border-border mt-1">
-                                <tr className="text-xs text-muted-foreground">
-                                  <td colSpan={3} className="pt-2 text-right">Subtotal (sin IGV)</td>
-                                  <td className="pt-2 text-right">{fmt(subtotalSinIgvV)}</td>
-                                </tr>
-                                <tr className="text-xs text-muted-foreground">
-                                  <td colSpan={3} className="text-right">IGV (18%)</td>
-                                  <td className="text-right">{fmt(igvV)}</td>
-                                </tr>
                                 <tr className="font-bold">
                                   <td colSpan={3} className="pt-1.5 text-right">Total</td>
                                   <td className="pt-1.5 text-right">{fmt(total)}</td>

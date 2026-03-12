@@ -297,8 +297,6 @@ const s = StyleSheet.create({
 
 export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
   const total = Number.parseFloat(venta.total);
-  const subtotalSinIgv = total / 1.18;
-  const igv = total - subtotalSinIgv;
   const codigo = formatCodigoVenta(venta.codigoCorrelativo);
 
   return (
@@ -392,15 +390,6 @@ export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
 
           {/* Totales */}
           <View style={s.totalsOuter}>
-            <View style={s.totalRowNormal}>
-              <Text style={s.totalLabel}>Subtotal (sin IGV)</Text>
-              <Text style={s.totalValue}>S/ {fmtNum(subtotalSinIgv)}</Text>
-            </View>
-            <View style={s.totalRowNormal}>
-              <Text style={s.totalLabel}>IGV (18%)</Text>
-              <Text style={s.totalValue}>S/ {fmtNum(igv)}</Text>
-            </View>
-            <View style={s.totalDivider} />
             <View style={s.totalBigRow}>
               <Text style={s.totalBigLabel}>TOTAL</Text>
               <Text style={s.totalBigValue}>S/ {fmtNum(total)}</Text>
