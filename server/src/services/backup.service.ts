@@ -8,7 +8,7 @@
  */
 import path from 'node:path';
 import fs from 'node:fs';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 
 // Helpers
 
@@ -80,7 +80,8 @@ export async function runBackup(): Promise<BackupResult> {
   }
 
   // Construir comando pg_dump
-  // Se usa PGPASSWORD para evitar un prompt interactivo
+  // --clean --if-exists: incluye DROP TABLE IF EXISTS antes de cada CREATE TABLE.
+  // Se usa PGPASSWORD para evitar un prompt interactivo.
   const pgDumpCmd = [
     `pg_dump`,
     `--host=${dbConn.host}`,
@@ -89,6 +90,8 @@ export async function runBackup(): Promise<BackupResult> {
     `--dbname=${dbConn.database}`,
     `--no-password`,
     `--format=plain`,
+    `--clean`,
+    `--if-exists`,
     `--file="${outputFile}"`,
   ].join(' ');
 
@@ -168,5 +171,66 @@ export function cleanOldBackups(keepCount = 30): void {
     } catch {
       // ignorar error de eliminación
     }
+  });
+}
+
+// Restauración
+
+export interface RestoreResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Restaura la base de datos desde un volcado .sql usando psql.
+ * Requiere que psql esté accesible en el PATH (viene con PostgreSQL).
+ */
+export async function runRestore(filePath: string): Promise<RestoreResult> {
+  if (!filePath.endsWith('.sql')) {
+    return { success: false, error: 'El archivo debe tener extensión .sql' };
+  }
+  if (!fs.existsSync(filePath)) {
+    return { success: false, error: 'Archivo no encontrado: ' + filePath };
+  }
+
+  const databaseUrl = process.env['DATABASE_URL'];
+  if (!databaseUrl) {
+    return { success: false, error: 'DATABASE_URL no está definida' };
+  }
+
+  let dbConn: ReturnType<typeof parseDbUrl>;
+  try {
+    dbConn = parseDbUrl(databaseUrl);
+  } catch {
+    return { success: false, error: 'DATABASE_URL con formato inválido' };
+  }
+
+  const args = [
+    `--host=${dbConn.host}`,
+    `--port=${dbConn.port}`,
+    `--username=${dbConn.user}`,
+    `--dbname=${dbConn.database}`,
+    '--no-password',
+    // No abortar ante errores de DROP (ej. si una tabla no existe aún)
+    '--set=ON_ERROR_STOP=off',
+    `--file=${filePath}`,
+  ];
+
+  return new Promise((resolve) => {
+    execFile(
+      'psql',
+      args,
+      {
+        env: { ...process.env, PGPASSWORD: dbConn.password },
+        timeout: 120_000,
+      },
+      (error, _stdout, stderr) => {
+        if (error) {
+          resolve({ success: false, error: stderr?.trim() || error.message });
+          return;
+        }
+        resolve({ success: true });
+      }
+    );
   });
 }

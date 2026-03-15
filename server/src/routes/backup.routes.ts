@@ -7,5 +7,6 @@ const router = Router();
 // Solo usuarios autenticados pueden disparar o consultar backups
 router.post('/ejecutar', requireAuth, backupController.ejecutar);
 router.get('/estado', requireAuth, backupController.estado);
+router.post('/restaurar', requireAuth, backupController.restaurar);
 
 export default router;
