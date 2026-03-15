@@ -8,6 +8,7 @@ interface UseProductosParams {
   categoriaId?: string;
   esServicio?: boolean;
   bajoStock?: boolean;
+  preciosPendientes?: boolean;
   skip?: number;
   take?: number;
 }
@@ -19,7 +20,7 @@ export const useProductos = (params?: UseProductosParams) => {
   const [error, setError] = useState<string | null>(null);
 
   // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { busqueda, categoriaId, esServicio, bajoStock, skip, take } = params || {};
+  const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -30,6 +31,7 @@ export const useProductos = (params?: UseProductosParams) => {
         categoriaId,
         esServicio,
         bajoStock,
+        preciosPendientes,
         skip,
         take,
       });
@@ -41,7 +43,7 @@ export const useProductos = (params?: UseProductosParams) => {
     } finally {
       setLoading(false);
     }
-  }, [busqueda, categoriaId, esServicio, bajoStock, skip, take]);
+  }, [busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take]);
 
   const getProductoById = async (id: string): Promise<Producto> => {
     setLoading(true);
@@ -110,11 +112,11 @@ export const useProductos = (params?: UseProductosParams) => {
     }
   };
 
-  const deleteProducto = async (id: string): Promise<void> => {
+  const deleteProducto = async (id: string, force: boolean = false): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      await productoService.delete(id);
+      await productoService.delete(id, force);
       setProductos((prev) => prev.filter((p) => p.id !== id));
       setTotal((prev) => prev - 1);
     } catch (err) {

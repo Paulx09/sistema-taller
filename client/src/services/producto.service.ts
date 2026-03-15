@@ -13,6 +13,8 @@ interface ProductoBusqueda {
   marca: string | null;
   modelo: string | null;
   stockActual: number;
+  esServicio: boolean;
+  precioVenta: number | string;
 }
 
 // Tipo para el producto que viene del backend con precios como string (Decimal de Prisma)
@@ -37,6 +39,7 @@ const transformProducto = (producto: ProductoRaw): Producto => ({
   padre: producto.padre ? transformProducto(producto.padre) : undefined,
   hijos: producto.hijos?.map(transformProducto),
   movimientos: producto.movimientos,
+  historialCostos: producto.historialCostos, // Mantener historialCostos (costo ya viene como string desde Prisma)
 });
 
 export const productoService = {
@@ -46,6 +49,7 @@ export const productoService = {
     categoriaId?: string;
     esServicio?: boolean;
     bajoStock?: boolean;
+    preciosPendientes?: boolean;
     skip?: number;
     take?: number;
   }): Promise<{ productos: Producto[]; total: number }> {
@@ -64,10 +68,10 @@ export const productoService = {
     return transformProducto(response.data.data);
   },
 
-  // GET /api/productos/buscar?q=...&excludeId=...
-  async buscarParaCombobox(query: string, excludeId?: string): Promise<ProductoBusqueda[]> {
+  // GET /api/productos/buscar?q=...&excludeId=...&incluirServicios=...
+  async buscarParaCombobox(query: string, excludeId?: string, incluirServicios = false): Promise<ProductoBusqueda[]> {
     const response = await api.get<ApiResponse<ProductoBusqueda[]>>('/productos/buscar', {
-      params: { q: query, excludeId },
+      params: { q: query, excludeId, incluirServicios: incluirServicios || undefined },
     });
     return response.data.data;
   },
@@ -96,6 +100,12 @@ export const productoService = {
     return transformProducto(response.data.data);
   },
 
+  // POST /api/productos/rapido (Crear Producto Rápido desde Compras)
+  async createRapido(data: CrearProductoDto): Promise<Producto> {
+    const response = await api.post<ApiResponse<ProductoRaw>>('/productos/rapido', data);
+    return transformProducto(response.data.data);
+  },
+
   // PUT /api/productos/:id
   async update(id: string, data: ActualizarProductoDto | FormData): Promise<Producto> {
     const config = data instanceof FormData ? {
@@ -112,8 +122,21 @@ export const productoService = {
     return transformProducto(response.data.data);
   },
 
+  // PUT /api/productos/actualizar-precios-masivo
+  async actualizarPreciosMasivo(actualizaciones: Array<{ id: string; precioVenta: number }>): Promise<void> {
+    await api.put('/productos/actualizar-precios-masivo', actualizaciones);
+  },
+
   // DELETE /api/productos/:id
-  async delete(id: string): Promise<void> {
-    await api.delete(`/productos/${id}`);
+  async delete(id: string, force: boolean = false): Promise<void> {
+    await api.delete(`/productos/${id}`, {
+      params: { force: force.toString() },
+    });
+  },
+
+  // PUT /api/productos/:id/restaurar
+  async restaurar(id: string): Promise<Producto> {
+    const response = await api.put<ApiResponse<ProductoRaw>>(`/productos/${id}/restaurar`);
+    return transformProducto(response.data.data);
   },
 };

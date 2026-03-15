@@ -75,30 +75,11 @@ export function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Ventas */}
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <p className="text-sm font-medium text-muted-foreground">Ventas de Hoy</p>
-            <span className="material-symbols-outlined text-muted-foreground text-[20px]">payments</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h3 className="text-2xl font-bold text-foreground">{metrics.ventasHoy}</h3>
-            <div className="flex items-center text-xs text-muted-foreground">
-               <span className="text-success font-medium flex items-center mr-1">
-                 <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                 {' '}+0%
-               </span>
-               {' '}vs. ayer
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Ganancia Real */}
+        {/* Card 1: Ganancia Real */}
         <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-           <div className="absolute right-0 top-0 h-24 w-24 bg-gradient-to-br from-primary/5 to-primary/10 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
            <div className="flex justify-between items-start mb-4 relative z-10">
             <p className="text-sm font-medium text-muted-foreground">Ganancia Real Hoy</p>
-            <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
+            <span className="material-symbols-outlined text-muted-foreground text-[20px] group-hover:text-primary transition-colors">account_balance_wallet</span>
           </div>
           <div className="flex flex-col gap-1 relative z-10">
             <h3 className="text-2xl font-bold text-foreground">S/ {metrics.gananciaHoy.toFixed(2)}</h3>
@@ -112,29 +93,47 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Card 3: Reparaciones (Mock por ahora) */}
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
-           <div className="flex justify-between items-start mb-4">
-            <p className="text-sm font-medium text-muted-foreground">Reparaciones Pendientes</p>
-            <span className="material-symbols-outlined text-muted-foreground text-[20px]">build_circle</span>
+        {/* Card 2: Ventas */}
+        <Link to="/ventas" className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow group">
+          <div className="flex justify-between items-start mb-4">
+            <p className="text-sm font-medium text-muted-foreground">Ventas de Hoy</p>
+            <span className="material-symbols-outlined text-muted-foreground text-[20px] group-hover:text-primary transition-colors">payments</span>
           </div>
           <div className="flex flex-col gap-1">
-            <h3 className="text-2xl font-bold text-foreground">0</h3>
+            <h3 className="text-2xl font-bold text-foreground">{metrics.ventasHoy}</h3>
             <div className="flex items-center text-xs text-muted-foreground">
-               <span className="text-warning font-medium flex items-center mr-1">
-                 <span className="material-symbols-outlined text-[14px]">schedule</span>
-                 {' '}0 urgentes
+               <span className="text-success font-medium flex items-center mr-1">
+                 <span className="material-symbols-outlined text-[14px]">trending_up</span>
+                 {' '}+0%
                </span>
-               {' '}en cola
+               {' '}vs. ayer
             </div>
           </div>
-        </div>
+        </Link>
+
+        {/* Card 3: Órdenes de Servicio Activas */}
+        <Link to="/ordenes-servicio" className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow block group">
+           <div className="flex justify-between items-start mb-4">
+            <p className="text-sm font-medium text-muted-foreground">Reparaciones Activas</p>
+            <span className="material-symbols-outlined text-muted-foreground text-[20px] group-hover:text-primary transition-colors">build_circle</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <h3 className="text-2xl font-bold text-foreground">{metrics.ordenesActivas}</h3>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+               <span className="text-blue-500 font-medium">{metrics.ordenesDetalle.recibidas} recibidas</span>
+               <span>·</span>
+               <span className="text-yellow-600 font-medium">{metrics.ordenesDetalle.enReparacion} en proceso</span>
+               <span>·</span>
+               <span className="text-green-600 font-medium">{metrics.ordenesDetalle.listas} listas</span>
+            </div>
+          </div>
+        </Link>
 
         {/* Card 4: Alertas Stock */}
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
+        <Link to="/productos" className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow group">
            <div className="flex justify-between items-start mb-4">
             <p className="text-sm font-medium text-muted-foreground">Alertas de Stock</p>
-            <span className="material-symbols-outlined text-muted-foreground text-[20px]">inventory</span>
+            <span className="material-symbols-outlined text-muted-foreground text-[20px] group-hover:text-primary transition-colors">inventory</span>
           </div>
           <div className="flex flex-col gap-1">
             <h3 className="text-2xl font-bold text-foreground">{metrics.productosStockBajo}</h3>
@@ -146,7 +145,7 @@ export function Dashboard() {
                {' '}reponer pronto
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Content Grid */}

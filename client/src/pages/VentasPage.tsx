@@ -1,16 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, Search, CheckCircle, X, Receipt, History, Loader2, ChevronDown, ChevronUp, Calendar as CalendarIcon, QrCode, AlertTriangle, FileDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { crearVenta, listarVentasHoy, listarVentas } from '@/services/venta.service';
+import { crearVenta, listarVentasHoy, listarVentas, obtenerVenta } from '@/services/venta.service';
+import { pdf } from '@react-pdf/renderer';
+import { VentaPDFDoc } from '@/pages/VentaPDF';
 import api from '@/services/api';
 import type { Producto, Venta, DetalleVenta } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
 
 // Inline mini-toast
 type ToastMsg = { id: number; title: string; description?: string; variant?: 'default' | 'destructive' };
@@ -32,6 +36,7 @@ interface ItemCarrito {
   producto: Producto;
   cantidad: number;
   precioUnitario: number;
+  numerosSerie?: string[]; // Para productos que requieren serie
 }
 
 type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
@@ -70,10 +75,20 @@ export function VentasPage() {
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
   const [procesando, setProcesando] = useState(false);
 
+  // Estados para series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [productoSerieActual, setProductoSerieActual] = useState<{
+    producto: Producto;
+    cantidadRequerida: number;
+  } | null>(null);
+
   // Historial state
   const [ventasHoy, setVentasHoy] = useState<Venta[]>([]);
   const [cargandoVentas, setCargandoVentas] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
+
+  // PDF descarga
+  const [descargandoPDFId, setDescargandoPDFId] = useState<string | null>(null);
 
   // Historial completo state
   const [ventasHistorial, setVentasHistorial] = useState<Venta[]>([]);
@@ -101,7 +116,9 @@ export function VentasPage() {
       if (q) params.busqueda = q;
       if (catId) params.categoriaId = catId;
       const r = await api.get('/productos', { params });
-      setProductos(r.data.data || []);
+      // Filtrar productos sin precio de venta definido (precios pendientes)
+      const productosFiltrados = (r.data.data || []).filter((p: any) => Number(p.precioVenta) > 0);
+      setProductos(productosFiltrados);
     } finally {
       setCargandoProductos(false);
     }
@@ -143,7 +160,7 @@ export function VentasPage() {
         const search = busquedaCliente.toLowerCase();
         ventas = ventas.filter(v => 
           v.clienteNombre?.toLowerCase().includes(search) ||
-          v.codigoCorrelativo?.toString().includes(search)
+          v.codigoFormateado?.toLowerCase().includes(search)
         );
       }
       
@@ -176,15 +193,26 @@ export function VentasPage() {
   const agregarAlCarrito = (p: Producto) => {
     if (!p.esServicio && p.stockActual === 0) return;
 
+    // Bloquear productos cuyo precio de venta está por debajo del CPP
+    if (Number(p.precioVenta) < Number(p.precioCompra)) {
+      toast({
+        title: 'Producto en pérdida',
+        description: `El precio de venta de "${p.nombre}" (${fmt(Number(p.precioVenta))}) es menor al costo (${fmt(Number(p.precioCompra))}). Actualiza el precio antes de venderlo.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const prevCarrito = carritoRef.current;
     const existente = prevCarrito.find((i) => i.producto.id === p.id);
     const maxStock = p.esServicio ? Infinity : p.stockActual;
 
     if (existente && existente.cantidad >= maxStock) {
       toast({ title: 'Stock máximo alcanzado', variant: 'destructive' });
-      return; // No hacemos nada más
+      return;
     }
 
+    // Agregar al carrito normalmente (sin abrir modal)
     setCarritoSync((prev) => {
       const item = prev.find((i) => i.producto.id === p.id);
       if (!item) {
@@ -196,17 +224,31 @@ export function VentasPage() {
     });
   };
 
+  // Abrir modal de series manualmente
+  const abrirModalSeries = (item: ItemCarrito) => {
+    setProductoSerieActual({
+      producto: item.producto,
+      cantidadRequerida: item.cantidad,
+    });
+    setSeriesModalOpen(true);
+  };
+
 
   // Carrito: cambiar cantidad
   const cambiarCantidad = (productoId: string, delta: number) => {
+    const itemActual = carritoRef.current.find((i) => i.producto.id === productoId);
+    if (!itemActual) return;
+
+    const nuevaCantidad = itemActual.cantidad + delta;
+    const maxStock = itemActual.producto.esServicio ? Infinity : itemActual.producto.stockActual;
+    const cantidadFinal = Math.min(Math.max(nuevaCantidad, 0), maxStock);
+
+    // Actualizar cantidad normalmente
     setCarritoSync((prev) =>
       prev
         .map((i) => {
           if (i.producto.id !== productoId) return i;
-          const nueva = i.cantidad + delta;
-          const maxStock = i.producto.esServicio ? Infinity : i.producto.stockActual;
-          const clamped = Math.min(Math.max(nueva, 0), maxStock);
-          return { ...i, cantidad: clamped };
+          return { ...i, cantidad: cantidadFinal };
         })
         .filter((i) => i.cantidad > 0)
     );
@@ -234,18 +276,91 @@ export function VentasPage() {
     setCarrito([]);
   };
 
+  // Handler para cuando se completan las series en el modal
+  const handleSeriesCompletas = (series: string[]) => {
+    if (!productoSerieActual) return;
+
+    const { producto, cantidadRequerida } = productoSerieActual;
+
+    setCarritoSync((prev) => {
+      const existente = prev.find((i) => i.producto.id === producto.id);
+      if (existente) {
+        // Actualizar item existente con las nuevas series
+        return prev.map((i) =>
+          i.producto.id === producto.id
+            ? { ...i, cantidad: cantidadRequerida, numerosSerie: series }
+            : i
+        );
+      } else {
+        // Agregar nuevo item con las series
+        return [
+          ...prev,
+          {
+            producto,
+            cantidad: cantidadRequerida,
+            precioUnitario: producto.precioVenta,
+            numerosSerie: series,
+          },
+        ];
+      }
+    });
+
+    // Cerrar modal y limpiar estado
+    setSeriesModalOpen(false);
+    setProductoSerieActual(null);
+  };
+
   // Cálculos
-  // El precio de venta ya incluye IGV. Subtotal = total / 1.18
-  const totalConIgv = carrito.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
-  const subtotalSinIgv = totalConIgv / 1.18;
-  const igv = totalConIgv - subtotalSinIgv;
+  const total = carrito.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
   const gananciaProyectada = carrito.reduce(
     (s, i) => s + (i.precioUnitario - i.producto.precioCompra) * i.cantidad, 0
   );
+  const hayItemsEnPerdida = carrito.some(
+    (i) => Number(i.precioUnitario) < Number(i.producto.precioCompra)
+  );
+
+  // Descargar PDF de venta
+  const handleDescargarPDF = async (ventaId: string, codigo: string) => {
+    setDescargandoPDFId(ventaId);
+    try {
+      const r = await obtenerVenta(ventaId);
+      const blob = await pdf(<VentaPDFDoc venta={r.data} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${codigo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo generar el PDF.', variant: 'destructive' });
+    } finally {
+      setDescargandoPDFId(null);
+    }
+  };
 
   // Finalizar venta
   const finalizarVenta = async () => {
     if (carrito.length === 0) return;
+
+    // Validar que productos con requiereSerie tengan todas sus series
+    const faltanSeries = carrito.filter(
+      (item) =>
+        item.producto.requiereSerie &&
+        (!item.numerosSerie || item.numerosSerie.length !== item.cantidad)
+    );
+
+    if (faltanSeries.length > 0) {
+      const nombres = faltanSeries.map((i) => i.producto.nombre).join(', ');
+      toast({
+        title: 'Faltan números de serie',
+        description: `Los siguientes productos requieren números de serie: ${nombres}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setProcesando(true);
     try {
       const resultado = await crearVenta({
@@ -255,6 +370,7 @@ export function VentasPage() {
           productoId: i.producto.id,
           cantidad: Number(i.cantidad),
           precioUnitario: Number(i.precioUnitario),
+          numerosSerie: i.numerosSerie, // Incluir series en el payload
         })),
       });
 
@@ -362,8 +478,8 @@ export function VentasPage() {
                   className={cn(
                     'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                     !categoriaFiltro
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-background text-muted-foreground border border-border hover:bg-muted'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted text-foreground border border-border hover:bg-muted/70'
                   )}
                 >
                   Todos
@@ -375,8 +491,8 @@ export function VentasPage() {
                     className={cn(
                       'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                       cat.id === categoriaFiltro
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'bg-background text-muted-foreground border border-border hover:bg-muted'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted text-foreground border border-border hover:bg-muted/70'
                     )}
                   >
                     {cat.nombre}
@@ -456,7 +572,7 @@ export function VentasPage() {
           </section>
 
           {/* Columna derecha: Carrito + Checkout */}
-          <section className="flex flex-col w-full max-w-sm xl:max-w-md bg-background flex-shrink-0">
+          <section className="flex flex-col w-full max-w-md xl:max-w-lg bg-background flex-shrink-0">
             {/* Header carrito */}
             <div className="px-5 py-4 border-b border-border flex justify-between items-center flex-shrink-0">
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -490,18 +606,26 @@ export function VentasPage() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-muted/40 sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[38%]">Producto</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[24%]">Cant.</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[18%]">P.Unit</th>
-                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">Total</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[30%]">Producto</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[18%]">Cant.</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[14%]">P.Unit</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[14%]">Total</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[20%]">Series</th>
                       <th className="py-2.5 pr-3 w-8" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {carrito.map((item) => (
-                      <tr key={item.producto.id} className="group hover:bg-muted/30 transition-colors">
+                      <tr key={item.producto.id} className={cn("group hover:bg-muted/30 transition-colors", Number(item.precioUnitario) < Number(item.producto.precioCompra) && "bg-red-50/50 dark:bg-red-950/20")}>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-sm leading-tight">{item.producto.nombre}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm leading-tight">{item.producto.nombre}</span>
+                            {Number(item.precioUnitario) < Number(item.producto.precioCompra) && (
+                              <span title={`Precio de venta (${fmt(item.precioUnitario)}) menor al costo (${fmt(Number(item.producto.precioCompra))})`}>
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground leading-tight mt-0.5">
                             {[item.producto.marca, item.producto.modelo].filter(Boolean).join(' ') || '—'}
                           </div>
@@ -534,6 +658,30 @@ export function VentasPage() {
                         <td className="px-4 py-3 text-right text-sm font-bold">
                           {fmt(item.precioUnitario * item.cantidad)}
                         </td>
+                        <td className="px-2 py-3 text-center">
+                          {item.producto.requiereSerie ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge
+                                variant={(item.numerosSerie?.length ?? 0) === item.cantidad ? "default" : "destructive"}
+                                className="text-xs whitespace-nowrap"
+                              >
+                                {(item.numerosSerie?.length ?? 0) === item.cantidad
+                                  ? "✓ Completo"
+                                  : `⚠ ${item.cantidad - (item.numerosSerie?.length ?? 0)}`}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => abrirModalSeries(item)}
+                                className="h-6 text-xs px-2"
+                              >
+                                <QrCode className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="py-3 pr-3 text-right">
                           <button
                             onClick={() => quitarItem(item.producto.id)}
@@ -564,15 +712,16 @@ export function VentasPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Método de Pago</label>
-                    <select
-                      value={metodoPago}
-                      onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {METODOS_PAGO.map((m) => (
-                        <option key={m.value} value={m.value}>{m.label}</option>
-                      ))}
-                    </select>
+                    <Select value={metodoPago} onValueChange={(v) => setMetodoPago(v as MetodoPago)}>
+                      <SelectTrigger className="w-full bg-background text-sm h-9">
+                        <SelectValue placeholder="Método de pago" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {METODOS_PAGO.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -583,35 +732,48 @@ export function VentasPage() {
               {carrito.length > 0 && (
                 <>
                   {/* Ganancia proyectada */}
-                  <div className="flex justify-between items-center px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg">
-                    <div className="flex items-center gap-1.5 text-green-700 dark:text-green-400">
-                      <span className="material-symbols-outlined text-[16px]">visibility_off</span>
-                      <span className="text-xs font-semibold uppercase tracking-wider">Ganancia Proyectada</span>
+                  <div className={cn(
+                    "flex justify-between items-center px-3 py-2 rounded-lg border",
+                    hayItemsEnPerdida
+                      ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                      : "bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900"
+                  )}>
+                    <div className={cn(
+                      "flex items-center gap-1.5",
+                      hayItemsEnPerdida ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                    )}>
+                      {hayItemsEnPerdida
+                        ? <AlertTriangle className="h-4 w-4" />
+                        : <span className="material-symbols-outlined text-[16px]">visibility_off</span>
+                      }
+                      <span className="text-xs font-semibold uppercase tracking-wider">
+                        {hayItemsEnPerdida ? 'Venta en Pérdida' : 'Ganancia Proyectada'}
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-green-700 dark:text-green-400">{fmt(gananciaProyectada)}</span>
+                    <span className={cn(
+                      "text-sm font-bold",
+                      hayItemsEnPerdida ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                    )}>{fmt(gananciaProyectada)}</span>
                   </div>
 
-                  {/* Subtotal, IGV, Total */}
+                  {/* Total */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Subtotal (sin IGV)</span>
-                      <span>{fmt(subtotalSinIgv)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>IGV (18%)</span>
-                      <span>{fmt(igv)}</span>
-                    </div>
                     <div className="flex justify-between items-baseline pt-1.5 border-t border-border">
                       <span className="text-lg font-bold">Total a Pagar</span>
-                      <span className="text-2xl font-bold tracking-tight">{fmt(totalConIgv)}</span>
+                      <span className="text-2xl font-bold tracking-tight">{fmt(total)}</span>
                     </div>
                   </div>
                 </>
               )}
 
+              {hayItemsEnPerdida && (
+                <p className="text-xs text-red-600 dark:text-red-400 text-center font-medium">
+                  Hay productos con precio de venta menor al costo. Corrígelos para poder vender.
+                </p>
+              )}
               <Button
                 onClick={finalizarVenta}
-                disabled={carrito.length === 0 || procesando}
+                disabled={carrito.length === 0 || procesando || hayItemsEnPerdida}
                 className="w-full h-12 text-base font-bold gap-2 rounded-xl shadow-lg"
               >
                 {procesando ? (
@@ -683,8 +845,6 @@ export function VentasPage() {
                 {ventasHoy.map((venta) => {
                   const total = parseFloat(venta.total);
                   const ganancia = parseFloat(venta.gananciaTotal);
-                  const subtotalSinIgvV = total / 1.18;
-                  const igvV = total - subtotalSinIgvV;
                   const isExpanded = expandida === venta.id;
 
                   return (
@@ -761,20 +921,26 @@ export function VentasPage() {
                               ))}
                             </tbody>
                             <tfoot className="border-t border-border mt-1">
-                              <tr className="text-xs text-muted-foreground">
-                                <td colSpan={3} className="pt-2 text-right">Subtotal (sin IGV)</td>
-                                <td className="pt-2 text-right">{fmt(subtotalSinIgvV)}</td>
-                              </tr>
-                              <tr className="text-xs text-muted-foreground">
-                                <td colSpan={3} className="text-right">IGV (18%)</td>
-                                <td className="text-right">{fmt(igvV)}</td>
-                              </tr>
                               <tr className="font-bold">
                                 <td colSpan={3} className="pt-1.5 text-right">Total</td>
                                 <td className="pt-1.5 text-right">{fmt(total)}</td>
                               </tr>
                             </tfoot>
                           </table>
+                          <div className="flex justify-end mt-3 pt-3 border-t border-border">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs h-8"
+                              disabled={descargandoPDFId === venta.id}
+                              onClick={() => handleDescargarPDF(venta.id, venta.codigoFormateado)}
+                            >
+                              {descargandoPDFId === venta.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <FileDown className="h-3.5 w-3.5" />}
+                              Descargar PDF
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -822,7 +988,13 @@ export function VentasPage() {
                       selected={fechaDesde}
                       onSelect={(date) => { setFechaDesde(date); setPaginaActual(1); }}
                       locale={es}
-                      disabled={(date) => date > new Date()}
+                      disabled={(date) => {
+                        // No puede ser fecha futura
+                        if (date > new Date()) return true;
+                        // No puede ser posterior a fechaHasta
+                        if (fechaHasta && date > fechaHasta) return true;
+                        return false;
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
@@ -849,7 +1021,9 @@ export function VentasPage() {
                       onSelect={(date) => { setFechaHasta(date); setPaginaActual(1); }}
                       locale={es}
                       disabled={(date) => {
-                        // Solo validar que no sea anterior a fechaDesde
+                        // No puede ser fecha futura
+                        if (date > new Date()) return true;
+                        // No puede ser anterior a fechaDesde
                         if (fechaDesde && date < fechaDesde) return true;
                         return false;
                       }}
@@ -910,8 +1084,6 @@ export function VentasPage() {
                   {ventasHistorial.map((venta) => {
                     const total = parseFloat(venta.total);
                     const ganancia = parseFloat(venta.gananciaTotal);
-                    const subtotalSinIgvV = total / 1.18;
-                    const igvV = total - subtotalSinIgvV;
                     const isExpanded = expandida === venta.id;
 
                     return (
@@ -990,20 +1162,26 @@ export function VentasPage() {
                                 ))}
                               </tbody>
                               <tfoot className="border-t border-border mt-1">
-                                <tr className="text-xs text-muted-foreground">
-                                  <td colSpan={3} className="pt-2 text-right">Subtotal (sin IGV)</td>
-                                  <td className="pt-2 text-right">{fmt(subtotalSinIgvV)}</td>
-                                </tr>
-                                <tr className="text-xs text-muted-foreground">
-                                  <td colSpan={3} className="text-right">IGV (18%)</td>
-                                  <td className="text-right">{fmt(igvV)}</td>
-                                </tr>
                                 <tr className="font-bold">
                                   <td colSpan={3} className="pt-1.5 text-right">Total</td>
                                   <td className="pt-1.5 text-right">{fmt(total)}</td>
                                 </tr>
                               </tfoot>
                             </table>
+                            <div className="flex justify-end mt-3 pt-3 border-t border-border">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs h-8"
+                                disabled={descargandoPDFId === venta.id}
+                                onClick={() => handleDescargarPDF(venta.id, venta.codigoFormateado)}
+                              >
+                                {descargandoPDFId === venta.id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <FileDown className="h-3.5 w-3.5" />}
+                                Descargar PDF
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1069,6 +1247,22 @@ export function VentasPage() {
           </div>
         ))}
       </div>
+
+      {/* Modal de series */}
+      {productoSerieActual && (
+        <SeriesEscanerModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            setProductoSerieActual(null);
+          }}
+          modo="venta"
+          productoNombre={productoSerieActual.producto.nombre}
+          productoId={productoSerieActual.producto.id}
+          cantidad={productoSerieActual.cantidadRequerida}
+          onSeriesCompletas={handleSeriesCompletas}
+        />
+      )}
     </div>
   );
 }

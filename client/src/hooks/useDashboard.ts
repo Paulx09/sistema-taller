@@ -8,11 +8,13 @@ export function useDashboard() {
     gananciaHoy: 0,
     productosStockBajo: 0,
     productosSinMovimiento: 0,
+    ordenesActivas: 0,
+    ordenesDetalle: { recibidas: 0, enReparacion: 0, listas: 0 },
   });
   const [bajoStock, setBajoStock] = useState<ProductoBajoStock[]>([]);
   const [sinMovimiento, setSinMovimiento] = useState<ProductoSinMovimiento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [diasSinMovimiento, setDiasSinMovimiento] = useState(90);
+  const [diasSinMovimiento, setDiasSinMovimiento] = useState(30);
 
   const fetchData = useCallback(async () => {
     try {

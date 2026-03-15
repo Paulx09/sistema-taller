@@ -31,6 +31,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { productoService } from '@/services/producto.service';
 import type { Producto, AjustarStockDto } from '@/types';
+import { SeriesEscanerModal } from './SeriesEscanerModal';
+import { SeriesSeleccionModal } from './SeriesSeleccionModal';
 
 const ajustarStockSchema = z.object({
   tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE'], {
@@ -61,6 +63,11 @@ export function AjustarStockDialog({
 }: Readonly<AjustarStockDialogProps>) {
   const [error, setError] = useState<string | null>(null);
   
+  // Estados para manejo de series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [seriesSeleccionModalOpen, setSeriesSeleccionModalOpen] = useState(false);
+  const [ajustePendiente, setAjustePendiente] = useState<AjustarStockFormValues | null>(null);
+  
   const form = useForm<AjustarStockFormValues>({
     resolver: zodResolver(ajustarStockSchema),
     defaultValues: {
@@ -74,22 +81,28 @@ export function AjustarStockDialog({
   useEffect(() => {
     if (!open) {
       setError(null);
+      setAjustePendiente(null);
+      setSeriesModalOpen(false);
+      setSeriesSeleccionModalOpen(false);
       form.reset();
     }
   }, [open, form]);
 
-  const onSubmit = async (data: AjustarStockFormValues) => {
+  const ejecutarAjuste = async (data: AjustarStockFormValues, series?: string[]) => {
     setError(null);
     try {
       const payload: AjustarStockDto = {
         tipo: data.tipo,
         cantidad: data.cantidad,
         motivo: data.motivo || '',
+        numerosSerie: series,
       };
 
       await productoService.ajustarStock(producto.id, payload);
       onSuccess();
       form.reset();
+      setAjustePendiente(null);
+      onOpenChange(false);
     } catch (err: unknown) {
       console.error('Error al ajustar stock:', err);
       
@@ -104,6 +117,68 @@ export function AjustarStockDialog({
       } else {
         setError('Error al ajustar el stock. Por favor, intente nuevamente.');
       }
+    }
+  };
+
+  const onSubmit = async (data: AjustarStockFormValues) => {
+    // Si el producto requiere número de serie
+    if (producto.requiereSerie) {
+      if (data.tipo === 'ENTRADA') {
+        // ENTRADA: abrir modal para escanear series nuevas
+        setAjustePendiente(data);
+        setSeriesModalOpen(true);
+        return;
+      }
+
+      if (data.tipo === 'SALIDA') {
+        // SALIDA: abrir modal para seleccionar series a retirar
+        setAjustePendiente(data);
+        setSeriesSeleccionModalOpen(true);
+        return;
+      }
+
+      if (data.tipo === 'AJUSTE') {
+        // AJUSTE: calcular diferencia y actuar en consecuencia
+        const stockActual = producto.stockActual;
+        const nuevoStock = data.cantidad;
+        const diferencia = nuevoStock - stockActual;
+
+        if (diferencia > 0) {
+          // Ajuste positivo: faltan series, abrir modal para escanear
+          const ajusteModificado = { ...data, cantidad: diferencia, tipo: 'ENTRADA' as const };
+          setAjustePendiente(ajusteModificado);
+          setSeriesModalOpen(true);
+          return;
+        } else if (diferencia < 0) {
+          // Ajuste negativo: sobran series, abrir modal para seleccionar cuáles retirar
+          const ajusteModificado = { ...data, cantidad: Math.abs(diferencia), tipo: 'SALIDA' as const };
+          setAjustePendiente(ajusteModificado);
+          setSeriesSeleccionModalOpen(true);
+          return;
+        }
+        // Si diferencia === 0, continuar con ajuste normal (no hace nada)
+      }
+    }
+
+    // Si no requiere serie o diferencia es 0, ejecutar ajuste directo
+    await ejecutarAjuste(data);
+  };
+
+  const handleSeriesCompletas = (series: string[]) => {
+    setSeriesModalOpen(false);
+    
+    // Ejecutar el ajuste pendiente con las series escaneadas
+    if (ajustePendiente) {
+      ejecutarAjuste(ajustePendiente, series);
+    }
+  };
+
+  const handleSeriesSeleccionadas = (series: string[]) => {
+    setSeriesSeleccionModalOpen(false);
+    
+    // Ejecutar el ajuste pendiente con las series seleccionadas
+    if (ajustePendiente) {
+      ejecutarAjuste(ajustePendiente, series);
     }
   };
 
@@ -131,8 +206,9 @@ export function AjustarStockDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
         <DialogHeader>
           <DialogTitle>Ajustar Stock</DialogTitle>
           <DialogDescription>
@@ -249,5 +325,36 @@ export function AjustarStockDialog({
         </Form>
       </DialogContent>
     </Dialog>
+    
+    {/* Modal de escaneo de series para ENTRADA */}
+    {ajustePendiente && (
+      <SeriesEscanerModal
+        isOpen={seriesModalOpen}
+        onClose={() => {
+          setSeriesModalOpen(false);
+          setAjustePendiente(null);
+        }}
+        modo="compra"
+        productoNombre={producto.nombre}
+        cantidad={ajustePendiente.cantidad}
+        onSeriesCompletas={handleSeriesCompletas}
+      />
+    )}
+    
+    {/* Modal de selección de series para SALIDA */}
+    {ajustePendiente && (
+      <SeriesSeleccionModal
+        isOpen={seriesSeleccionModalOpen}
+        onClose={() => {
+          setSeriesSeleccionModalOpen(false);
+          setAjustePendiente(null);
+        }}
+        productoId={producto.id}
+        productoNombre={producto.nombre}
+        cantidadRequerida={ajustePendiente.cantidad}
+        onSeriesSeleccionadas={handleSeriesSeleccionadas}
+      />
+    )}
+    </>
   );
 }

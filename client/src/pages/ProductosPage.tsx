@@ -3,6 +3,7 @@ import { FEATURES } from '@/config/features';
 import { useProductos } from '@/hooks/useProductos';
 import { useCategorias } from '@/hooks/useCategorias';
 import { useUbicaciones } from '@/hooks/useUbicaciones';
+import { productoService } from '@/services/producto.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,6 +23,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,6 +39,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination } from '@/components/Pagination';
+import { SeriesDetalleModal } from '@/components/SeriesDetalleModal';
 
 // Helper para construir URL completa de imagen
 const getImageUrl = (imagenUrl: string | null): string | null => {
@@ -40,7 +50,7 @@ const getImageUrl = (imagenUrl: string | null): string | null => {
   const baseUrl = API_URL.replace('/api', ''); // Eliminar /api si existe
   return `${baseUrl}${imagenUrl}`;
 };
-import { Plus, Pencil, Trash2, Loader2, Filter, Eye} from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Eye, History, AlertCircle } from 'lucide-react';
 import { ProductoForm } from '@/components/forms/ProductoForm';
 import { ProductoDetalle } from '@/components/ProductoDetalle';
 import type { Producto } from '@/types';
@@ -50,8 +60,10 @@ export function ProductosPage() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
   const [servicioFilter, setServicioFilter] = useState<string>('all');
+  const [pendientesFilter, setPendientesFilter] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [countPendientes, setCountPendientes] = useState(0);
 
   // Calcular skip para la paginación
   const skip = (currentPage - 1) * itemsPerPage;
@@ -67,6 +79,7 @@ export function ProductosPage() {
       busqueda: busqueda || undefined,
       categoriaId: categoriaFilter === 'all' ? undefined : categoriaFilter,
       esServicio: getEsServicioValue(),
+      preciosPendientes: pendientesFilter || undefined,
       skip,
       take: itemsPerPage,
     });
@@ -74,15 +87,46 @@ export function ProductosPage() {
   // Resetear a página 1 cuando cambien los filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [busqueda, categoriaFilter, servicioFilter, itemsPerPage]);
+  }, [busqueda, categoriaFilter, servicioFilter, pendientesFilter, itemsPerPage]);
 
-  const { categorias } = useCategorias();
+  // Obtener count de productos con precios pendientes
+  useEffect(() => {
+    const fetchCountPendientes = async () => {
+      try {
+        const { total: count } = await productoService.getAll({
+          preciosPendientes: true,
+          take: 1, // Solo necesitamos el count
+        });
+        setCountPendientes(count);
+      } catch (err) {
+        console.error('Error al obtener count de pendientes:', err);
+      }
+    };
+    
+    fetchCountPendientes();
+  }, [productos]); // Se actualiza cuando cambia la lista de productos
+
+  const { categorias, refetch: refetchCategorias } = useCategorias();
   const { ubicaciones } = useUbicaciones();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
   const [viewingProducto, setViewingProducto] = useState<Producto | null>(null); // Nuevo estado
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
+    isOpen: boolean;
+    productoId: string | null;
+    mensaje: string;
+  }>({
+    isOpen: false,
+    productoId: null,
+    mensaje: '',
+  });
+  
+  // Estado para modal de series
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [productoSeriesId, setProductoSeriesId] = useState<string | null>(null);
+  const [productoSeriesNombre, setProductoSeriesNombre] = useState<string>('');
 
   const handleCreate = () => {
     setEditingProducto(null);
@@ -101,13 +145,36 @@ export function ProductosPage() {
     setEditingProducto(null);
     setSheetOpen(true);
   };
+  
+  const handleVerSeries = (productoId: string, productoNombre: string) => {
+    setProductoSeriesId(productoId);
+    setProductoSeriesNombre(productoNombre);
+    setSeriesModalOpen(true);
+  };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, force: boolean = false) => {
     try {
-      await deleteProducto(id);
+      await deleteProducto(id, force);
       setDeleteConfirmId(null);
-    } catch (err) {
+      setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
+    } catch (err: any) {
       console.error('Error al eliminar:', err);
+      
+      // Detectar si es un error 409 que requiere confirmación
+      if (err.response?.status === 409 && err.response?.data?.requiereConfirmacion) {
+        setDeleteWarningDialog({
+          isOpen: true,
+          productoId: id,
+          mensaje: err.response.data.mensaje,
+        });
+        setDeleteConfirmId(null);
+      }
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (deleteWarningDialog.productoId) {
+      await handleDelete(deleteWarningDialog.productoId, true);
     }
   };
 
@@ -169,6 +236,7 @@ export function ProductosPage() {
                           onUpdate={updateProducto}
                           categorias={categorias}
                           ubicaciones={ubicaciones}
+                          onCategoriaCreada={() => refetchCategorias()}
                         />
                     )}
                   </SheetContent>
@@ -183,20 +251,20 @@ export function ProductosPage() {
                   <span className="material-symbols-outlined text-muted-foreground text-[18px]">search</span>
                 </div>
                 <Input
-                  placeholder="Buscar producto, marca o SKU..."
+                  placeholder="Buscar producto, marca o modelo..."
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="pl-9 bg-background border-input focus:ring-1 h-9"
                 />
              </div>
              
-             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+             <div className="flex items-center gap-2 overflow-x-auto pb-3 md:pb-0">
                 <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-                  <SelectTrigger className="w-[160px] bg-background border-input h-9 text-sm">
+                  <SelectTrigger className="w-[190px] bg-background text-sm">
                     <SelectValue placeholder="Categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="all">Todas las categorías</SelectItem>
                     {categorias.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.nombre}
@@ -206,21 +274,30 @@ export function ProductosPage() {
                 </Select>
 
                 <Select value={servicioFilter} onValueChange={setServicioFilter}>
-                  <SelectTrigger className="w-[140px] bg-background border-input h-9 text-sm">
+                  <SelectTrigger className="w-[190px] bg-background text-sm">
                     <SelectValue placeholder="Tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="all">Todos los tipos</SelectItem>
                     <SelectItem value="false">Productos</SelectItem>
                     <SelectItem value="true">Servicios</SelectItem>
                   </SelectContent>
                 </Select>
                 
-                <div className="h-6 w-px bg-border mx-1"></div>
-                
-                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-                   <Filter className="h-4 w-4" />
-                </Button>
+                {countPendientes > 0 && (
+                  <Button 
+                    variant={pendientesFilter ? "default" : "outline"} 
+                    size="sm"
+                    className={cn(
+                      "h-9 text-sm whitespace-nowrap",
+                      !pendientesFilter && "border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    )}
+                    onClick={() => setPendientesFilter(!pendientesFilter)}
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    {countPendientes} sin precio
+                  </Button>
+                )}
              </div>
          </div>
 
@@ -328,6 +405,17 @@ export function ProductosPage() {
                               </TableCell>
                               <TableCell className="text-right py-2">
                                   <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                      {producto.requiereSerie && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                                          onClick={() => handleVerSeries(producto.id, producto.nombre)}
+                                          title="Ver historial de series"
+                                        >
+                                           <History className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleVerDetalle(producto)}>
                                          <Eye className="h-4 w-4" />
                                       </Button>
@@ -376,6 +464,61 @@ export function ProductosPage() {
             />
          </div>
       </div>
+
+      {/* Dialog de advertencia para eliminación con historial */}
+      <Dialog 
+        open={deleteWarningDialog.isOpen} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>⚠️ Confirmación Requerida</DialogTitle>
+            <DialogDescription>
+              {deleteWarningDialog.mensaje}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Alert variant="destructive">
+              <AlertDescription>
+                <strong>Nota:</strong> Esta acción ocultará el producto del sistema pero conservará el historial.
+                Los reportes históricos mantendrán la información.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' })}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleForceDelete}
+            >
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal de historial de series */}
+      {productoSeriesId && (
+        <SeriesDetalleModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            setProductoSeriesId(null);
+            setProductoSeriesNombre('');
+          }}
+          productoId={productoSeriesId}
+          productoNombre={productoSeriesNombre}
+        />
+      )}
     </div>
   );
 }

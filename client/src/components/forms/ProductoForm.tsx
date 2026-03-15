@@ -3,7 +3,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
+import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
+import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -67,10 +70,14 @@ const productoSchema = z.object({
   codigoBarras: z.string().max(50).optional().or(z.literal('')),
   precioCompra: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
   precioVenta: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
+  margenReferencia: z.string().regex(/^\d*\.?\d*$/, 'Debe ser un número válido').optional().or(z.literal('')),
   stockActual: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   stockMinimo: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   esServicio: z.boolean().optional(),
   esSegundaMano: z.boolean().optional(),
+  requiereSerie: z.boolean().optional(),
+  garantiaProveedorMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
+  garantiaClienteMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
   padreId: z
     .string()
     .uuid('ID de producto padre inválido')
@@ -83,10 +90,17 @@ const productoSchema = z.object({
     const precioV = Number.parseFloat(data.precioVenta || '0');
     const precioC = Number.parseFloat(data.precioCompra || '0');
 
-    if (stockMin < 1) {
+    if (!data.ubicacionId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "El stock mínimo debe ser al menos 1",
+        message: 'Requerido para productos físicos',
+        path: ['ubicacionId'],
+      });
+    }
+    if (stockMin < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "El stock mínimo no puede ser negativo",
         path: ["stockMinimo"],
       });
     }
@@ -109,6 +123,7 @@ interface ProductoFormProps {
   onUpdate: (id: string, data: ActualizarProductoDto | FormData) => Promise<Producto>;
   categorias: Categoria[];
   ubicaciones: Ubicacion[];
+  onCategoriaCreada?: (categoria: { id: string; nombre: string }) => void;
 }
 
 export function ProductoForm({
@@ -118,13 +133,24 @@ export function ProductoForm({
   onUpdate,
   categorias,
   ubicaciones,
+  onCategoriaCreada,
 }: Readonly<ProductoFormProps>) {
   const [esServicio, setEsServicio] = useState(producto?.esServicio || false);
+  const [modoMargen, setModoMargen] = useState<boolean>(false); // false = Modo Precio, true = Modo Margen
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     getImageUrl(producto?.imagenUrl || null)
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para modal de series retroactivas
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
+  const [_seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
+  // Ref síncrono para evitar stale closures al verificar series escaneadas
+  const seriesRetroactivasRef = useRef<string[]>([]);
+  // Guarda los datos del form cuando hay que escanear antes de guardar (nuevo producto)
+  const pendingSubmitRef = useRef<ProductoFormValues | null>(null);
+  const prevRequiereSerieRef = useRef<boolean>(producto?.requiereSerie || false);
 
   const form = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
@@ -139,10 +165,14 @@ export function ProductoForm({
       codigoBarras: producto?.codigoBarras || '',
       precioCompra: producto?.precioCompra?.toString() || '',
       precioVenta: producto?.precioVenta?.toString() || '',
+      margenReferencia: producto?.margenReferencia?.toString() || '',
       stockActual: producto?.stockActual?.toString() || '',
       stockMinimo: producto?.stockMinimo?.toString() || '',
       esServicio: producto?.esServicio || false,
       esSegundaMano: producto?.esSegundaMano || false,
+      requiereSerie: producto?.requiereSerie || false,
+      garantiaProveedorMeses: producto?.garantiaProveedorMeses?.toString() || '0',
+      garantiaClienteMeses: producto?.garantiaClienteMeses?.toString() || '0',
       padreId: producto?.padreId || '',
       imagenUrl: producto?.imagenUrl || '',
     },
@@ -161,6 +191,11 @@ export function ProductoForm({
         form.setValue('precioCompra', '0');
         if (FEATURES.ENABLE_PRODUCT_SKU) form.setValue('sku', '');
         if (FEATURES.ENABLE_PRODUCT_BARCODE) form.setValue('codigoBarras', '');
+        // Resetear campos específicos de productos físicos
+        form.setValue('esSegundaMano', false);
+        form.setValue('requiereSerie', false);
+        form.setValue('garantiaProveedorMeses', '0');
+        form.setValue('garantiaClienteMeses', '0');
         setEsServicio(true);
       } else if (name === 'esServicio' && !value.esServicio) {
         setEsServicio(false);
@@ -169,7 +204,94 @@ export function ProductoForm({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  // Detectar cuando se activa requiereSerie en producto con stock existente
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'requiereSerie' && value.requiereSerie && !prevRequiereSerieRef.current) {
+        // Se acaba de activar requiereSerie
+        const stockActual = producto?.stockActual || 0;
+        
+        if (producto && stockActual > 0) {
+          // Producto en edición con stock existente - abrir modal para registrar series
+          setSeriesModalOpen(true);
+        }
+        
+        prevRequiereSerieRef.current = true;
+      } else if (name === 'requiereSerie' && !value.requiereSerie) {
+        prevRequiereSerieRef.current = false;
+        setSeriesRetroactivas([]); // Limpiar series si se desactiva
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, producto]);
+
+  // Calcular precio de venta automáticamente en Modo Margen
+  useEffect(() => {
+    if (!modoMargen) return;
+
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'precioCompra' || name === 'margenReferencia') {
+        const precioCompra = Number.parseFloat(value.precioCompra || '0');
+        const margen = Number.parseFloat(value.margenReferencia || '0');
+
+        if (precioCompra > 0 && margen >= 0) {
+          const precioVenta = precioCompra * (1 + margen / 100);
+          form.setValue('precioVenta', precioVenta.toFixed(2));
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, modoMargen]);
+
+  // Calcular margen automáticamente en Modo Precio
+  useEffect(() => {
+    if (modoMargen) return; // Solo aplica en modo precio
+
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'precioCompra' || name === 'precioVenta') {
+        const precioCompra = Number.parseFloat(value.precioCompra || '0');
+        const precioVenta = Number.parseFloat(value.precioVenta || '0');
+
+        if (precioCompra > 0 && precioVenta > precioCompra) {
+          const margen = ((precioVenta - precioCompra) / precioCompra) * 100;
+          form.setValue('margenReferencia', margen.toFixed(2));
+        } else if (precioVenta === 0 || precioCompra === 0) {
+          // Limpiar margen si los precios no son válidos
+          form.setValue('margenReferencia', '');
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, modoMargen]);
+
+  // Corregir margenReferencia desactualizado al cargar producto en edición
+  useEffect(() => {
+    if (!producto) return; // Solo para productos en edición
+    
+    const precioCompra = Number.parseFloat(producto.precioCompra?.toString() || '0');
+    const precioVenta = Number.parseFloat(producto.precioVenta?.toString() || '0');
+    const margenGuardado = Number.parseFloat(producto.margenReferencia?.toString() || '0');
+    
+    // Calcular margen real basado en los precios actuales
+    if (precioCompra > 0 && precioVenta > precioCompra) {
+      const margenReal = ((precioVenta - precioCompra) / precioCompra) * 100;
+      
+      // Si el margen guardado difiere del real por más de 0.5%, corregirlo
+      const diferencia = Math.abs(margenReal - margenGuardado);
+      if (diferencia > 0.5) {
+        form.setValue('margenReferencia', margenReal.toFixed(2));
+      }
+    }
+  }, [producto, form]);
+
   const onSubmit = async (data: ProductoFormValues) => {
+    // NUEVO PRODUCTO: Si requiere serie y tiene stock inicial, abrir escáner ANTES de guardar
+    if (!producto && data.requiereSerie && Number.parseInt(data.stockActual || '0') > 0 && seriesRetroactivasRef.current.length === 0) {
+      pendingSubmitRef.current = data;
+      setSeriesModalOpen(true);
+      return; // Esperar a que se completen las series; handleSeriesCompletas re-lanzará el guardado
+    }
+
     try {
       // Crear FormData para enviar archivo
       const formData = new FormData();
@@ -185,6 +307,7 @@ export function ProductoForm({
       if (FEATURES.ENABLE_PRODUCT_BARCODE && data.codigoBarras) formData.append('codigoBarras', data.codigoBarras);
       formData.append('precioCompra', data.precioCompra);
       formData.append('precioVenta', data.precioVenta);
+      if (data.margenReferencia) formData.append('margenReferencia', data.margenReferencia);
       
       if (!esServicio) {
         // stockActual solo se envía al CREAR (trazabilidad - las ediciones usan PATCH /stock)
@@ -197,7 +320,15 @@ export function ProductoForm({
       
       formData.append('esServicio', data.esServicio ? 'true' : 'false');
       formData.append('esSegundaMano', data.esSegundaMano ? 'true' : 'false');
+      formData.append('requiereSerie', data.requiereSerie ? 'true' : 'false');
+      formData.append('garantiaProveedorMeses', data.garantiaProveedorMeses || '0');
+      formData.append('garantiaClienteMeses', data.garantiaClienteMeses || '0');
       if (data.padreId) formData.append('padreId', data.padreId);
+      
+      // Agregar series retroactivas usando el ref (evita stale closures)
+      if (seriesRetroactivasRef.current.length > 0) {
+        formData.append('seriesRetroactivas', JSON.stringify(seriesRetroactivasRef.current));
+      }
       
       // Agregar archivo si existe (solo si la funcionalidad está habilitada)
       if (FEATURES.ENABLE_PRODUCT_IMAGES && imagenFile) {
@@ -214,8 +345,23 @@ export function ProductoForm({
       form.reset();
       setImagenFile(null);
       setPreviewUrl(null);
+      seriesRetroactivasRef.current = [];
+      setSeriesRetroactivas([]);
     } catch (error) {
       console.error('Error al guardar:', error);
+    }
+  };
+
+  const handleSeriesCompletas = (series: string[]) => {
+    // Actualizar ref síncronamente para evitar stale closures
+    seriesRetroactivasRef.current = series;
+    setSeriesRetroactivas(series);
+    setSeriesModalOpen(false);
+
+    // Si había un submit pendiente (nuevo producto esperando escaneo), re-lanzar guardado
+    if (pendingSubmitRef.current !== null) {
+      pendingSubmitRef.current = null;
+      form.handleSubmit(onSubmit)();
     }
   };
 
@@ -367,18 +513,12 @@ export function ProductoForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Categoría *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-background border-border">
-                              <SelectValue placeholder="Seleccionar..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {categorias.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>{cat.nombre}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <CategoriaCombobox
+                          value={field.value}
+                          onChange={field.onChange}
+                          categorias={categorias}
+                          onCategoriaCreada={onCategoriaCreada}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -452,6 +592,16 @@ export function ProductoForm({
            <div className="flex items-center gap-2 border-b border-border pb-2">
               <span className="material-symbols-outlined text-primary text-[20px]">payments</span>
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Precios y Stock</h3>
+              {!esServicio && (
+                <div className="ml-auto flex items-center gap-2">
+                  <Badge variant={!modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(false)}>
+                    Por Precio
+                  </Badge>
+                  <Badge variant={modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(true)}>
+                    Por Margen %
+                  </Badge>
+                </div>
+              )}
            </div>
            
            {/* Fila 1: Precios y Margen */}
@@ -479,37 +629,81 @@ export function ProductoForm({
                         />
                       </FormControl>
                       <FormMessage />
+                      <FormDescription>CPP - Costo Promedio</FormDescription>
                     </FormItem>
                   )}
                 />
               )}
-              <FormField
-                control={form.control}
-                name="precioVenta"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio Venta (S/.)</FormLabel>
-                    <FormControl>
-                        <Input 
-                          type="text" 
-                          className="bg-background border-border" 
-                          placeholder="0.00"
-                          {...field} 
-                          value={field.value === '0' ? '' : field.value}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (/^\d*\.?\d{0,2}$/.test(value)) {
-                                field.onChange(value);
-                            }
-                          }}
-                        />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               
-              {!esServicio && (
+              {/* Modo Precio: Usuario ingresa precio venta manualmente */}
+              {!modoMargen && (
+                <FormField
+                  control={form.control}
+                  name="precioVenta"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio Venta (S/.)</FormLabel>
+                      <FormControl>
+                          <Input 
+                            type="text" 
+                            className="bg-background border-border" 
+                            placeholder="0.00"
+                            {...field} 
+                            value={field.value === '0' ? '' : field.value}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*\.?\d{0,2}$/.test(value)) {
+                                  field.onChange(value);
+                              }
+                            }}
+                          />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              
+              {/* Modo Margen: Usuario ingresa porcentaje de margen */}
+              {modoMargen && (
+                <FormField
+                  control={form.control}
+                  name="margenReferencia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Margen Deseado (%)</FormLabel>
+                      <FormControl>
+                          <Input 
+                            type="text" 
+                            className="bg-background border-border" 
+                            placeholder="30"
+                            {...field} 
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*\.?\d{0,2}$/.test(value)) {
+                                  field.onChange(value);
+                              }
+                            }}
+                          />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              
+              {/* Modo Margen: Mostrar precio de venta calculado */}
+              {modoMargen && !esServicio && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Precio Venta</label>
+                  <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center font-semibold">
+                    S/. {form.watch('precioVenta') || '0.00'}
+                  </div>
+                </div>
+              )}
+              
+              {/* Modo Precio: Mostrar margen calculado (como antes) */}
+              {!modoMargen && !esServicio && (
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-muted-foreground">Ganancia / Margen</label>
                       <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center justify-between text-muted-foreground font-mono">
@@ -593,6 +787,103 @@ export function ProductoForm({
                </div>
            )}
         </section>
+
+        {/* Sección: Atributos y Configuración (FASE 3: Series y Garantías) */}
+        {!esServicio && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-2">
+              <span className="material-symbols-outlined text-primary text-[20px]">settings</span>
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Atributos y Configuración</h3>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Switch: Requiere Número de Serie */}
+              <FormField
+                control={form.control}
+                name="requiereSerie"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between bg-muted/40 p-4 rounded-lg border border-border">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium text-foreground block">
+                        ¿Requiere Número de Serie?
+                      </FormLabel>
+                      <FormDescription className="text-xs text-muted-foreground">
+                        Activar para productos que necesitan seguimiento individual (laptops, celulares, equipos).
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Garantías */}
+              <div className="bg-muted/40 p-4 rounded-lg border border-border space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-primary text-[16px]">verified_user</span>
+                  <h4 className="text-sm font-medium text-foreground">Garantías</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="garantiaProveedorMeses"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Garantía Proveedor (Meses)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            {...field}
+                            className="bg-background border-border"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                field.onChange(value);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Garantía que ofrece el proveedor
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="garantiaClienteMeses"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Garantía Cliente (Meses)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            {...field}
+                            className="bg-background border-border"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                field.onChange(value);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Garantía que ofreces a tus clientes
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         
         {/* Feature: Imagen - Controlado por config/features.ts */}
         {FEATURES.ENABLE_PRODUCT_IMAGES && (
@@ -646,6 +937,27 @@ export function ProductoForm({
           </Button>
         </div>
       </form>
+
+      {/* Modal para registrar series retroactivas (nuevo producto o edición con stock existente) */}
+      {seriesModalOpen && (
+        <SeriesEscanerModal
+          isOpen={seriesModalOpen}
+          onClose={() => {
+            setSeriesModalOpen(false);
+            pendingSubmitRef.current = null; // Cancelar submit pendiente si lo hay
+            // Solo desactivar requiereSerie si el usuario cerró sin completar el escaneo
+            // Usar ref en lugar de state para evitar stale closures
+            if (seriesRetroactivasRef.current.length === 0) {
+              form.setValue('requiereSerie', false);
+              prevRequiereSerieRef.current = false;
+            }
+          }}
+          productoNombre={producto?.nombre ?? form.getValues('nombre')}
+          cantidad={producto ? producto.stockActual : Number.parseInt(form.getValues('stockActual') || '0')}
+          onSeriesCompletas={handleSeriesCompletas}
+          modo="compra"
+        />
+      )}
     </Form>
   );
 }
