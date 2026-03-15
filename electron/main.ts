@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -236,6 +236,16 @@ function createWindow(): void {
 // IPC: abrir URL en navegador externo (llamado desde el renderer)
 ipcMain.handle('open-external', (_event, url: string) => {
   shell.openExternal(url);
+});
+
+// IPC: abrir diálogo de selección de archivo .sql para restauración
+ipcMain.handle('open-file-dialog', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Seleccionar archivo de backup (.sql)',
+    filters: [{ name: 'SQL Backup', extensions: ['sql'] }],
+    properties: ['openFile'],
+  });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
 // Ciclo de vida de la app
