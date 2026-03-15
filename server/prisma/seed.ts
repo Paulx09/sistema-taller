@@ -3,43 +3,42 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
+export async function runSeed(): Promise<void> {
   console.log('Iniciando seed de la base de datos...');
 
-  // Encriptar contraseña
   const passwordHash = await bcrypt.hash('admin123', 10);
 
-  // Usuario Admin por defecto
   const admin = await prisma.usuario.upsert({
     where: { username: 'admin' },
     update: {
       passwordHash,
       nombreCompleto: 'Administrador del Sistema',
-      rol: 'ADMIN'
+      rol: 'ADMIN',
     },
     create: {
       username: 'admin',
       passwordHash,
       nombreCompleto: 'Administrador del Sistema',
-      rol: 'ADMIN'
-    }
+      rol: 'ADMIN',
+    },
   });
 
-  console.log('Usuario admin creado - ID:', admin.id);
+  console.log('Usuario admin creado/actualizado - ID:', admin.id);
   console.log('Username:', admin.username);
   console.log('Password: admin123');
   console.log('Nombre:', admin.nombreCompleto);
 }
 
-// Ejecutar seed
-main()
-  .then(() => {
+async function main(): Promise<void> {
+  try {
+    await runSeed();
     console.log('Seed ejecutado correctamente.');
-  })
-  .catch((error: unknown) => {
+  } catch (error: unknown) {
     console.error('Error en el seed:', error);
     process.exit(1);
-  })
-  .finally(async () => {
+  } finally {
     await prisma.$disconnect();
-  });
+  }
+}
+
+void main();
