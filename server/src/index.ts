@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import prisma from './config/database';
 import routes from './routes';
 import { runBackup, cleanOldBackups } from './services/backup.service';
+import { bootstrapDatabaseIfEnabled } from './bootstrap/database-bootstrap';
 
 const app = express();
 
@@ -66,50 +67,65 @@ app.use(errorHandler);
 // Iniciar servidor
 const PORT = env.PORT;
 
-app.listen(PORT, () => {
-  console.log('Servidor iniciado correctamente');
-  console.log(`URL: http://localhost:${PORT}`);
-  console.log(`Entorno: ${env.NODE_ENV}`);
-  console.log(`Base de datos: Conectada`);
+async function startServer(): Promise<void> {
+  await bootstrapDatabaseIfEnabled();
 
-  // ── Backup automático programado ──────────────────────────────────────────
-  // Solo en producción (empaquetado con Electron).
-  // Se ejecuta dos veces al día: a las 14:00 y a las 20:00 (hora local).
-  if (env.NODE_ENV === 'production') {
-    function scheduleBackup() {
-      const now = new Date();
-      const targets = [14, 20]; // horas del día
+  app.listen(PORT, () => {
+    console.log('Servidor iniciado correctamente');
+    console.log(`URL: http://localhost:${PORT}`);
+    console.log(`Entorno: ${env.NODE_ENV}`);
+    console.log(`Base de datos: Conectada`);
 
-      // Calcular milisegundos hasta la próxima hora objetivo
-      const delays = targets.map((h) => {
-        const next = new Date(now);
-        next.setHours(h, 0, 0, 0);
-        if (next <= now) next.setDate(next.getDate() + 1); // mañana si ya pasó
-        return next.getTime() - now.getTime();
-      });
+    // ── Backup automático programado ──────────────────────────────────────────
+    // Solo en producción (empaquetado con Electron).
+    // Se ejecuta dos veces al día: a las 14:00 y a las 20:00 (hora local).
+    if (env.NODE_ENV === 'production') {
+      function scheduleBackup() {
+        const now = new Date();
+        const targets = [14, 20]; // horas del día
 
-      const nextMs = Math.min(...delays);
-      console.log(
-        `[Backup] Próximo backup automático en ${Math.round(nextMs / 60_000)} minutos`
-      );
+        // Calcular milisegundos hasta la próxima hora objetivo
+        const delays = targets.map((h) => {
+          const next = new Date(now);
+          next.setHours(h, 0, 0, 0);
+          if (next <= now) next.setDate(next.getDate() + 1); // mañana si ya pasó
+          return next.getTime() - now.getTime();
+        });
 
-      setTimeout(async () => {
-        console.log('[Backup] Ejecutando backup automático...');
-        const result = await runBackup();
-        if (result.success) {
-          console.log(`[Backup] OK → ${result.filename} (${result.sizeKB} KB)`);
-          cleanOldBackups(30);
-        } else {
-          console.error('[Backup] Error:', result.error);
-        }
-        // Programar el siguiente
-        scheduleBackup();
-      }, nextMs);
+        const nextMs = Math.min(...delays);
+        console.log(
+          `[Backup] Próximo backup automático en ${Math.round(nextMs / 60_000)} minutos`
+        );
+
+        setTimeout(async () => {
+          console.log('[Backup] Ejecutando backup automático...');
+          const result = await runBackup();
+          if (result.success) {
+            console.log(`[Backup] OK → ${result.filename} (${result.sizeKB} KB)`);
+            cleanOldBackups(30);
+          } else {
+            console.error('[Backup] Error:', result.error);
+          }
+          // Programar el siguiente
+          scheduleBackup();
+        }, nextMs);
+      }
+
+      scheduleBackup();
     }
+  });
+}
 
-    scheduleBackup();
+async function main(): Promise<void> {
+  try {
+    await startServer();
+  } catch (error: unknown) {
+    console.error('[Bootstrap] Error al iniciar servidor:', error);
+    process.exit(1);
   }
-});
+}
+
+void main();
 
 // Manejo de cierre graceful
 process.on('SIGINT', async () => {
