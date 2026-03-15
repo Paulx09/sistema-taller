@@ -4,11 +4,25 @@ import { cn } from '@/lib/utils';
 import { ModeToggle } from '@/components/mode-toggle';
 import { authService } from '@/services/auth.service';
 import { Button } from '@/components/ui/button';
+import { BackupPanel } from '@/components/BackupPanel';
+import { DatabaseBackup, ChevronUp } from 'lucide-react';
+
+function getRolFromToken(): string | null {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split('.')[1])).rol ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const esAdmin = getRolFromToken() === 'ADMIN';
 
   const handleLogout = () => {
     authService.removeToken();
@@ -111,15 +125,52 @@ export function MainLayout() {
           </NavLink>
         </nav>
 
-        <div className="p-4 border-t border-border mt-auto">
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            className="w-full justify-start gap-2 px-3 text-muted-foreground hover:text-foreground"
-          >
-            <span className="material-symbols-outlined text-[20px]">logout</span>
-            <span>Cerrar Sesión</span>
-          </Button>
+        <div className="border-t border-border mt-auto">
+
+          {/* Copia de seguridad — solo ADMIN */}
+          {esAdmin && (
+            <>
+              <div className="px-3 pt-3">
+                <button
+                  onClick={() => setBackupOpen(prev => !prev)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3 py-2 text-sm rounded-md font-medium transition-colors",
+                    backupOpen
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <DatabaseBackup className="h-[20px] w-[20px] shrink-0" />
+                  <span className="flex-1 text-left">Copia de seguridad</span>
+                  <ChevronUp
+                    className={cn(
+                      "h-4 w-4 transition-transform duration-200",
+                      !backupOpen && "rotate-180"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {backupOpen && (
+                <div className="px-3 pb-2 pt-1">
+                  <BackupPanel />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Cerrar sesión */}
+          <div className="p-4">
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              className="w-full justify-start gap-2 px-3 text-muted-foreground hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+              <span>Cerrar Sesión</span>
+            </Button>
+          </div>
+
         </div>
       </aside>
 

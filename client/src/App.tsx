@@ -12,6 +12,7 @@ import { ClientesPage } from '@/pages/ClientesPage';
 import { OrdenesServicioPage } from '@/pages/OrdenesServicioPage';
 import { OrdenServicioDetalle } from '@/pages/OrdenServicioDetalle';
 import { OrdenServicioPDF } from '@/pages/OrdenServicioPDF';
+import { VentaPDF } from '@/pages/VentaPDF';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
@@ -48,6 +49,14 @@ function App() {
           </Route>
 
           {/* PDF — standalone, sin layout */}
+          <Route
+            path="ventas/:id/pdf"
+            element={
+              <ProtectedRoute>
+                <VentaPDF />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="ordenes-servicio/:id/pdf"
             element={

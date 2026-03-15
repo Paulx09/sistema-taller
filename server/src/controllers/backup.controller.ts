@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { runBackup, cleanOldBackups, BackupResult } from '../services/backup.service';
+import path from 'node:path';
+import { runBackup, cleanOldBackups, runRestore, BackupResult } from '../services/backup.service';
 
 export const backupController = {
   /**
@@ -68,6 +69,54 @@ export const backupController = {
         ultimoBackup: archivos[0] ?? null,
         archivos: archivos.slice(0, 10), // últimos 10
       });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Error desconocido';
+      res.status(500).json({ success: false, error: msg });
+    }
+  },
+
+  /**
+   * POST /api/backup/restaurar
+   * Restaura la base de datos desde un archivo .sql.
+   * - Body { filename }:      restaura desde el BACKUP_DIR del servidor (lista de backups).
+   * - Body { externalPath }:  restaura desde una ruta absoluta elegida por el usuario
+   *                           vía el diálogo de archivo de Electron.
+   */
+  async restaurar(req: Request, res: Response): Promise<void> {
+    try {
+      const { filename, externalPath } = req.body as {
+        filename?: string;
+        externalPath?: string;
+      };
+
+      let absolutePath: string;
+
+      if (filename) {
+        // Seguridad: solo usamos el nombre base, nunca rutas relativas
+        const safeName = path.basename(filename);
+        const backupDir =
+          process.env['BACKUP_DIR'] ||
+          path.join(process.cwd(), 'backups');
+        absolutePath = path.join(backupDir, safeName);
+      } else if (externalPath) {
+        absolutePath = path.resolve(externalPath);
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'Se requiere \'filename\' (backup de la lista) o \'externalPath\' (archivo externo)',
+        });
+        return;
+      }
+
+      console.log(`[Backup] Iniciando restauración desde: ${absolutePath}`);
+      const result = await runRestore(absolutePath);
+
+      if (!result.success) {
+        res.status(500).json({ success: false, error: result.error });
+        return;
+      }
+
+      res.json({ success: true, mensaje: 'Base de datos restaurada correctamente' });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
       res.status(500).json({ success: false, error: msg });
