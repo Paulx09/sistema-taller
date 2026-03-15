@@ -5,6 +5,8 @@
 interface ElectronAPI {
   /** Abre una URL en el navegador predeterminado del sistema operativo. */
   openExternal: (url: string) => void;
+  /** Abre el diálogo nativo del SO para elegir un archivo .sql. Devuelve la ruta o null. */
+  openFileDialog: () => Promise<string | null>;
 }
 
 interface Window {
