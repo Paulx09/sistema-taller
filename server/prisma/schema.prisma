@@ -111,7 +111,8 @@ model Producto {
 
 model Venta {
   id                  String         @id @default(uuid())
-  codigoCorrelativo   Int            @default(autoincrement()) @map("codigo_correlativo")
+  codigoCorrelativo   Int            @map("codigo_correlativo")
+  anioCorrelativo     Int            @map("anio_correlativo")
   fecha               DateTime       @default(now())
   usuarioId           String         @map("usuario_id")
   usuario             Usuario        @relation(fields: [usuarioId], references: [id])
@@ -128,6 +129,7 @@ model Venta {
   detalles            DetalleVenta[]
   series              ProductoSerie[] // FASE 3: Series vendidas en esta venta
 
+  @@unique([anioCorrelativo, codigoCorrelativo])
   @@map("ventas")
 }
 
@@ -310,7 +312,8 @@ model EquipoCliente {
 
 model OrdenServicio {
   id                String            @id @default(uuid())
-  codigoCorrelativo Int               @default(autoincrement()) @map("codigo_correlativo")
+  codigoCorrelativo Int               @map("codigo_correlativo")
+  anioCorrelativo   Int               @map("anio_correlativo")
   clienteId         String            @map("cliente_id")
   cliente           Cliente           @relation(fields: [clienteId], references: [id])
   usuarioRegistroId String            @map("usuario_registro_id")
@@ -331,6 +334,7 @@ model OrdenServicio {
   equipos           EquipoOrden[]     // Uno o más equipos por orden
   movimientos       MovimientoStock[]
 
+  @@unique([anioCorrelativo, codigoCorrelativo])
   @@map("ordenes_servicio")
 }
 

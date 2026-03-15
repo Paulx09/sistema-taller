@@ -82,15 +82,33 @@ const s = StyleSheet.create({
   },
   headerBrand: {
     color: C.white,
-    fontSize: 15,
-    fontFamily: 'Helvetica-Bold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    fontSize: 18,
+    fontFamily: 'Times-Roman',
+    letterSpacing: 0.3,
+    marginBottom: 1,
+  },
+  headerBrandAccent: {
+    color: C.white,
+    fontSize: 22,
+    fontFamily: 'Times-BoldItalic',
+    letterSpacing: 0.2,
+    marginBottom: 3,
+  },
+  headerServices: {
+    color: C.sky300,
+    fontSize: 7,
+    letterSpacing: 0.2,
+    marginBottom: 4,
   },
   headerSubBrand: {
     color: C.slate400,
     fontSize: 7.5,
     letterSpacing: 0.3,
+  },
+  headerContact: {
+    color: C.slate300,
+    fontSize: 7,
+    marginTop: 2,
   },
   headerDocType: {
     color: C.white,
@@ -299,6 +317,40 @@ const s = StyleSheet.create({
     fontSize: 7,
     color: C.gray500,
   },
+  noticeBox: {
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.gray200,
+    borderRadius: 5,
+    backgroundColor: C.gray50,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  noticeTitle: {
+    fontSize: 7.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.gray700,
+    letterSpacing: 0.8,
+    marginBottom: 7,
+  },
+  noticeItem: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    alignItems: 'flex-start',
+  },
+  noticeBullet: {
+    fontSize: 8,
+    color: C.navy,
+    fontFamily: 'Helvetica-Bold',
+    marginRight: 5,
+    marginTop: 0.5,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 7.5,
+    color: C.gray700,
+    lineHeight: 1.5,
+  },
 });
 
 // Badge de estado
@@ -339,8 +391,11 @@ export function GlobalPDFDoc({ orden }: { orden: OrdenServicio }) {
         {/* Header */}
         <View style={s.header}>
           <View>
-            <Text style={s.headerBrand}>SERVICIO TÉCNICO - JOSÉ GÁLVEZ</Text>
-            <Text style={s.headerSubBrand}>Sistema Gestion de Taller</Text>
+            <Text style={s.headerBrand}>SERVICIO TÉCNICO</Text>
+            <Text style={s.headerBrandAccent}>José Gálvez</Text>
+            <Text style={s.headerServices}>Venta y Soporte Técnico  •  Impresoras y Suministros  •  Servidores y Redes</Text>
+            <Text style={s.headerContact}>Av. Lima 961 - José Gálvez - V.M.T</Text>
+            <Text style={s.headerContact}>Cel: 960140558 - 960140542</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.headerDocType}>ORDEN DE SERVICIO</Text>
@@ -441,12 +496,25 @@ export function GlobalPDFDoc({ orden }: { orden: OrdenServicio }) {
           </View>
         </View>
 
+        {/* Condiciones de Servicio y Custodia */}
+        <View style={s.noticeBox}>
+          <Text style={s.noticeTitle}>CONDICIONES DE SERVICIO Y CUSTODIA</Text>
+          <View style={s.noticeItem}>
+            <Text style={s.noticeBullet}>•</Text>
+            <Text style={s.noticeText}>La empresa no se responsabiliza por la integridad o pérdida de equipos que permanezcan en almacén por más de 30 días calendario tras la notificación de recojo.</Text>
+          </View>
+          <View style={s.noticeItem}>
+            <Text style={s.noticeBullet}>•</Text>
+            <Text style={s.noticeText}>Transcurridos los 60 días, el equipo se considerará legalmente en situación de abandono, facultando a la empresa a su disposición final para cubrir gastos operativos y de almacenaje.</Text>
+          </View>
+        </View>
+
         {/* Footer fijo */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>
             {orden.codigoFormateado} — Generado el {formatDate(new Date().toISOString())}
           </Text>
-          <Text style={s.footerText}>Sistema Taller · Documento interno</Text>
+          <Text style={s.footerText}>Servicio Técnico José Gálvez · Documento interno</Text>
         </View>
       </Page>
     </Document>
@@ -470,8 +538,11 @@ export function EquipoPDFDoc({
         {/* Header */}
         <View style={s.header}>
           <View>
-            <Text style={s.headerBrand}>SERVICIO TÉCNICO - JOSÉ GALVÉZ</Text>
-            <Text style={s.headerSubBrand}>Sistema Gestión de Taller</Text>
+            <Text style={s.headerBrand}>SERVICIO TÉCNICO</Text>
+            <Text style={s.headerBrandAccent}>José Gálvez</Text>
+            <Text style={s.headerServices}>Venta y Soporte Técnico  •  Impresoras y Suministros  •  Servidores y Redes</Text>
+            <Text style={s.headerContact}>Av. Lima 961 - José Gálvez - V.M.T</Text>
+            <Text style={s.headerContact}>Cel: 960140558 - 960140542</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.headerDocType}>TICKET DE EQUIPO</Text>
@@ -648,6 +719,19 @@ export function EquipoPDFDoc({
           </View>
         </View>
 
+        {/* Condiciones de Servicio y Custodia */}
+        <View style={s.noticeBox}>
+          <Text style={s.noticeTitle}>CONDICIONES DE SERVICIO Y CUSTODIA</Text>
+          <View style={s.noticeItem}>
+            <Text style={s.noticeBullet}>•</Text>
+            <Text style={s.noticeText}>La empresa no se responsabiliza por la integridad o pérdida de equipos que permanezcan en almacén por más de 30 días calendario tras la notificación de recojo.</Text>
+          </View>
+          <View style={s.noticeItem}>
+            <Text style={s.noticeBullet}>•</Text>
+            <Text style={s.noticeText}>Transcurridos los 60 días, el equipo se considerará legalmente en situación de abandono, facultando a la empresa a su disposición final para cubrir gastos operativos y de almacenaje.</Text>
+          </View>
+        </View>
+
         {/* Footer fijo */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>
@@ -661,7 +745,7 @@ export function EquipoPDFDoc({
               .join(' ')}
           </Text>
           <Text style={s.footerText}>
-            Generado el {formatDate(new Date().toISOString())} · Sistema Taller
+            Generado el {formatDate(new Date().toISOString())} · Servicio Técnico José Gálvez
           </Text>
         </View>
       </Page>
