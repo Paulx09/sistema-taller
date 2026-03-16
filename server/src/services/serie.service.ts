@@ -2,6 +2,26 @@ import { PrismaClient, EstadoSerie } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+function normalizarSeries(numerosSerie: string[]): string[] {
+  return numerosSerie
+    .map((ns) => ns.trim().toUpperCase())
+    .filter((ns) => ns.length > 0);
+}
+
+function obtenerDuplicados(numerosSerie: string[]): string[] {
+  const vistos = new Set<string>();
+  const duplicados = new Set<string>();
+
+  for (const serie of numerosSerie) {
+    if (vistos.has(serie)) {
+      duplicados.add(serie);
+    }
+    vistos.add(serie);
+  }
+
+  return Array.from(duplicados);
+}
+
 /**
  * Servicio para gestionar números de serie de productos
  */
@@ -24,10 +44,14 @@ export const serieService = {
     compraId: string,
     numerosSerie: string[]
   ) {
+    const seriesNormalizadas = normalizarSeries(numerosSerie);
+
+    if (seriesNormalizadas.length === 0) {
+      throw new Error('Debe proporcionar al menos un número de serie válido');
+    }
+
     // Validar que no existan duplicados en el array
-    const duplicadosLocales = numerosSerie.filter(
-      (item, index) => numerosSerie.indexOf(item) !== index
-    );
+    const duplicadosLocales = obtenerDuplicados(seriesNormalizadas);
     if (duplicadosLocales.length > 0) {
       throw new Error(
         `Números de serie duplicados en la lista: ${duplicadosLocales.join(', ')}`
@@ -37,7 +61,7 @@ export const serieService = {
     // Validar que no existan en la BD
     const existentes = await prisma.productoSerie.findMany({
       where: {
-        numeroSerie: { in: numerosSerie },
+        numeroSerie: { in: seriesNormalizadas },
       },
       select: { numeroSerie: true },
     });
@@ -50,10 +74,10 @@ export const serieService = {
 
     // Crear todos los registros
     return await prisma.productoSerie.createMany({
-      data: numerosSerie.map((ns) => ({
+      data: seriesNormalizadas.map((ns) => ({
         productoId,
         compraId,
-        numeroSerie: ns.trim().toUpperCase(),
+        numeroSerie: ns,
         estado: EstadoSerie.DISPONIBLE,
       })),
     });
@@ -67,20 +91,66 @@ export const serieService = {
     productoId: string,
     numerosSerie: string[]
   ) {
+    const seriesNormalizadas = normalizarSeries(numerosSerie);
+
     // Validar que no existan duplicados en el array
-    const duplicadosLocales = numerosSerie.filter(
-      (item, index) => numerosSerie.indexOf(item) !== index
-    );
+    const duplicadosLocales = obtenerDuplicados(seriesNormalizadas);
     if (duplicadosLocales.length > 0) {
       throw new Error(
         `Números de serie duplicados en la lista: ${duplicadosLocales.join(', ')}`
       );
     }
 
+    const producto = await prisma.producto.findUnique({
+      where: { id: productoId },
+      select: {
+        id: true,
+        nombre: true,
+        stockActual: true,
+        garantiaProveedorMeses: true,
+        garantiaClienteMeses: true,
+      },
+    });
+
+    if (!producto) {
+      throw new Error('Producto no encontrado para registrar series');
+    }
+
+    const seriesDisponiblesActuales = await prisma.productoSerie.count({
+      where: {
+        productoId,
+        estado: EstadoSerie.DISPONIBLE,
+      },
+    });
+
+    const faltantes = producto.stockActual - seriesDisponiblesActuales;
+
+    if (faltantes < 0) {
+      throw new Error(
+        `Inconsistencia detectada en "${producto.nombre}": hay ${seriesDisponiblesActuales} series DISPONIBLES pero stock actual ${producto.stockActual}. Debe reconciliarse antes de continuar.`
+      );
+    }
+
+    if (faltantes === 0) {
+      if (seriesNormalizadas.length > 0) {
+        throw new Error(
+          `No se requieren series adicionales para "${producto.nombre}". El stock ya está cubierto por series disponibles.`
+        );
+      }
+
+      return { count: 0 };
+    }
+
+    if (seriesNormalizadas.length !== faltantes) {
+      throw new Error(
+        `Debe registrar exactamente ${faltantes} serie(s) para "${producto.nombre}". Se recibieron ${seriesNormalizadas.length}.`
+      );
+    }
+
     // Validar que no existan en la BD
     const existentes = await prisma.productoSerie.findMany({
       where: {
-        numeroSerie: { in: numerosSerie },
+        numeroSerie: { in: seriesNormalizadas },
       },
       select: { numeroSerie: true },
     });
@@ -93,10 +163,12 @@ export const serieService = {
 
     // Crear todos los registros sin compraId (retroactivo)
     return await prisma.productoSerie.createMany({
-      data: numerosSerie.map((ns) => ({
+      data: seriesNormalizadas.map((ns) => ({
         productoId,
-        numeroSerie: ns.trim().toUpperCase(),
+        numeroSerie: ns,
         estado: EstadoSerie.DISPONIBLE,
+        garantiaProveedorMeses: producto.garantiaProveedorMeses,
+        garantiaClienteMeses: producto.garantiaClienteMeses,
         // compraId será null para series retroactivas
       })),
     });

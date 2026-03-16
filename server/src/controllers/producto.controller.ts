@@ -131,10 +131,13 @@ export class ProductoController {
 
       const producto = await productoService.crear(datosProducto, usuarioId);
 
-      // Si hay series retroactivas, registrarlas vinculadas al nuevo producto
-      if (seriesRetroactivas && Array.isArray(seriesRetroactivas) && seriesRetroactivas.length > 0) {
+      // Si requiere serie y tiene stock, validar/cubrir faltantes con series retroactivas
+      if (producto.requiereSerie && producto.stockActual > 0) {
         try {
-          await serieService.registrarSeriesRetroactivas(producto.id, seriesRetroactivas);
+          await serieService.registrarSeriesRetroactivas(
+            producto.id,
+            Array.isArray(seriesRetroactivas) ? seriesRetroactivas : []
+          );
         } catch (serieError: any) {
           throw new Error(`Producto creado pero falló el registro de series: ${serieError.message}`);
         }
@@ -187,6 +190,8 @@ export class ProductoController {
   async actualizar(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+
+      const productoAntes = await productoService.obtenerPorId(id);
       
       // Si hay nueva imagen, eliminar la anterior
       if (req.body.imagenUrl) {
@@ -201,13 +206,18 @@ export class ProductoController {
       
       const producto = await productoService.actualizar(id, datosProducto);
 
-      // Si hay series retroactivas, registrarlas
-      if (seriesRetroactivas && Array.isArray(seriesRetroactivas) && seriesRetroactivas.length > 0) {
+      // Si requiere serie y tiene stock, validar/cubrir faltantes con series retroactivas
+      if (producto.requiereSerie && producto.stockActual > 0) {
         try {
-          await serieService.registrarSeriesRetroactivas(id, seriesRetroactivas);
+          await serieService.registrarSeriesRetroactivas(
+            id,
+            Array.isArray(seriesRetroactivas) ? seriesRetroactivas : []
+          );
         } catch (serieError: any) {
-          // Si falla el registro de series, revertir el cambio de requiereSerie
-          await productoService.actualizar(id, { requiereSerie: false });
+          // Si falla el registro de series, revertir requiereSerie al estado previo real
+          await productoService.actualizar(id, {
+            requiereSerie: productoAntes?.requiereSerie ?? false,
+          });
           throw new Error(`Error al registrar series: ${serieError.message}`);
         }
       }
