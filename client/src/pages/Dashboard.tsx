@@ -48,6 +48,22 @@ export function Dashboard() {
     refetch();
   };
 
+  const getTrendIcon = (variation: number | null) => {
+    if (variation === null || variation === 0) return 'trending_flat';
+    return variation > 0 ? 'trending_up' : 'trending_down';
+  };
+
+  const getTrendClass = (variation: number | null) => {
+    if (variation === null || variation === 0) return 'text-muted-foreground';
+    return variation > 0 ? 'text-success' : 'text-destructive';
+  };
+
+  const formatVariation = (variation: number | null) => {
+    if (variation === null) return 'Nuevo';
+    if (variation === 0) return '0%';
+    return `${variation > 0 ? '+' : ''}${variation.toFixed(1)}%`;
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -84,11 +100,11 @@ export function Dashboard() {
           <div className="flex flex-col gap-1 relative z-10">
             <h3 className="text-2xl font-bold text-foreground">S/ {metrics.gananciaHoy.toFixed(2)}</h3>
              <div className="flex items-center text-xs text-muted-foreground">
-               <span className="text-success font-medium flex items-center mr-1">
-                 <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                 {' '}+0%
+               <span className={cn('font-medium flex items-center mr-1', getTrendClass(metrics.variacionGananciaPct))}>
+                 <span className="material-symbols-outlined text-[14px]">{getTrendIcon(metrics.variacionGananciaPct)}</span>
+                 {' '}{formatVariation(metrics.variacionGananciaPct)}
                </span>
-               {' '}margen neto
+               {' '}margen neto {metrics.margenNetoHoyPct.toFixed(1)}%
             </div>
           </div>
         </div>
@@ -102,9 +118,9 @@ export function Dashboard() {
           <div className="flex flex-col gap-1">
             <h3 className="text-2xl font-bold text-foreground">{metrics.ventasHoy}</h3>
             <div className="flex items-center text-xs text-muted-foreground">
-               <span className="text-success font-medium flex items-center mr-1">
-                 <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                 {' '}+0%
+               <span className={cn('font-medium flex items-center mr-1', getTrendClass(metrics.variacionVentasPct))}>
+                 <span className="material-symbols-outlined text-[14px]">{getTrendIcon(metrics.variacionVentasPct)}</span>
+                 {' '}{formatVariation(metrics.variacionVentasPct)}
                </span>
                {' '}vs. ayer
             </div>
