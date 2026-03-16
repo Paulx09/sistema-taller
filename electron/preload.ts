@@ -13,4 +13,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url: string): void => {
     ipcRenderer.invoke('open-external', url);
   },
+
+  /**
+   * Abre el diálogo nativo del SO para seleccionar un archivo .sql.
+   * Devuelve la ruta absoluta seleccionada, o null si se canceló.
+   */
+  openFileDialog: (): Promise<string | null> => {
+    return ipcRenderer.invoke('open-file-dialog');
+  },
 });
