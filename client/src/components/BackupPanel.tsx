@@ -139,6 +139,7 @@ export function BackupPanel() {
   }
 
   const ocupado = ejecutando || restaurando;
+  const backupsDisponibles = estado?.archivos ?? [];
 
   return (
     <>
@@ -204,7 +205,7 @@ export function BackupPanel() {
         </Button>
 
         {/* Lista de backups para restaurar */}
-        {(estado?.archivos?.length ?? 0) > 0 && (
+        {backupsDisponibles.length > 0 && (
           <>
             <Separator />
             <div className="space-y-1.5">
@@ -212,7 +213,7 @@ export function BackupPanel() {
                 Restaurar un backup
               </p>
               <div className="max-h-36 overflow-y-auto space-y-1 pr-0.5">
-                {estado.archivos.map((archivo) => (
+                {backupsDisponibles.map((archivo) => (
                   <div
                     key={archivo.nombre}
                     className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 bg-muted/50 hover:bg-muted transition-colors"
