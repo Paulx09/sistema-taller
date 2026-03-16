@@ -2,7 +2,12 @@ import api from './api';
 
 export interface DashboardMetrics {
   ventasHoy: number;
+  ventasAyer: number;
   gananciaHoy: number;
+  gananciaAyer: number;
+  variacionVentasPct: number | null;
+  variacionGananciaPct: number | null;
+  margenNetoHoyPct: number;
   productosStockBajo: number;
   productosSinMovimiento: number;
   ordenesActivas: number;
@@ -40,7 +45,12 @@ export const dashboardService = {
       // Fallback en caso de error
       return {
         ventasHoy: 0,
+        ventasAyer: 0,
         gananciaHoy: 0,
+        gananciaAyer: 0,
+        variacionVentasPct: 0,
+        variacionGananciaPct: 0,
+        margenNetoHoyPct: 0,
         productosStockBajo: 0,
         productosSinMovimiento: 0,
         ordenesActivas: 0,

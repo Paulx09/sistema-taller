@@ -5,7 +5,12 @@ import type { DashboardMetrics, ProductoBajoStock, ProductoSinMovimiento } from 
 export function useDashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     ventasHoy: 0,
+    ventasAyer: 0,
     gananciaHoy: 0,
+    gananciaAyer: 0,
+    variacionVentasPct: 0,
+    variacionGananciaPct: 0,
+    margenNetoHoyPct: 0,
     productosStockBajo: 0,
     productosSinMovimiento: 0,
     ordenesActivas: 0,
