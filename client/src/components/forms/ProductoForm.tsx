@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
+import { serieService } from '@/services/serie.service';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -145,7 +146,8 @@ export function ProductoForm({
   
   // Estados para modal de series retroactivas
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
-  const [_seriesRetroactivas, setSeriesRetroactivas] = useState<string[]>([]);
+  const [, setSeriesRetroactivas] = useState<string[]>([]);
+  const [cantidadSeriesPendientes, setCantidadSeriesPendientes] = useState(0);
   // Ref síncrono para evitar stale closures al verificar series escaneadas
   const seriesRetroactivasRef = useRef<string[]>([]);
   // Guarda los datos del form cuando hay que escanear antes de guardar (nuevo producto)
@@ -212,14 +214,35 @@ export function ProductoForm({
         const stockActual = producto?.stockActual || 0;
         
         if (producto && stockActual > 0) {
-          // Producto en edición con stock existente - abrir modal para registrar series
-          setSeriesModalOpen(true);
+          // Producto en edición con stock existente: pedir solo series faltantes
+          serieService
+            .obtenerEstadisticas(producto.id)
+            .then((estadisticas) => {
+              const seriesDisponibles = estadisticas.DISPONIBLE ?? 0;
+              const faltantes = stockActual - seriesDisponibles;
+
+              if (faltantes > 0) {
+                setCantidadSeriesPendientes(faltantes);
+                setSeriesModalOpen(true);
+              }
+
+              if (faltantes < 0) {
+                form.setValue('requiereSerie', false);
+                prevRequiereSerieRef.current = false;
+              }
+            })
+            .catch(() => {
+              form.setValue('requiereSerie', false);
+              prevRequiereSerieRef.current = false;
+            });
         }
         
         prevRequiereSerieRef.current = true;
       } else if (name === 'requiereSerie' && !value.requiereSerie) {
         prevRequiereSerieRef.current = false;
         setSeriesRetroactivas([]); // Limpiar series si se desactiva
+        seriesRetroactivasRef.current = [];
+        setCantidadSeriesPendientes(0);
       }
     });
     return () => subscription.unsubscribe();
@@ -288,8 +311,34 @@ export function ProductoForm({
     // NUEVO PRODUCTO: Si requiere serie y tiene stock inicial, abrir escáner ANTES de guardar
     if (!producto && data.requiereSerie && Number.parseInt(data.stockActual || '0') > 0 && seriesRetroactivasRef.current.length === 0) {
       pendingSubmitRef.current = data;
+      setCantidadSeriesPendientes(Number.parseInt(data.stockActual || '0'));
       setSeriesModalOpen(true);
       return; // Esperar a que se completen las series; handleSeriesCompletas re-lanzará el guardado
+    }
+
+    // Si requiere serie y hay faltantes, exigir solo las series faltantes
+    if (producto && data.requiereSerie && producto.stockActual > 0 && seriesRetroactivasRef.current.length === 0) {
+      try {
+        const estadisticas = await serieService.obtenerEstadisticas(producto.id);
+        const seriesDisponibles = estadisticas.DISPONIBLE ?? 0;
+        const faltantes = producto.stockActual - seriesDisponibles;
+
+        if (faltantes > 0) {
+          setCantidadSeriesPendientes(faltantes);
+          setSeriesModalOpen(true);
+          return;
+        }
+
+        if (faltantes < 0) {
+          form.setValue('requiereSerie', false);
+          prevRequiereSerieRef.current = false;
+          return;
+        }
+      } catch {
+        form.setValue('requiereSerie', false);
+        prevRequiereSerieRef.current = false;
+        return;
+      }
     }
 
     try {
@@ -953,7 +1002,7 @@ export function ProductoForm({
             }
           }}
           productoNombre={producto?.nombre ?? form.getValues('nombre')}
-          cantidad={producto ? producto.stockActual : Number.parseInt(form.getValues('stockActual') || '0')}
+          cantidad={cantidadSeriesPendientes}
           onSeriesCompletas={handleSeriesCompletas}
           modo="compra"
         />
