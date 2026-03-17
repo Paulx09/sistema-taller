@@ -110,7 +110,7 @@ export function BackupPanel() {
     const filePath = await eAPI.openFileDialog();
     if (!filePath) return;
     const parts = filePath.replaceAll('\\', '/').split('/');
-    const label = parts[parts.length - 1] ?? filePath;
+    const label = parts.at(-1) ?? filePath;
     pedirConfirmacion({ label, payload: { externalPath: filePath } });
   }
 
@@ -254,10 +254,10 @@ export function BackupPanel() {
             variant="ghost"
             onClick={handlePickFile}
             disabled={ocupado}
-            className="w-full justify-start text-muted-foreground hover:text-foreground text-xs h-7 px-2"
+            className="w-full justify-start text-muted-foreground hover:text-foreground text-xs h-auto min-h-7 px-2 py-1.5 whitespace-normal"
           >
-            <FolderOpen className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-            Restaurar desde archivo externo…
+            <FolderOpen className="h-3.5 w-3.5 mr-1.5 shrink-0 self-start mt-0.5" />
+            <span className="leading-tight text-left break-words">Restaurar desde archivo externo...</span>
           </Button>
         )}
 
