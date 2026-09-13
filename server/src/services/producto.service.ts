@@ -2,8 +2,9 @@ import prisma from '../config/database';
 import { Producto, Prisma } from '@prisma/client';
 
 interface CrearProductoData {
-  nombre: string;
+  nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
@@ -29,6 +30,7 @@ interface CrearProductoData {
 interface ActualizarProductoData {
   nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
@@ -52,6 +54,7 @@ interface ActualizarProductoData {
 interface FiltrosProducto {
   busqueda?: string;
   categoriaId?: string;
+  marcaId?: string;
   esServicio?: boolean;
   bajoStock?: boolean;
   preciosPendientes?: boolean;
@@ -60,9 +63,63 @@ interface FiltrosProducto {
 }
 
 export class ProductoService {
+  // Helper para autogenerar nombre comercial a partir de Categoría + Marca + Modelo
+  private async generarNombreProducto(data: {
+    nombre?: string;
+    categoriaId?: string;
+    marcaId?: string;
+    marca?: string;
+    modelo?: string;
+  }): Promise<{ nombre: string; marca: string; marcaId?: string | null }> {
+    let marcaNombre = data.marca?.trim() || '';
+    let marcaIdFinal = data.marcaId || null;
+
+    if (data.marcaId) {
+      const marcaFound = await prisma.marca.findUnique({
+        where: { id: data.marcaId },
+        select: { id: true, nombre: true },
+      });
+      if (marcaFound) {
+        marcaNombre = marcaFound.nombre;
+        marcaIdFinal = marcaFound.id;
+      }
+    } else if (marcaNombre) {
+      // Buscar si existe una marca por nombre o crearla si es necesario
+      const marcaFound = await prisma.marca.findFirst({
+        where: { nombre: { equals: marcaNombre, mode: 'insensitive' }, deletedAt: null },
+      });
+      if (marcaFound) {
+        marcaIdFinal = marcaFound.id;
+        marcaNombre = marcaFound.nombre;
+      }
+    }
+
+    if (data.nombre && data.nombre.trim().length > 0) {
+      return { nombre: data.nombre.trim(), marca: marcaNombre, marcaId: marcaIdFinal };
+    }
+
+    let categoriaNombre = '';
+    if (data.categoriaId) {
+      const cat = await prisma.categoria.findUnique({
+        where: { id: data.categoriaId },
+        select: { nombre: true },
+      });
+      categoriaNombre = cat?.nombre || '';
+    }
+
+    const partes = [categoriaNombre, marcaNombre, data.modelo?.trim()].filter(Boolean);
+    const nombreGenerado = partes.join(' ').trim() || 'Producto sin nombre';
+
+    return {
+      nombre: nombreGenerado,
+      marca: marcaNombre,
+      marcaId: marcaIdFinal,
+    };
+  }
+
   // Listar productos con filtros y paginación
   async listar(filtros: FiltrosProducto = {}) {
-    const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
+    const { busqueda, categoriaId, marcaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
 
     const where: Prisma.ProductoWhereInput = {
       deletedAt: null,
@@ -75,6 +132,7 @@ export class ProductoService {
         ],
       }),
       ...(categoriaId && { categoriaId }),
+      ...(marcaId && { marcaId }),
       ...(esServicio !== undefined && { esServicio }),
       ...(bajoStock && {
         stockActual: { lte: prisma.producto.fields.stockMinimo },
@@ -93,6 +151,7 @@ export class ProductoService {
         where,
         include: {
           categoria: { select: { id: true, nombre: true } },
+          marcaRel: { select: { id: true, nombre: true } },
           ubicacion: { select: { id: true, nombre: true } },
           padre: { select: { id: true, nombre: true } },
           historialCostos: {
@@ -219,6 +278,7 @@ export class ProductoService {
       },
       include: {
         categoria: true,
+        marcaRel: true,
         ubicacion: true,
         padre: { select: { id: true, nombre: true } },
         hijos: {
@@ -245,10 +305,19 @@ export class ProductoService {
     // Si es servicio, forzar valores por defecto en campos que no aplican
     const esServicio = data.esServicio ?? false;
     
+    const { nombre, marca, marcaId } = await this.generarNombreProducto({
+      nombre: data.nombre,
+      categoriaId: data.categoriaId,
+      marcaId: data.marcaId,
+      marca: data.marca,
+      modelo: data.modelo,
+    });
+
     const producto = await prisma.producto.create({
       data: {
-        nombre: data.nombre,
-        marca: esServicio ? null : data.marca,
+        nombre,
+        marca: esServicio ? null : marca,
+        marcaId: esServicio ? null : marcaId,
         modelo: esServicio ? null : data.modelo,
         sku: esServicio ? null : data.sku,
         codigoBarras: esServicio ? null : data.codigoBarras,
@@ -307,18 +376,52 @@ export class ProductoService {
     
     if (data.esServicio === true) {
       updateData.marca = null;
+      updateData.marcaId = null;
       updateData.modelo = null;
       updateData.sku = null;
       updateData.codigoBarras = null;
       updateData.ubicacionId = null;
       updateData.precioCompra = new Prisma.Decimal(0);
       updateData.stockMinimo = 0;
+    } else {
+      // Si cambia marcaId, marca, modelo o categoriaId, autogenerar nombre si no se envía uno explícito
+      const productoActual = await prisma.producto.findUnique({
+        where: { id },
+        select: {
+          nombre: true,
+          categoriaId: true,
+          marcaId: true,
+          marca: true,
+          modelo: true,
+          precioCompra: true,
+          precioVenta: true,
+        },
+      });
+
+      if (productoActual) {
+        const categoriaId = updateData.categoriaId || productoActual.categoriaId;
+        const marcaId = updateData.marcaId !== undefined ? updateData.marcaId : productoActual.marcaId;
+        const marca = updateData.marca !== undefined ? updateData.marca : productoActual.marca;
+        const modelo = updateData.modelo !== undefined ? updateData.modelo : productoActual.modelo;
+
+        const { nombre, marca: resolvedMarca, marcaId: resolvedMarcaId } =
+          await this.generarNombreProducto({
+            nombre: updateData.nombre,
+            categoriaId,
+            marcaId: marcaId || undefined,
+            marca: marca || undefined,
+            modelo: modelo || undefined,
+          });
+
+        updateData.nombre = nombre;
+        updateData.marca = resolvedMarca || null;
+        updateData.marcaId = resolvedMarcaId || null;
+      }
     }
     
     // Recalcular margenReferencia automáticamente si se actualiza precioCompra o precioVenta
     // (pero solo si no se proveyó explícitamente un margenReferencia)
     if (updateData.margenReferencia === undefined && (updateData.precioCompra || updateData.precioVenta)) {
-      // Obtener datos actuales del producto
       const productoActual = await prisma.producto.findUnique({
         where: { id },
         select: { precioCompra: true, precioVenta: true },

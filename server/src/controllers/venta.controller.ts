@@ -84,10 +84,11 @@ class VentaController {
   // POST /api/ventas
   async crear(req: Request, res: Response, next: NextFunction) {
     try {
-      const { clienteNombre, metodoPago, detalles } = req.body;
+      const { clienteId, clienteNombre, metodoPago, detalles } = req.body;
 
       // req.userId viene del middleware requireAuth
       const venta = await ventaService.crear({
+        clienteId,
         clienteNombre,
         metodoPago,
         detalles,

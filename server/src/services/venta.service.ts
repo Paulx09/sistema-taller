@@ -9,7 +9,8 @@ interface DetalleVentaInput {
 }
 
 interface CrearVentaData {
-  clienteNombre?: string;
+  clienteId?: string | null;
+  clienteNombre?: string | null;
   metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
   detalles: DetalleVentaInput[];
   usuarioId: string;
@@ -62,6 +63,9 @@ class VentaService {
         take,
         orderBy: { fecha: 'desc' },
         include: {
+          cliente: {
+            select: { id: true, nombre: true, dniRuc: true, telefono: true },
+          },
           usuario: {
             select: { id: true, username: true, nombreCompleto: true },
           },
@@ -107,6 +111,9 @@ class VentaService {
     const venta = await prisma.venta.findFirst({
       where: { id, deletedAt: null },
       include: {
+        cliente: {
+          select: { id: true, nombre: true, dniRuc: true, telefono: true },
+        },
         usuario: {
           select: { id: true, username: true, nombreCompleto: true },
         },
@@ -244,16 +251,31 @@ class VentaService {
       const anio = ahora.getFullYear();
       const correlativo = await this.nextCorrelativo(tx, anio);
 
+      let finalClienteNombre = clienteNombre?.trim() || null;
+      if (data.clienteId && !finalClienteNombre) {
+        const cli = await tx.cliente.findUnique({
+          where: { id: data.clienteId },
+          select: { nombre: true },
+        });
+        if (cli) finalClienteNombre = cli.nombre;
+      }
+
       const nuevaVenta = await tx.venta.create({
         data: {
           codigoCorrelativo: correlativo,
           anioCorrelativo: anio,
           usuarioId,
-          clienteNombre: clienteNombre || null,
+          clienteId: data.clienteId || null,
+          clienteNombre: finalClienteNombre,
           metodoPago,
           total: totalVenta,
           gananciaTotal,
           estado: 'COMPLETADA',
+        },
+        include: {
+          cliente: {
+            select: { id: true, nombre: true, dniRuc: true, telefono: true },
+          },
         },
       });
 

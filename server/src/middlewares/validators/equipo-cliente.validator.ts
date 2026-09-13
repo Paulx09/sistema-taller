@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 
 const crearEquipoSchema = z.object({
+  tipoEquipoId: z.string().uuid().optional().nullable(),
   tipoEquipo: z.string()
-    .min(1, 'El tipo de equipo es requerido')
     .max(50, 'El tipo de equipo no puede exceder 50 caracteres')
-    .trim(),
+    .trim()
+    .optional(),
+  marcaId: z.string().uuid().optional().nullable(),
   marca: z.string()
     .max(50, 'La marca no puede exceder 50 caracteres')
     .trim()
@@ -26,14 +28,18 @@ const crearEquipoSchema = z.object({
     .trim()
     .optional()
     .nullable(),
+}).refine((data) => data.tipoEquipoId || data.tipoEquipo, {
+  message: 'El tipo de equipo es requerido',
+  path: ['tipoEquipo'],
 });
 
 const actualizarEquipoSchema = z.object({
+  tipoEquipoId: z.string().uuid().optional().nullable(),
   tipoEquipo: z.string()
-    .min(1, 'El tipo de equipo es requerido')
     .max(50, 'El tipo de equipo no puede exceder 50 caracteres')
     .trim()
     .optional(),
+  marcaId: z.string().uuid().optional().nullable(),
   marca: z.string()
     .max(50, 'La marca no puede exceder 50 caracteres')
     .trim()

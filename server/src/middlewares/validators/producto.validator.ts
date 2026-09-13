@@ -6,10 +6,11 @@ const crearProductoSchema = z
   .object({
     nombre: z
       .string()
-      .min(1, 'El nombre es requerido')
       .max(150, 'El nombre no puede exceder 150 caracteres')
-      .trim(),
+      .trim()
+      .optional(),
     marca: z.string().max(50, 'La marca no puede exceder 50 caracteres').trim().optional(),
+    marcaId: z.string().min(1).optional(),
     modelo: z.string().max(50, 'El modelo no puede exceder 50 caracteres').trim().optional(),
     sku: z.string().max(50, 'El SKU no puede exceder 50 caracteres').trim().optional(),
     codigoBarras: z
@@ -88,11 +89,11 @@ const actualizarProductoSchema = z
   .object({
     nombre: z
       .string()
-      .min(1, 'El nombre es requerido')
       .max(150, 'El nombre no puede exceder 150 caracteres')
       .trim()
       .optional(),
     marca: z.string().max(50, 'La marca no puede exceder 50 caracteres').trim().optional(),
+    marcaId: z.string().min(1).optional(),
     modelo: z.string().max(50, 'El modelo no puede exceder 50 caracteres').trim().optional(),
     sku: z.string().max(50, 'El SKU no puede exceder 50 caracteres').trim().optional(),
     codigoBarras: z
@@ -335,17 +336,49 @@ const validarProductoPadre = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+// Validación de negocio: Verificar que marca existe (si se envía marcaId)
+const validarMarcaExiste = async (req: Request, res: Response, next: NextFunction) => {
+  const { marcaId } = req.body;
+
+  if (!marcaId) {
+    return next();
+  }
+
+  try {
+    const marca = await prisma.marca.findFirst({
+      where: { id: marcaId, deletedAt: null },
+    });
+
+    if (!marca) {
+      return res.status(404).json({
+        error: 'Marca no encontrada',
+        mensaje: 'La marca especificada no existe o fue eliminada',
+      });
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Validador específico para Crear Producto Rápido (desde Compras)
 // Permite precios en 0 y menos campos obligatorios
 const crearProductoRapidoSchema = z
   .object({
     nombre: z
       .string()
-      .min(1, 'El nombre es requerido')
       .max(150, 'El nombre no puede exceder 150 caracteres')
-      .trim(),
+      .trim()
+      .optional(),
     marca: z.string().max(50, 'La marca no puede exceder 50 caracteres').trim().optional(),
+    marcaId: z.string().min(1).optional(),
     modelo: z.string().max(50, 'El modelo no puede exceder 50 caracteres').trim().optional(),
+    descripcion: z
+      .string()
+      .max(255, 'La descripción no puede exceder 255 caracteres')
+      .trim()
+      .optional(),
     categoriaId: z.string().min(1, 'El ID de categoría es requerido'),
     ubicacionId: z.string().min(1).optional(),
     precioCompra: z
@@ -391,11 +424,23 @@ const crearProductoRapidoSchema = z
   });
 
 export const productoValidator = {
-  crear: [validate(crearProductoSchema), validarCategoriaExiste, validarUbicacionExiste, validarProductoPadre],
-  crearRapido: [validate(crearProductoRapidoSchema), validarCategoriaExiste, validarUbicacionExiste],
+  crear: [
+    validate(crearProductoSchema),
+    validarCategoriaExiste,
+    validarMarcaExiste,
+    validarUbicacionExiste,
+    validarProductoPadre,
+  ],
+  crearRapido: [
+    validate(crearProductoRapidoSchema),
+    validarCategoriaExiste,
+    validarMarcaExiste,
+    validarUbicacionExiste,
+  ],
   actualizar: [
     validate(actualizarProductoSchema),
     validarCategoriaExiste,
+    validarMarcaExiste,
     validarUbicacionExiste,
     validarProductoPadre,
   ],
