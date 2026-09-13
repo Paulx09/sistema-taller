@@ -47,6 +47,18 @@ model Categoria {
   @@map("categorias")
 }
 
+model Marca {
+  id          String          @id @default(uuid())
+  nombre      String          @unique @db.VarChar(50)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  productos   Producto[]
+  equipos     EquipoCliente[]
+
+  @@map("marcas")
+}
+
 model Ubicacion {
   id                  String       @id @default(uuid())
   nombre              String       @db.VarChar(100)
@@ -72,6 +84,8 @@ model Producto {
   descripcion     String?           @db.VarChar(255)
   categoriaId     String            @map("categoria_id")
   categoria       Categoria         @relation(fields: [categoriaId], references: [id])
+  marcaId         String?           @map("marca_id")
+  marcaRel        Marca?            @relation(fields: [marcaId], references: [id])
   ubicacionId     String?           @map("ubicacion_id")
   ubicacion       Ubicacion?        @relation(fields: [ubicacionId], references: [id])
   precioCompra    Decimal           @map("precio_compra") @db.Decimal(10, 2)
@@ -294,11 +308,28 @@ model Cliente {
   @@map("clientes")
 }
 
+model TipoEquipo {
+  id            String          @id @default(uuid())
+  nombre        String          @unique @db.VarChar(50)
+  requiereClave Boolean         @default(false) @map("requiere_clave")
+  activo        Boolean         @default(true)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  deletedAt     DateTime?       @map("deleted_at")
+  equipos       EquipoCliente[]
+
+  @@map("tipos_equipo")
+}
+
 model EquipoCliente {
   id               String          @id @default(uuid())
   clienteId        String          @map("cliente_id")
   cliente          Cliente         @relation(fields: [clienteId], references: [id])
+  tipoEquipoId     String?         @map("tipo_equipo_id")
+  tipoEquipoRel    TipoEquipo?     @relation(fields: [tipoEquipoId], references: [id])
   tipoEquipo       String          @map("tipo_equipo") @db.VarChar(50)
+  marcaId          String?         @map("marca_id")
+  marcaRel         Marca?          @relation(fields: [marcaId], references: [id])
   marca            String?         @db.VarChar(50)
   modelo           String?         @db.VarChar(50)
   numeroSerie      String?         @map("numero_serie") @db.VarChar(100)
