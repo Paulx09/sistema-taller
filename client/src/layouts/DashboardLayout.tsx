@@ -1,8 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  MapPin,
-  Tag,
   Package,
   ShoppingCart,
   LayoutDashboard,
@@ -16,16 +14,6 @@ const sidebarLinks = [
     label: 'Dashboard',
     href: '/',
     icon: LayoutDashboard,
-  },
-  {
-    label: 'Ubicaciones',
-    href: '/ubicaciones',
-    icon: MapPin,
-  },
-  {
-    label: 'Categorías',
-    href: '/categorias',
-    icon: Tag,
   },
   {
     label: 'Productos',

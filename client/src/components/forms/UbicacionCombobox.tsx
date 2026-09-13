@@ -25,32 +25,32 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { categoriaService } from '@/services/categoria.service';
-import type { Categoria } from '@/types';
+import { ubicacionService } from '@/services/ubicacion.service';
+import type { Ubicacion } from '@/types';
 
-interface CategoriaComboboxProps {
+interface UbicacionComboboxProps {
   value?: string; // id o nombre
-  onChange: (categoriaId: string, categoriaNombre?: string) => void;
-  categorias: Categoria[];
-  onCategoriaCreada?: (categoria: Categoria) => void;
-  onCategoriaActualizada?: (categoria: Categoria) => void;
-  onCategoriaEliminada?: (id: string) => void;
+  onChange: (ubicacionId: string, ubicacionNombre?: string) => void;
+  ubicaciones: Ubicacion[];
+  onUbicacionCreada?: (ubicacion: Ubicacion) => void;
+  onUbicacionActualizada?: (ubicacion: Ubicacion) => void;
+  onUbicacionEliminada?: (id: string) => void;
   onRefresh?: () => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
-export function CategoriaCombobox({
+export function UbicacionCombobox({
   value,
   onChange,
-  categorias,
-  onCategoriaCreada,
-  onCategoriaActualizada,
-  onCategoriaEliminada,
+  ubicaciones,
+  onUbicacionCreada,
+  onUbicacionActualizada,
+  onUbicacionEliminada,
   onRefresh,
   disabled,
-  placeholder = 'Seleccionar categoría...',
-}: Readonly<CategoriaComboboxProps>) {
+  placeholder = 'Seleccionar ubicación...',
+}: Readonly<UbicacionComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [crearOpen, setCrearOpen] = useState(false);
   const [gestionarOpen, setGestionarOpen] = useState(false);
@@ -65,22 +65,22 @@ export function CategoriaCombobox({
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [gestionError, setGestionError] = useState<string | null>(null);
 
-  // Label local para mostrar la categoría seleccionada
+  // Label local para mostrar la ubicación seleccionada
   const [selectedLabel, setSelectedLabel] = useState<string>(() => {
     if (!value) return '';
-    const found = categorias.find((c) => c.id === value || c.nombre.toLowerCase() === value.toLowerCase());
+    const found = ubicaciones.find((u) => u.id === value || u.nombre.toLowerCase() === value.toLowerCase());
     return found ? found.nombre : value;
   });
 
   useEffect(() => {
     if (value) {
-      const found = categorias.find((c) => c.id === value || c.nombre.toLowerCase() === value.toLowerCase());
+      const found = ubicaciones.find((u) => u.id === value || u.nombre.toLowerCase() === value.toLowerCase());
       if (found) setSelectedLabel(found.nombre);
       else setSelectedLabel(value);
     } else {
       setSelectedLabel('');
     }
-  }, [value, categorias]);
+  }, [value, ubicaciones]);
 
   const handleCrear = async () => {
     const nombre = nuevoNombre.trim();
@@ -91,17 +91,17 @@ export function CategoriaCombobox({
     setCreando(true);
     setErrorCrear(null);
     try {
-      const nueva = await categoriaService.create({ nombre });
+      const nueva = await ubicacionService.create({ nombre });
       setSelectedLabel(nueva.nombre);
       onChange(nueva.id, nueva.nombre);
-      onCategoriaCreada?.(nueva);
+      onUbicacionCreada?.(nueva);
       onRefresh?.();
       setNuevoNombre('');
       setCrearOpen(false);
     } catch (err) {
       const e = err as { response?: { data?: { message?: string; error?: string } } };
       setErrorCrear(
-        e.response?.data?.message || e.response?.data?.error || 'Error al crear categoría'
+        e.response?.data?.message || e.response?.data?.error || 'Error al crear ubicación'
       );
     } finally {
       setCreando(false);
@@ -120,10 +120,10 @@ export function CategoriaCombobox({
     setGuardandoEdit(true);
     setGestionError(null);
     try {
-      const actualizada = await categoriaService.update(id, { nombre });
-      onCategoriaActualizada?.(actualizada);
+      const actualizada = await ubicacionService.update(id, { nombre });
+      onUbicacionActualizada?.(actualizada);
       onRefresh?.();
-      if (value === id || selectedLabel === categorias.find((c) => c.id === id)?.nombre) {
+      if (value === id || selectedLabel === ubicaciones.find((u) => u.id === id)?.nombre) {
         setSelectedLabel(actualizada.nombre);
         onChange(actualizada.id, actualizada.nombre);
       }
@@ -132,7 +132,7 @@ export function CategoriaCombobox({
     } catch (err) {
       const e = err as { response?: { data?: { message?: string; error?: string } } };
       setGestionError(
-        e.response?.data?.message || e.response?.data?.error || 'Error al actualizar categoría'
+        e.response?.data?.message || e.response?.data?.error || 'Error al actualizar ubicación'
       );
     } finally {
       setGuardandoEdit(false);
@@ -142,10 +142,10 @@ export function CategoriaCombobox({
   const handleEliminar = async (id: string) => {
     setEliminandoId(id);
     setGestionError(null);
-    const itemEliminado = categorias.find((c) => c.id === id);
+    const itemEliminado = ubicaciones.find((u) => u.id === id);
     try {
-      await categoriaService.delete(id);
-      onCategoriaEliminada?.(id);
+      await ubicacionService.delete(id);
+      onUbicacionEliminada?.(id);
       onRefresh?.();
       if (value === id || (itemEliminado && selectedLabel.toLowerCase() === itemEliminado.nombre.toLowerCase())) {
         setSelectedLabel('');
@@ -154,7 +154,7 @@ export function CategoriaCombobox({
     } catch (err) {
       const e = err as { response?: { data?: { message?: string; error?: string } } };
       setGestionError(
-        e.response?.data?.message || e.response?.data?.error || 'No se puede eliminar la categoría porque tiene productos asignados'
+        e.response?.data?.message || e.response?.data?.error || 'No se puede eliminar la ubicación porque tiene productos asignados'
       );
     } finally {
       setEliminandoId(null);
@@ -181,10 +181,10 @@ export function CategoriaCombobox({
         </PopoverTrigger>
         <PopoverContent className="w-[280px] p-0" align="start">
           <Command>
-            <CommandInput placeholder="Buscar categoría..." />
+            <CommandInput placeholder="Buscar ubicación..." />
             <CommandList>
               <CommandEmpty className="p-2 text-xs text-muted-foreground text-center">
-                No se encontraron categorías.
+                No se encontraron ubicaciones.
                 <Button
                   type="button"
                   variant="link"
@@ -195,27 +195,27 @@ export function CategoriaCombobox({
                     handleOpenCrear();
                   }}
                 >
-                  + Crear nueva categoría
+                  + Crear nueva ubicación
                 </Button>
               </CommandEmpty>
               <CommandGroup>
-                {categorias.map((cat) => (
+                {ubicaciones.map((u) => (
                   <CommandItem
-                    key={cat.id}
-                    value={cat.nombre}
+                    key={u.id}
+                    value={u.nombre}
                     onSelect={() => {
-                      setSelectedLabel(cat.nombre);
-                      onChange(cat.id, cat.nombre);
+                      setSelectedLabel(u.nombre);
+                      onChange(u.id, u.nombre);
                       setOpen(false);
                     }}
                   >
                     <Check
                       className={cn(
                         'mr-2 h-4 w-4 shrink-0',
-                        value === cat.id || value === cat.nombre ? 'opacity-100' : 'opacity-0'
+                        value === u.id || value === u.nombre ? 'opacity-100' : 'opacity-0'
                       )}
                     />
-                    {cat.nombre}
+                    {u.nombre}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -224,20 +224,20 @@ export function CategoriaCombobox({
         </PopoverContent>
       </Popover>
 
-      {/* Botón rápido para crear categoría */}
+      {/* Botón rápido para crear ubicación */}
       <Button
         type="button"
         variant="outline"
         size="icon"
         disabled={disabled}
         onClick={handleOpenCrear}
-        title="Nueva categoría"
+        title="Nueva ubicación"
         className="shrink-0 h-9 w-9"
       >
         <Plus className="h-4 w-4" />
       </Button>
 
-      {/* Botón para gestionar categorías en Pop-Up */}
+      {/* Botón para gestionar ubicaciones en Pop-Up */}
       <Button
         type="button"
         variant="ghost"
@@ -247,31 +247,31 @@ export function CategoriaCombobox({
           setGestionError(null);
           setGestionarOpen(true);
         }}
-        title="Gestionar categorías (editar o eliminar)"
+        title="Gestionar ubicaciones (editar o eliminar)"
         className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
       >
         <Settings className="h-4 w-4" />
       </Button>
 
-      {/* Diálogo Pop-up: Crear Categoría */}
+      {/* Diálogo Pop-up: Crear Ubicación */}
       <Dialog open={crearOpen} onOpenChange={setCrearOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nueva Categoría</DialogTitle>
+            <DialogTitle>Nueva Ubicación</DialogTitle>
             <DialogDescription>
-              Ingresa el nombre de la categoría para clasificar productos.
+              Ingresa el nombre del estante, gaveta o vitrina física.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-1">
-            <Label htmlFor="nueva-cat-nombre">Nombre de la Categoría *</Label>
+            <Label htmlFor="nueva-ubi-nombre">Nombre de la Ubicación *</Label>
             <Input
-              id="nueva-cat-nombre"
+              id="nueva-ubi-nombre"
               value={nuevoNombre}
               onChange={(e) => {
                 setNuevoNombre(e.target.value);
                 setErrorCrear(null);
               }}
-              placeholder="Ej: Laptops, Memorias RAM, Teclados..."
+              placeholder="Ej: Vitrina 1, Estante A-2, Taller..."
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -297,19 +297,19 @@ export function CategoriaCombobox({
               disabled={creando || !nuevoNombre.trim()}
             >
               {creando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar Categoría
+              Guardar Ubicación
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo Pop-up: Gestionar Categorías (CRUD completo en Pop-up) */}
+      {/* Diálogo Pop-up: Gestionar Ubicaciones (CRUD completo en Pop-up) */}
       <Dialog open={gestionarOpen} onOpenChange={setGestionarOpen}>
         <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Gestión de Categorías</DialogTitle>
+            <DialogTitle>Gestión de Ubicaciones Físicas</DialogTitle>
             <DialogDescription>
-              Edita o elimina categorías registradas en el sistema.
+              Edita o elimina ubicaciones físicas registradas en el sistema.
             </DialogDescription>
           </DialogHeader>
 
@@ -320,14 +320,14 @@ export function CategoriaCombobox({
           )}
 
           <div className="overflow-y-auto flex-1 divide-y border rounded-md my-2">
-            {categorias.length === 0 ? (
+            {ubicaciones.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
-                No hay categorías registradas.
+                No hay ubicaciones registradas.
               </div>
             ) : (
-              categorias.map((c) => (
-                <div key={c.id} className="flex items-center justify-between p-2.5 hover:bg-muted/40 gap-2">
-                  {editandoId === c.id ? (
+              ubicaciones.map((u) => (
+                <div key={u.id} className="flex items-center justify-between p-2.5 hover:bg-muted/40 gap-2">
+                  {editandoId === u.id ? (
                     <div className="flex items-center gap-1.5 flex-1">
                       <Input
                         size={1}
@@ -336,14 +336,14 @@ export function CategoriaCombobox({
                         onChange={(e) => setEditandoNombre(e.target.value)}
                         autoFocus
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleGuardarEdicion(c.id);
+                          if (e.key === 'Enter') handleGuardarEdicion(u.id);
                           if (e.key === 'Escape') setEditandoId(null);
                         }}
                       />
                       <Button
                         size="sm"
                         className="h-8 text-xs px-2"
-                        onClick={() => handleGuardarEdicion(c.id)}
+                        onClick={() => handleGuardarEdicion(u.id)}
                         disabled={guardandoEdit || !editandoNombre.trim()}
                       >
                         {guardandoEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar'}
@@ -359,7 +359,7 @@ export function CategoriaCombobox({
                     </div>
                   ) : (
                     <>
-                      <span className="text-sm font-medium text-foreground truncate">{c.nombre}</span>
+                      <span className="text-sm font-medium text-foreground truncate">{u.nombre}</span>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
                           type="button"
@@ -367,10 +367,10 @@ export function CategoriaCombobox({
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-primary"
                           onClick={() => {
-                            setEditandoId(c.id);
-                            setEditandoNombre(c.nombre);
+                            setEditandoId(u.id);
+                            setEditandoNombre(u.nombre);
                           }}
-                          title="Editar nombre de categoría"
+                          title="Editar nombre de ubicación"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -379,11 +379,11 @@ export function CategoriaCombobox({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleEliminar(c.id)}
-                          disabled={eliminandoId === c.id}
-                          title="Eliminar categoría"
+                          onClick={() => handleEliminar(u.id)}
+                          disabled={eliminandoId === u.id}
+                          title="Eliminar ubicación"
                         >
-                          {eliminandoId === c.id ? (
+                          {eliminandoId === u.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <Trash2 className="h-3.5 w-3.5" />
@@ -408,7 +408,7 @@ export function CategoriaCombobox({
               }}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Nueva Categoría
+              Nueva Ubicación
             </Button>
             <Button
               type="button"

@@ -6,6 +6,7 @@ import type { Producto, CrearProductoDto, ActualizarProductoDto, AjustarStockDto
 interface UseProductosParams {
   busqueda?: string;
   categoriaId?: string;
+  marcaId?: string;
   esServicio?: boolean;
   bajoStock?: boolean;
   preciosPendientes?: boolean;
@@ -20,7 +21,7 @@ export const useProductos = (params?: UseProductosParams) => {
   const [error, setError] = useState<string | null>(null);
 
   // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
+  const { busqueda, categoriaId, marcaId, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -29,6 +30,7 @@ export const useProductos = (params?: UseProductosParams) => {
       const { productos: data, total: totalCount } = await productoService.getAll({
         busqueda,
         categoriaId,
+        marcaId,
         esServicio,
         bajoStock,
         preciosPendientes,
@@ -43,7 +45,7 @@ export const useProductos = (params?: UseProductosParams) => {
     } finally {
       setLoading(false);
     }
-  }, [busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take]);
+  }, [busqueda, categoriaId, marcaId, esServicio, bajoStock, preciosPendientes, skip, take]);
 
   const getProductoById = async (id: string): Promise<Producto> => {
     setLoading(true);

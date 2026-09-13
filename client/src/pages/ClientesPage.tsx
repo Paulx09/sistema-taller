@@ -40,6 +40,10 @@ import {
 } from 'lucide-react';
 import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
+import { TipoEquipoCombobox } from '@/components/forms/TipoEquipoCombobox';
+import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
+import { useTiposEquipo } from '@/hooks/useTiposEquipo';
+import { useMarcas } from '@/hooks/useMarcas';
 import type { Cliente, EquipoCliente, CrearClienteDto, CrearEquipoDto } from '@/types';
 
 // ─── Formulario vacío de cliente ────────────────────────────────────────────
@@ -51,7 +55,9 @@ const clienteVacio: CrearClienteDto = {
 };
 
 const equipoVacio: CrearEquipoDto = {
+  tipoEquipoId: '',
   tipoEquipo: '',
+  marcaId: '',
   marca: '',
   modelo: '',
   numeroSerie: '',
@@ -59,6 +65,9 @@ const equipoVacio: CrearEquipoDto = {
 };
 
 export function ClientesPage() {
+  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo();
+  const { marcas, refetch: refetchMarcas } = useMarcas();
+
   // ── Estado principal ───────────────────────────────────────────────────────
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [total, setTotal] = useState(0);
@@ -80,6 +89,7 @@ export function ClientesPage() {
   const [equipos, setEquipos] = useState<EquipoCliente[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
   const [formEquipo, setFormEquipo] = useState<CrearEquipoDto>(equipoVacio);
+  const [tipoRequiereClave, setTipoRequiereClave] = useState(false);
   const [editingEquipo, setEditingEquipo] = useState<EquipoCliente | null>(null);
   const [deleteEquipoId, setDeleteEquipoId] = useState<string | null>(null);
   const [mostrarContrasena, setMostrarContrasena] = useState<Record<string, string | null>>({});
@@ -187,6 +197,7 @@ export function ClientesPage() {
     setClienteSeleccionado(cliente);
     setEquiposDialogOpen(true);
     setFormEquipo(equipoVacio);
+    setTipoRequiereClave(false);
     setEditingEquipo(null);
     setErrorEquipos(null);
     setMostrarContrasena({});
@@ -209,15 +220,25 @@ export function ClientesPage() {
   const handleSubmitEquipo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteSeleccionado) return;
+    if (!formEquipo.tipoEquipo.trim() && !formEquipo.tipoEquipoId) {
+      setErrorEquipos('El tipo de equipo es obligatorio.');
+      return;
+    }
+    if (!formEquipo.marca?.trim() && !formEquipo.marcaId) {
+      setErrorEquipos('La marca es obligatoria.');
+      return;
+    }
     setSubmitting(true);
     setErrorEquipos(null);
     try {
       const payload: CrearEquipoDto = {
+        tipoEquipoId: formEquipo.tipoEquipoId || null,
         tipoEquipo: formEquipo.tipoEquipo.trim(),
+        marcaId: formEquipo.marcaId || null,
         marca: formEquipo.marca?.trim() || null,
         modelo: formEquipo.modelo?.trim() || null,
         numeroSerie: formEquipo.numeroSerie?.trim() || null,
-        contrasenaPatron: formEquipo.contrasenaPatron?.trim() || null,
+        contrasenaPatron: tipoRequiereClave ? (formEquipo.contrasenaPatron?.trim() || null) : null,
       };
       if (editingEquipo) {
         await equipoClienteService.update(editingEquipo.id, payload);
@@ -225,6 +246,7 @@ export function ClientesPage() {
         await equipoClienteService.create(clienteSeleccionado.id, payload);
       }
       setFormEquipo(equipoVacio);
+      setTipoRequiereClave(false);
       setEditingEquipo(null);
       await cargarEquipos(clienteSeleccionado.id);
       cargarClientes();
@@ -237,8 +259,14 @@ export function ClientesPage() {
 
   const handleEditarEquipo = (equipo: EquipoCliente) => {
     setEditingEquipo(equipo);
+    const tipoEncontrado = tiposEquipo.find(
+      (t) => t.id === equipo.tipoEquipoId || t.nombre.toLowerCase() === equipo.tipoEquipo.toLowerCase()
+    );
+    setTipoRequiereClave(tipoEncontrado ? tipoEncontrado.requiereClave : false);
     setFormEquipo({
+      tipoEquipoId: equipo.tipoEquipoId || (tipoEncontrado ? tipoEncontrado.id : ''),
       tipoEquipo: equipo.tipoEquipo,
+      marcaId: equipo.marcaId || '',
       marca: equipo.marca || '',
       modelo: equipo.modelo || '',
       numeroSerie: equipo.numeroSerie || '',
@@ -654,21 +682,38 @@ export function ClientesPage() {
                   <label className="text-xs font-medium">
                     Tipo de equipo <span className="text-destructive">*</span>
                   </label>
-                  <Input
-                    required
-                    value={formEquipo.tipoEquipo}
-                    onChange={(e) => setFormEquipo({ ...formEquipo, tipoEquipo: e.target.value })}
-                    placeholder="Ej: Laptop, Smartphone"
-                    className="h-8 text-sm"
+                  <TipoEquipoCombobox
+                    value={formEquipo.tipoEquipoId || ''}
+                    onChange={(id, nombre, requiereClave) => {
+                      setFormEquipo((p) => ({
+                        ...p,
+                        tipoEquipoId: id,
+                        tipoEquipo: nombre || '',
+                        ...(requiereClave ? {} : { contrasenaPatron: '' }),
+                      }));
+                      setTipoRequiereClave(!!requiereClave);
+                    }}
+                    tiposEquipo={tiposEquipo}
+                    onTipoEquipoCreado={refetchTiposEquipo}
+                    onRefresh={refetchTiposEquipo}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Marca</label>
-                  <Input
-                    value={formEquipo.marca || ''}
-                    onChange={(e) => setFormEquipo({ ...formEquipo, marca: e.target.value })}
-                    placeholder="Ej: HP, Samsung"
-                    className="h-8 text-sm"
+                  <label className="text-xs font-medium">
+                    Marca <span className="text-destructive">*</span>
+                  </label>
+                  <MarcaCombobox
+                    value={formEquipo.marcaId || ''}
+                    onChange={(id, nombre) => {
+                      setFormEquipo((p) => ({
+                        ...p,
+                        marcaId: id,
+                        marca: nombre || '',
+                      }));
+                    }}
+                    marcas={marcas}
+                    onMarcaCreada={refetchMarcas}
+                    onRefresh={refetchMarcas}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -689,22 +734,24 @@ export function ClientesPage() {
                     className="h-8 text-sm"
                   />
                 </div>
-                <div className="col-span-2 space-y-1.5">
-                  <label className="text-xs font-medium">
-                    Contraseña / Patrón de desbloqueo
-                  </label>
-                  <Input
-                    value={formEquipo.contrasenaPatron || ''}
-                    onChange={(e) => setFormEquipo({ ...formEquipo, contrasenaPatron: e.target.value })}
-                    placeholder="Contraseña o patrón (se almacena cifrado)"
-                    className="h-8 text-sm"
-                    type="password"
-                    autoComplete="new-password"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Solo visible para el técnico al revelar. Deja en blanco para no modificar.
-                  </p>
-                </div>
+                {tipoRequiereClave && (
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-xs font-medium">
+                      Contraseña / Patrón de desbloqueo
+                    </label>
+                    <Input
+                      value={formEquipo.contrasenaPatron || ''}
+                      onChange={(e) => setFormEquipo({ ...formEquipo, contrasenaPatron: e.target.value })}
+                      placeholder="Contraseña o patrón (se almacena cifrado)"
+                      className="h-8 text-sm"
+                      type="password"
+                      autoComplete="new-password"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Solo visible para el técnico al revelar. Deja en blanco para no modificar.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {errorEquipos && (
@@ -719,7 +766,7 @@ export function ClientesPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => { setEditingEquipo(null); setFormEquipo(equipoVacio); }}
+                    onClick={() => { setEditingEquipo(null); setFormEquipo(equipoVacio); setTipoRequiereClave(false); }}
                     disabled={submitting}
                   >
                     Cancelar edición

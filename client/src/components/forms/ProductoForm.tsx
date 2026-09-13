@@ -6,6 +6,9 @@ import { FEATURES } from '@/config/features';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
 import { serieService } from '@/services/serie.service';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
+import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
+import { UbicacionCombobox } from '@/components/forms/UbicacionCombobox';
+import { useMarcas } from '@/hooks/useMarcas';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -19,13 +22,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,6 +30,7 @@ import type {
   CrearProductoDto,
   ActualizarProductoDto,
   Categoria,
+  Marca,
   Ubicacion,
 } from '@/types';
 
@@ -48,10 +45,7 @@ const getImageUrl = (imagenUrl: string | null): string | null => {
 };
 
 const productoSchema = z.object({
-  nombre: z
-    .string({ message: 'El nombre es requerido' })
-    .min(1, 'El nombre es requerido')
-    .max(200, 'El nombre no puede exceder 200 caracteres'),
+  nombre: z.string().max(200, 'El nombre no puede exceder 200 caracteres').optional().or(z.literal('')),
   descripcion: z
     .string()
     .max(255, 'La descripción no puede exceder 255 caracteres')
@@ -65,6 +59,7 @@ const productoSchema = z.object({
     .uuid('ID de ubicación inválido')
     .optional()
     .or(z.literal('')),
+  marcaId: z.string().optional().or(z.literal('')),
   marca: z.string().max(100).optional().or(z.literal('')),
   modelo: z.string().max(100).optional().or(z.literal('')),
   sku: z.string().max(50).optional().or(z.literal('')),
@@ -124,7 +119,16 @@ interface ProductoFormProps {
   onUpdate: (id: string, data: ActualizarProductoDto | FormData) => Promise<Producto>;
   categorias: Categoria[];
   ubicaciones: Ubicacion[];
-  onCategoriaCreada?: (categoria: { id: string; nombre: string }) => void;
+  marcas?: Marca[];
+  onCategoriaCreada?: (categoria: Categoria) => void;
+  onCategoriaActualizada?: (categoria: Categoria) => void;
+  onCategoriaEliminada?: (id: string) => void;
+  onUbicacionCreada?: (ubicacion: Ubicacion) => void;
+  onUbicacionActualizada?: (ubicacion: Ubicacion) => void;
+  onUbicacionEliminada?: (id: string) => void;
+  onMarcaCreada?: (marca: Marca) => void;
+  onMarcaActualizada?: (marca: Marca) => void;
+  onMarcaEliminada?: (id: string) => void;
 }
 
 export function ProductoForm({
@@ -134,8 +138,20 @@ export function ProductoForm({
   onUpdate,
   categorias,
   ubicaciones,
+  marcas,
   onCategoriaCreada,
+  onCategoriaActualizada,
+  onCategoriaEliminada,
+  onUbicacionCreada,
+  onUbicacionActualizada,
+  onUbicacionEliminada,
+  onMarcaCreada,
+  onMarcaActualizada,
+  onMarcaEliminada,
 }: Readonly<ProductoFormProps>) {
+  const { marcas: marcasHook, refetch: refetchMarcas } = useMarcas();
+  const marcasList = marcas || marcasHook;
+
   const [esServicio, setEsServicio] = useState(producto?.esServicio || false);
   const [modoMargen, setModoMargen] = useState<boolean>(false); // false = Modo Precio, true = Modo Margen
   const [imagenFile, setImagenFile] = useState<File | null>(null);
@@ -161,6 +177,7 @@ export function ProductoForm({
       descripcion: producto?.descripcion || '',
       categoriaId: producto?.categoriaId || '',
       ubicacionId: producto?.ubicacionId || '',
+      marcaId: producto?.marcaId || '',
       marca: producto?.marca || '',
       modelo: producto?.modelo || '',
       sku: producto?.sku || '',
@@ -186,6 +203,7 @@ export function ProductoForm({
       if (name === 'esServicio' && value.esServicio) {
         // Resetear campos que no aplican para servicios
         form.setValue('marca', '');
+        form.setValue('marcaId', '');
         form.setValue('modelo', '');
         form.setValue('ubicacionId', '');
         form.setValue('stockActual', '0');
@@ -346,10 +364,11 @@ export function ProductoForm({
       const formData = new FormData();
       
       // Agregar todos los campos
-      formData.append('nombre', data.nombre);
+      if (data.nombre) formData.append('nombre', data.nombre);
       if (data.descripcion) formData.append('descripcion', data.descripcion);
       formData.append('categoriaId', data.categoriaId);
       if (data.ubicacionId) formData.append('ubicacionId', data.ubicacionId);
+      if (data.marcaId) formData.append('marcaId', data.marcaId);
       if (data.marca) formData.append('marca', data.marca);
       if (data.modelo) formData.append('modelo', data.modelo);
       if (FEATURES.ENABLE_PRODUCT_SKU && data.sku) formData.append('sku', data.sku);
@@ -431,63 +450,110 @@ export function ProductoForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 py-4">
         
-        {/* Sección: Información General */}
+        {/* Sección: Identificación y Clasificación */}
         <section className="space-y-4">
            <div className="flex items-center gap-2 border-b border-border pb-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">info</span>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Información General</h3>
+              <span className="material-symbols-outlined text-primary text-[20px]">category</span>
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Identificación y Clasificación</h3>
            </div>
            
            <div className="grid grid-cols-1 gap-4">
-              <div className="grid grid-cols-1 gap-2">
+              {/* Fila 1: Categoría y Marca */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="categoriaId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Categoría *</FormLabel>
+                      <CategoriaCombobox
+                        value={field.value}
+                        onChange={field.onChange}
+                        categorias={categorias}
+                        onCategoriaCreada={onCategoriaCreada}
+                        onCategoriaActualizada={onCategoriaActualizada}
+                        onCategoriaEliminada={onCategoriaEliminada}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {!esServicio ? (
                   <FormField
                     control={form.control}
-                    name="nombre"
+                    name="marcaId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre del Producto *</FormLabel>
+                        <FormLabel>Marca</FormLabel>
+                        <MarcaCombobox
+                          value={field.value || form.watch('marca')}
+                          onChange={(marcaId, marcaNombre) => {
+                            field.onChange(marcaId);
+                            if (marcaNombre) form.setValue('marca', marcaNombre);
+                          }}
+                          marcas={marcasList}
+                          onMarcaCreada={(m) => {
+                            refetchMarcas();
+                            onMarcaCreada?.(m);
+                          }}
+                          onMarcaActualizada={(m) => {
+                            refetchMarcas();
+                            onMarcaActualizada?.(m);
+                          }}
+                          onMarcaEliminada={(id) => {
+                            refetchMarcas();
+                            onMarcaEliminada?.(id);
+                          }}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <div />
+                )}
+              </div>
+
+              {/* Fila 2: Modelo y Ubicación */}
+              {!esServicio && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="modelo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Modelo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej. Pantalla iPhone 13 Original" {...field} className="bg-background border-border focus:ring-primary/20" />
+                          <Input placeholder="Ej. ThinkPad T480 / DDR4 8GB 3200MHz" {...field} className="bg-background border-border" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-              </div>
 
-              {/* Marca y Modelo (solo para productos físicos) */}
-              {!esServicio && (
-                <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="marca"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Marca</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej. Apple" {...field} className="bg-background border-border" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="modelo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Modelo</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej. iPhone 13" {...field} className="bg-background border-border" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <FormField
+                    control={form.control}
+                    name="ubicacionId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ubicación Física</FormLabel>
+                        <UbicacionCombobox
+                          value={field.value}
+                          onChange={field.onChange}
+                          ubicaciones={ubicaciones}
+                          onUbicacionCreada={onUbicacionCreada}
+                          onUbicacionActualizada={onUbicacionActualizada}
+                          onUbicacionEliminada={onUbicacionEliminada}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               )}
 
-              {/* Campo Descripción (disponible para productos y servicios) */}
+              {/* Fila 3: Descripción (Siempre visible) */}
               <FormField
                 control={form.control}
                 name="descripcion"
@@ -496,18 +562,54 @@ export function ProductoForm({
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Descripción breve del producto (opcional)" 
+                        placeholder="Detalles adicionales o especificaciones técnicas breves..." 
                         {...field} 
                         className="bg-background border-border resize-none"
-                        rows={3}
+                        rows={2}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-                  
-              {/* Feature: SKU y Código de Barras - Controlado por config/features.ts */}
+
+              {/* Estado Switches */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg border border-border">
+                <FormField
+                  control={form.control}
+                  name="esServicio"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between">
+                       <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-medium text-foreground block">Es Servicio / Mano de Obra</FormLabel>
+                          <FormDescription className="text-xs text-muted-foreground">No consume stock ni ubicación física.</FormDescription>
+                       </div>
+                       <FormControl>
+                          <Switch checked={field.value} onCheckedChange={(c) => { field.onChange(c); setEsServicio(c); }} />
+                       </FormControl>
+                    </FormItem>
+                  )}
+                />
+                {!esServicio && (
+                  <FormField
+                    control={form.control}
+                    name="esSegundaMano"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <FormLabel className="text-sm font-medium text-foreground block">Es Segunda Mano / Usado</FormLabel>
+                            <FormDescription className="text-xs text-muted-foreground">Indica producto de reuso o reacondicionado.</FormDescription>
+                        </div>
+                        <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+
+              {/* Feature: SKU y Código de Barras */}
               {!esServicio && (FEATURES.ENABLE_PRODUCT_SKU || FEATURES.ENABLE_PRODUCT_BARCODE) && (
                 <div className="grid grid-cols-2 gap-4">
                   {FEATURES.ENABLE_PRODUCT_SKU && (
@@ -518,9 +620,7 @@ export function ProductoForm({
                         <FormItem>
                           <FormLabel>SKU</FormLabel>
                           <FormControl>
-                            <div className="flex gap-2">
-                              <Input placeholder="GEN-AUTO-001" {...field} className="bg-background border-border font-mono text-sm" />
-                            </div>
+                            <Input placeholder="GEN-AUTO-001" {...field} className="bg-background border-border font-mono text-sm" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -544,95 +644,6 @@ export function ProductoForm({
                   )}
                 </div>
               )}
-           </div>
-        </section>
-
-        {/* Sección: Clasificación */}
-        <section className="space-y-4">
-           <div className="flex items-center gap-2 border-b border-border pb-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">category</span>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Clasificación y Estado</h3>
-           </div>
-           
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                 <FormField
-                    control={form.control}
-                    name="categoriaId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Categoría *</FormLabel>
-                        <CategoriaCombobox
-                          value={field.value}
-                          onChange={field.onChange}
-                          categorias={categorias}
-                          onCategoriaCreada={onCategoriaCreada}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {!esServicio && (
-                      <FormField
-                        control={form.control}
-                        name="ubicacionId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Ubicación Física</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="bg-background border-border">
-                                  <SelectValue placeholder="Seleccionar..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {ubicaciones.map((ubi) => (
-                                  <SelectItem key={ubi.id} value={ubi.id}>{ubi.nombre}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                  )}
-              </div>
-              
-              <div className="bg-muted/40 p-4 rounded-lg border border-border space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="esServicio"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
-                         <div className="space-y-0.5">
-                            <FormLabel className="text-sm font-medium text-foreground block">Es Servicio</FormLabel>
-                            <FormDescription className="text-xs text-muted-foreground">Activa campos específicos para servicios.</FormDescription>
-                         </div>
-                         <FormControl>
-                            <Switch checked={field.value} onCheckedChange={(c) => { field.onChange(c); setEsServicio(c); }} />
-                         </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  {!esServicio && (
-                    <FormField
-                      control={form.control}
-                      name="esSegundaMano"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                              <FormLabel className="text-sm font-medium text-foreground block">Es Segunda Mano</FormLabel>
-                              <FormDescription className="text-xs text-muted-foreground">Marca el producto como usado.</FormDescription>
-                          </div>
-                          <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-              </div>
            </div>
         </section>
 
@@ -1001,7 +1012,7 @@ export function ProductoForm({
               prevRequiereSerieRef.current = false;
             }
           }}
-          productoNombre={producto?.nombre ?? form.getValues('nombre')}
+          productoNombre={producto?.nombre || form.getValues('nombre') || 'Producto'}
           cantidad={cantidadSeriesPendientes}
           onSeriesCompletas={handleSeriesCompletas}
           modo="compra"

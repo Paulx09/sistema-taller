@@ -173,7 +173,7 @@ export function ProductoDetalle({ producto, onRefresh }: Readonly<ProductoDetall
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Marca</p>
-                <p>{productoCompleto.marca || '-'}</p>
+                <p>{productoCompleto.marcaRel?.nombre || productoCompleto.marca || '-'}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Modelo</p>
