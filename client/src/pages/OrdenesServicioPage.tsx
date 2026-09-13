@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,8 +55,13 @@ import {
   Eye,
   EyeOff,
   X,
+  Pencil,
 } from 'lucide-react';
 import { useOrdenesServicio } from '@/hooks/useOrdenesServicio';
+import { useTiposEquipo } from '@/hooks/useTiposEquipo';
+import { useMarcas } from '@/hooks/useMarcas';
+import { TipoEquipoCombobox } from '@/components/forms/TipoEquipoCombobox';
+import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
 import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
 import { usuarioService } from '@/services/usuario.service';
@@ -88,7 +93,9 @@ const EQUIPO_ENTRADA_VACIO = {
 };
 
 const EQUIPO_NUEVO_VACIO: CrearEquipoDto = {
+  tipoEquipoId: '',
   tipoEquipo: '',
+  marcaId: '',
   marca: '',
   modelo: '',
   numeroSerie: '',
@@ -118,6 +125,9 @@ export function OrdenesServicioPage() {
     createOrden,
     deleteOrden,
   } = useOrdenesServicio();
+
+  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo();
+  const { marcas, refetch: refetchMarcas } = useMarcas();
 
   // Filtros
   const [busquedaLocal, setBusquedaLocal] = useState('');
@@ -158,9 +168,11 @@ export function OrdenesServicioPage() {
   const [equipoEntrada, setEquipoEntrada] = useState({ ...EQUIPO_ENTRADA_VACIO });
   const [entradaError, setEntradaError] = useState<string | null>(null);
 
-  // Mini-form crear nuevo equipo (dentro del dialog de agregar equipo)
+  // Mini-form crear/editar equipo (dentro del dialog de agregar equipo)
   const [mostrarFormEquipo, setMostrarFormEquipo] = useState(false);
+  const [editingEquipoId, setEditingEquipoId] = useState<string | null>(null);
   const [formNuevoEquipo, setFormNuevoEquipo] = useState<CrearEquipoDto>({ ...EQUIPO_NUEVO_VACIO });
+  const [tipoRequiereClave, setTipoRequiereClave] = useState(false);
   const [submittingNuevoEquipo, setSubmittingNuevoEquipo] = useState(false);
   const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
   const [verContrasenaEquipo, setVerContrasenaEquipo] = useState(false);
@@ -210,20 +222,42 @@ export function OrdenesServicioPage() {
     setEquipoEntrada({ ...EQUIPO_ENTRADA_VACIO });
     setEntradaError(null);
     setMostrarFormEquipo(false);
+    setEditingEquipoId(null);
     setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+    setTipoRequiereClave(false);
     setErrorNuevoEquipo(null);
     setVerContrasenaEquipo(false);
     setAgregarEquipoDialogOpen(true);
   };
 
-  // Crear equipo nuevo desde el dialog
+  // Editar equipo existente de la lista
+  const handleEditarEquipoInline = (eq: EquipoCliente) => {
+    const tipoEncontrado = tiposEquipo.find(
+      (t) => t.id === eq.tipoEquipoId || t.nombre.toLowerCase() === eq.tipoEquipo.toLowerCase()
+    );
+    setTipoRequiereClave(tipoEncontrado ? tipoEncontrado.requiereClave : false);
+    setFormNuevoEquipo({
+      tipoEquipoId: eq.tipoEquipoId || (tipoEncontrado ? tipoEncontrado.id : ''),
+      tipoEquipo: eq.tipoEquipo,
+      marcaId: eq.marcaId || '',
+      marca: eq.marca || '',
+      modelo: eq.modelo || '',
+      numeroSerie: eq.numeroSerie || '',
+      contrasenaPatron: '',
+    });
+    setEditingEquipoId(eq.id);
+    setErrorNuevoEquipo(null);
+    setMostrarFormEquipo(true);
+  };
+
+  // Crear o actualizar equipo desde el dialog
   const handleCrearEquipoInline = async () => {
     if (!clienteId) return;
-    if (!formNuevoEquipo.tipoEquipo.trim()) {
+    if (!formNuevoEquipo.tipoEquipo.trim() && !formNuevoEquipo.tipoEquipoId) {
       setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
       return;
     }
-    if (!formNuevoEquipo.marca?.trim()) {
+    if (!formNuevoEquipo.marca?.trim() && !formNuevoEquipo.marcaId) {
       setErrorNuevoEquipo('La marca es obligatoria.');
       return;
     }
@@ -238,20 +272,42 @@ export function OrdenesServicioPage() {
     setSubmittingNuevoEquipo(true);
     setErrorNuevoEquipo(null);
     try {
-      const nuevoEquipo = await equipoClienteService.create(clienteId, {
-        tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
-        marca: formNuevoEquipo.marca?.trim() || null,
-        modelo: formNuevoEquipo.modelo?.trim() || null,
-        numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
-        contrasenaPatron: formNuevoEquipo.contrasenaPatron?.trim() || null,
-      });
-      setEquipos((prev) => [...prev, nuevoEquipo]);
-      setEquipoEntrada((prev) => ({ ...prev, equipoId: nuevoEquipo.id }));
-      setMostrarFormEquipo(false);
-      setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
-      setVerContrasenaEquipo(false);
+      if (editingEquipoId) {
+        const equipoActualizado = await equipoClienteService.update(editingEquipoId, {
+          tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          marcaId: formNuevoEquipo.marcaId || null,
+          marca: formNuevoEquipo.marca?.trim() || null,
+          modelo: formNuevoEquipo.modelo?.trim() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
+        });
+        setEquipos((prev) => prev.map((e) => (e.id === editingEquipoId ? equipoActualizado : e)));
+        setEquipoEntrada((prev) => ({ ...prev, equipoId: equipoActualizado.id }));
+        setMostrarFormEquipo(false);
+        setEditingEquipoId(null);
+        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+        setTipoRequiereClave(false);
+        setVerContrasenaEquipo(false);
+      } else {
+        const nuevoEquipo = await equipoClienteService.create(clienteId, {
+          tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          marcaId: formNuevoEquipo.marcaId || null,
+          marca: formNuevoEquipo.marca?.trim() || null,
+          modelo: formNuevoEquipo.modelo?.trim() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
+        });
+        setEquipos((prev) => [...prev, nuevoEquipo]);
+        setEquipoEntrada((prev) => ({ ...prev, equipoId: nuevoEquipo.id }));
+        setMostrarFormEquipo(false);
+        setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+        setTipoRequiereClave(false);
+        setVerContrasenaEquipo(false);
+      }
     } catch (err: any) {
-      setErrorNuevoEquipo(err.response?.data?.error || 'Error al crear el equipo');
+      setErrorNuevoEquipo(err.response?.data?.error || 'Error al guardar el equipo');
     } finally {
       setSubmittingNuevoEquipo(false);
     }
@@ -905,41 +961,64 @@ export function OrdenesServicioPage() {
                   </p>
                 ) : (
                   equiposDisponibles.map((eq) => (
-                    <button
-                      type="button"
+                    <div
                       key={eq.id}
-                      onClick={() => setEquipoEntrada((prev) => ({ ...prev, equipoId: eq.id }))}
-                      className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-start gap-2 border-b last:border-b-0 ${
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors flex items-center justify-between gap-2 border-b last:border-b-0 ${
                         equipoEntrada.equipoId === eq.id
                           ? 'bg-primary/10 text-primary font-medium'
                           : ''
                       }`}
                     >
-                      <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium">{eq.tipoEquipo}</span>
-                        {(eq.marca || eq.modelo) && (
-                          <span className="text-muted-foreground font-normal">
-                            {' '}{[eq.marca, eq.modelo].filter(Boolean).join(' ')}
-                          </span>
-                        )}
-                        {eq.numeroSerie && (
-                          <p className="text-xs text-muted-foreground font-mono">S/N: {eq.numeroSerie}</p>
-                        )}
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setEquipoEntrada((prev) => ({ ...prev, equipoId: eq.id }))}
+                        className="flex items-start gap-2 flex-1 text-left min-w-0"
+                      >
+                        <Laptop className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <div className="truncate">
+                          <span className="font-medium">{eq.tipoEquipo}</span>
+                          {(eq.marca || eq.modelo) && (
+                            <span className="text-muted-foreground font-normal">
+                              {' '}{[eq.marca, eq.modelo].filter(Boolean).join(' ')}
+                            </span>
+                          )}
+                          {eq.numeroSerie && (
+                            <p className="text-xs text-muted-foreground font-mono">S/N: {eq.numeroSerie}</p>
+                          )}
+                        </div>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditarEquipoInline(eq);
+                        }}
+                        title="Editar datos de este equipo"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   ))
                 )}
               </div>
 
-              {/* Mini-form nuevo equipo — aparece debajo de la lista */}
+              {/* Mini-form nuevo/editar equipo — aparece debajo de la lista */}
               {!mostrarFormEquipo ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="shrink-0 gap-1.5 text-xs h-8"
-                  onClick={() => setMostrarFormEquipo(true)}
+                  onClick={() => {
+                    setEditingEquipoId(null);
+                    setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                    setTipoRequiereClave(false);
+                    setErrorNuevoEquipo(null);
+                    setMostrarFormEquipo(true);
+                  }}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Registrar nuevo equipo
@@ -947,13 +1026,17 @@ export function OrdenesServicioPage() {
               ) : (
                 <div className="border rounded-md p-3 space-y-3 bg-muted/20 shrink-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold">Nuevo equipo</p>
+                    <p className="text-xs font-semibold">
+                      {editingEquipoId ? 'Editar equipo' : 'Nuevo equipo'}
+                    </p>
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         setMostrarFormEquipo(false);
+                        setEditingEquipoId(null);
                         setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                        setTipoRequiereClave(false);
                         setErrorNuevoEquipo(null);
                       }}
                     >
@@ -965,24 +1048,43 @@ export function OrdenesServicioPage() {
                     <label className="text-xs font-medium">
                       Tipo de equipo <span className="text-destructive">*</span>
                     </label>
-                    <Input
-                      value={formNuevoEquipo.tipoEquipo}
-                      onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, tipoEquipo: e.target.value }))}
-                      placeholder="Laptop, Celular, PC..."
-                      className="h-8 text-xs"
+                    <TipoEquipoCombobox
+                      value={formNuevoEquipo.tipoEquipoId || ''}
+                      onChange={(id, nombre, requiereClave) => {
+                        setFormNuevoEquipo((p) => ({
+                          ...p,
+                          tipoEquipoId: id,
+                          tipoEquipo: nombre || '',
+                          ...(requiereClave ? {} : { contrasenaPatron: '' }),
+                        }));
+                        setTipoRequiereClave(!!requiereClave);
+                      }}
+                      tiposEquipo={tiposEquipo}
+                      onTipoEquipoCreado={refetchTiposEquipo}
+                      onRefresh={refetchTiposEquipo}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">
+                      Marca <span className="text-destructive">*</span>
+                    </label>
+                    <MarcaCombobox
+                      value={formNuevoEquipo.marcaId || ''}
+                      onChange={(id, nombre) => {
+                        setFormNuevoEquipo((p) => ({
+                          ...p,
+                          marcaId: id,
+                          marca: nombre || '',
+                        }));
+                      }}
+                      marcas={marcas}
+                      onMarcaCreada={refetchMarcas}
+                      onRefresh={refetchMarcas}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium">Marca <span className="text-destructive">*</span></label>
-                      <Input
-                        value={formNuevoEquipo.marca || ''}
-                        onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, marca: e.target.value }))}
-                        placeholder="HP, Samsung..."
-                        className="h-8 text-xs"
-                      />
-                    </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium">Modelo <span className="text-destructive">*</span></label>
                       <Input
@@ -992,11 +1094,8 @@ export function OrdenesServicioPage() {
                         className="h-8 text-xs"
                       />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">N de serie <span className="text-destructive">*</span></label>
+                      <label className="text-xs font-medium">N° de serie <span className="text-destructive">*</span></label>
                       <Input
                         value={formNuevoEquipo.numeroSerie || ''}
                         onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, numeroSerie: e.target.value }))}
@@ -1004,14 +1103,17 @@ export function OrdenesServicioPage() {
                         className="h-8 text-xs font-mono"
                       />
                     </div>
+                  </div>
+
+                  {tipoRequiereClave && (
                     <div className="space-y-1">
-                      <label className="text-xs font-medium">Clave / Patrón</label>
+                      <label className="text-xs font-medium">Clave / Patrón de desbloqueo</label>
                       <div className="relative">
                         <Input
                           type={verContrasenaEquipo ? 'text' : 'password'}
                           value={formNuevoEquipo.contrasenaPatron || ''}
                           onChange={(e) => setFormNuevoEquipo((p) => ({ ...p, contrasenaPatron: e.target.value }))}
-                          placeholder="Opcional"
+                          placeholder="Contraseña o PIN (opcional)"
                           className="h-8 text-xs pr-8"
                         />
                         <button
@@ -1023,7 +1125,7 @@ export function OrdenesServicioPage() {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {errorNuevoEquipo && (
                     <Alert variant="destructive" className="py-2">
@@ -1039,7 +1141,9 @@ export function OrdenesServicioPage() {
                       className="flex-1 h-7 text-xs"
                       onClick={() => {
                         setMostrarFormEquipo(false);
+                        setEditingEquipoId(null);
                         setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
+                        setTipoRequiereClave(false);
                         setErrorNuevoEquipo(null);
                       }}
                       disabled={submittingNuevoEquipo}
@@ -1054,7 +1158,7 @@ export function OrdenesServicioPage() {
                       disabled={submittingNuevoEquipo}
                     >
                       {submittingNuevoEquipo && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                      Guardar equipo
+                      {editingEquipoId ? 'Guardar cambios' : 'Guardar equipo'}
                     </Button>
                   </div>
                 </div>
@@ -1077,25 +1181,16 @@ export function OrdenesServicioPage() {
                 <Textarea
                   value={equipoEntrada.problemaReportado}
                   onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, problemaReportado: e.target.value }))}
-                  placeholder="Describir el problema que reporta el cliente..."
-                  rows={5}
+                  placeholder="Describir detalladamente el problema que reporta el cliente..."
+                  rows={6}
                   className="resize-none"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Diagnostico tecnico</label>
-                <Textarea
-                  value={equipoEntrada.diagnosticoTecnico}
-                  onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, diagnosticoTecnico: e.target.value }))}
-                  placeholder="Diagnostico preliminar (opcional)..."
-                  rows={4}
-                  className="resize-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Costo estimado (S/)</label>
+                <label className="text-sm font-medium">
+                  Costo Estimado / Presupuesto Acordado (S/)
+                </label>
                 <Input
                   type="text"
                   min="0"
@@ -1103,6 +1198,9 @@ export function OrdenesServicioPage() {
                   onChange={(e) => setEquipoEntrada((prev) => ({ ...prev, costoEstimado: e.target.value }))}
                   placeholder="0.00"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Monto referencial acordado inicialmente con el cliente para esta atención.
+                </p>
               </div>
 
               {entradaError && (

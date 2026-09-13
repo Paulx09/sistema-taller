@@ -100,14 +100,6 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px]">local_shipping</span>
             Proveedores
           </NavLink>
-          <NavLink to="/categorias" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">category</span>
-            Categorías
-          </NavLink>
-          <NavLink to="/ubicaciones" className={navLinkClass}>
-            <span className="material-symbols-outlined text-[20px]">shelves</span>
-            Ubicaciones
-          </NavLink>
 
           {/* Servicio Técnico */}
           <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Servicio Técnico</p>

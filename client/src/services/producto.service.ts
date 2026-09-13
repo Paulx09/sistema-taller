@@ -47,6 +47,7 @@ export const productoService = {
   async getAll(params?: {
     busqueda?: string;
     categoriaId?: string;
+    marcaId?: string;
     esServicio?: boolean;
     bajoStock?: boolean;
     preciosPendientes?: boolean;

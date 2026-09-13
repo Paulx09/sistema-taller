@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FEATURES } from '@/config/features';
 import { useProductos } from '@/hooks/useProductos';
 import { useCategorias } from '@/hooks/useCategorias';
+import { useMarcas } from '@/hooks/useMarcas';
 import { useUbicaciones } from '@/hooks/useUbicaciones';
 import { productoService } from '@/services/producto.service';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ import { cn } from '@/lib/utils';
 export function ProductosPage() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
+  const [marcaFilter, setMarcaFilter] = useState<string>('all');
   const [servicioFilter, setServicioFilter] = useState<string>('all');
   const [pendientesFilter, setPendientesFilter] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,6 +80,7 @@ export function ProductosPage() {
     useProductos({
       busqueda: busqueda || undefined,
       categoriaId: categoriaFilter === 'all' ? undefined : categoriaFilter,
+      marcaId: marcaFilter === 'all' ? undefined : marcaFilter,
       esServicio: getEsServicioValue(),
       preciosPendientes: pendientesFilter || undefined,
       skip,
@@ -87,7 +90,7 @@ export function ProductosPage() {
   // Resetear a página 1 cuando cambien los filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [busqueda, categoriaFilter, servicioFilter, pendientesFilter, itemsPerPage]);
+  }, [busqueda, categoriaFilter, marcaFilter, servicioFilter, pendientesFilter, itemsPerPage]);
 
   // Obtener count de productos con precios pendientes
   useEffect(() => {
@@ -107,7 +110,8 @@ export function ProductosPage() {
   }, [productos]); // Se actualiza cuando cambia la lista de productos
 
   const { categorias, refetch: refetchCategorias } = useCategorias();
-  const { ubicaciones } = useUbicaciones();
+  const { marcas, refetch: refetchMarcas } = useMarcas();
+  const { ubicaciones, refetch: refetchUbicaciones } = useUbicaciones();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
@@ -235,8 +239,17 @@ export function ProductosPage() {
                           onCreate={createProducto}
                           onUpdate={updateProducto}
                           categorias={categorias}
+                          marcas={marcas}
                           ubicaciones={ubicaciones}
                           onCategoriaCreada={() => refetchCategorias()}
+                          onCategoriaActualizada={() => refetchCategorias()}
+                          onCategoriaEliminada={() => refetchCategorias()}
+                          onUbicacionCreada={() => refetchUbicaciones()}
+                          onUbicacionActualizada={() => refetchUbicaciones()}
+                          onUbicacionEliminada={() => refetchUbicaciones()}
+                          onMarcaCreada={() => refetchMarcas()}
+                          onMarcaActualizada={() => refetchMarcas()}
+                          onMarcaEliminada={() => refetchMarcas()}
                         />
                     )}
                   </SheetContent>
@@ -259,8 +272,22 @@ export function ProductosPage() {
              </div>
              
              <div className="flex items-center gap-2 overflow-x-auto pb-3 md:pb-0">
+                <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+                  <SelectTrigger className="w-[160px] bg-background text-sm">
+                    <SelectValue placeholder="Marca" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las marcas</SelectItem>
+                    {marcas.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-                  <SelectTrigger className="w-[190px] bg-background text-sm">
+                  <SelectTrigger className="w-[170px] bg-background text-sm">
                     <SelectValue placeholder="Categoría" />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,7 +301,7 @@ export function ProductosPage() {
                 </Select>
 
                 <Select value={servicioFilter} onValueChange={setServicioFilter}>
-                  <SelectTrigger className="w-[190px] bg-background text-sm">
+                  <SelectTrigger className="w-[140px] bg-background text-sm">
                     <SelectValue placeholder="Tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,7 +341,7 @@ export function ProductosPage() {
                <Table>
                  <TableHeader className="bg-muted/50 sticky top-0 z-10 w-full">
                    <TableRow className="hover:bg-transparent">
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Producto</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Producto / Detalle</TableHead>
                      <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Marca / Modelo</TableHead>
                      <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Categoría</TableHead>
                      <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Stock</TableHead>
@@ -326,24 +353,24 @@ export function ProductosPage() {
                  <TableBody className="divide-y">
                     {loading && productos.length === 0 ? (
                        <TableRow>
-                          <TableCell colSpan={8} className="h-32 text-center">
+                          <TableCell colSpan={7} className="h-32 text-center">
                              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                           </TableCell>
                        </TableRow>
                     ) : productos.length === 0 ? (
                        <TableRow>
-                          <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                          <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                              No se encontraron productos
                           </TableCell>
                        </TableRow>
                     ) : (
                        productos.map((producto) => (
                            <TableRow key={producto.id} className="hover:bg-muted/50 transition-colors group">
-                              <TableCell className="py-2">
+                              <TableCell className="py-2.5">
                                  <div className="flex items-center">
                                     {/* Feature: Imagen del producto - Controlado por config/features.ts */}
                                     {FEATURES.ENABLE_PRODUCT_IMAGES && (
-                                      <div className="h-9 w-9 flex-shrink-0 rounded-md bg-muted border border-border flex items-center justify-center overflow-hidden text-muted-foreground">
+                                      <div className="h-10 w-10 flex-shrink-0 rounded-md bg-muted border border-border flex items-center justify-center overflow-hidden text-muted-foreground mr-3">
                                         {getImageUrl(producto.imagenUrl) ? (
                                           <img 
                                             src={getImageUrl(producto.imagenUrl)!} 
@@ -360,50 +387,60 @@ export function ProductosPage() {
                                         )}
                                       </div>
                                     )}
-                                    <div className={FEATURES.ENABLE_PRODUCT_IMAGES ? "ml-3" : ""}>
-                                       <div className="text-sm font-medium text-foreground">{producto.nombre}</div>
+                                    <div className="min-w-0 max-w-sm">
+                                       <div className="text-sm font-semibold text-foreground truncate">{producto.nombre}</div>
+                                       {producto.descripcion && (
+                                         <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{producto.descripcion}</p>
+                                       )}
                                        {/* Feature: SKU - Controlado por config/features.ts */}
-                                       {FEATURES.ENABLE_PRODUCT_SKU && (
-                                         <div className="text-[11px] text-muted-foreground font-mono">SKU: {producto.sku || 'N/A'}</div>
+                                       {FEATURES.ENABLE_PRODUCT_SKU && producto.sku && (
+                                         <div className="text-[11px] text-muted-foreground font-mono mt-0.5">SKU: {producto.sku}</div>
                                        )}
                                     </div>
                                  </div>
                               </TableCell>
-                              <TableCell className="text-sm text-foreground/80 py-2">
-                                 {producto.marca || 'Generico'} {producto.modelo ? `/ ${producto.modelo}` : ''}
+                              <TableCell className="py-2.5">
+                                 <div className="flex flex-col">
+                                   <span className="text-sm font-medium text-foreground">
+                                     {producto.marcaRel?.nombre || producto.marca || 'Genérico'}
+                                   </span>
+                                   {producto.modelo && (
+                                     <span className="text-xs text-muted-foreground">
+                                       Mod: {producto.modelo}
+                                     </span>
+                                   )}
+                                 </div>
                               </TableCell>
-                              <TableCell className="py-2">
-                                 <span className="px-2 py-0.5 inline-flex text-xs leading-4 font-medium rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
-                                    {producto.categoria?.nombre || 'Sin Cat.'}
+                              <TableCell className="py-2.5">
+                                 <span className="px-2.5 py-0.5 inline-flex text-xs leading-4 font-medium rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
+                                    {producto.categoria?.nombre || 'Sin Categoría'}
                                  </span>
                               </TableCell>
-                              <TableCell className="py-2 text-left">
+                              <TableCell className="py-2.5 text-left">
                                  {producto.esServicio ? (
-                                    <span className="text-xs text-muted-foreground italic">Servicio</span>
+                                    <span className="text-xs text-muted-foreground italic font-medium px-2 py-0.5 bg-muted rounded">Servicio</span>
                                  ) : (
                                     <div className="flex items-center justify-left gap-2">
-                                       <div className={cn("h-2 w-2 rounded-full", 
-                                          producto.stockActual <= producto.stockMinimo ? "bg-destructive" : "bg-emerald-500"
+                                       <div className={cn("h-2.5 w-2.5 rounded-full", 
+                                          producto.stockActual <= producto.stockMinimo ? "bg-destructive animate-pulse" : "bg-emerald-500"
                                        )}></div>
-                                       <span className={cn("text-sm font-medium", 
+                                       <span className={cn("text-sm font-semibold", 
                                           producto.stockActual <= producto.stockMinimo ? "text-destructive" : "text-foreground"
                                        )}>{producto.stockActual}</span>
                                     </div>
                                  )}
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground py-2">
+                              <TableCell className="text-sm text-muted-foreground py-2.5">
                                  {producto.esServicio ? (
                                     <span className="text-xs italic">--</span>
                                  ) : (
-                                    <div className="flex flex-col">
-                                       <span className="font-medium text-foreground/80">{producto.ubicacion?.nombre || '-'}</span>
-                                    </div>
+                                    <span className="font-medium text-foreground/80">{producto.ubicacion?.nombre || '-'}</span>
                                  )}
                               </TableCell>
-                              <TableCell className="text-right text-sm font-bold font-mono py-2">
+                              <TableCell className="text-right text-sm font-bold font-mono py-2.5">
                                  S/ {producto.precioVenta.toFixed(2)}
                               </TableCell>
-                              <TableCell className="text-right py-2">
+                              <TableCell className="text-right py-2.5">
                                   <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                       {producto.requiereSerie && (
                                         <Button 

@@ -16,6 +16,14 @@ export interface Categoria {
   deletedAt: string | null;
 }
 
+export interface Marca {
+  id: string;
+  nombre: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface Ubicacion {
   id: string;
   nombre: string;
@@ -30,6 +38,7 @@ export interface Producto {
   id: string;
   nombre: string;
   marca: string | null;
+  marcaId?: string | null;
   modelo: string | null;
   sku: string | null;
   codigoBarras: string | null;
@@ -55,6 +64,7 @@ export interface Producto {
   updatedAt: string;
   deletedAt: string | null;
   categoria?: Categoria;
+  marcaRel?: Marca;
   ubicacion?: Ubicacion;
   padre?: Producto;
   hijos?: Producto[];
@@ -89,6 +99,7 @@ export interface Venta {
   codigoFormateado: string;
   fecha: string;
   usuarioId: string;
+  clienteId?: string | null;
   clienteNombre: string | null;
   metodoPago: string | null;
   total: string;
@@ -97,6 +108,12 @@ export interface Venta {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  cliente?: {
+    id: string;
+    nombre: string;
+    dniRuc: string | null;
+    telefono: string | null;
+  } | null;
   usuario?: Usuario;
   detalles?: DetalleVenta[];
 }
@@ -133,9 +150,42 @@ export interface ActualizarCategoriaDto {
   nombre: string;
 }
 
-export interface CrearProductoDto {
+export interface CrearMarcaDto {
   nombre: string;
+}
+
+export interface ActualizarMarcaDto {
+  nombre: string;
+}
+
+export interface TipoEquipo {
+  id: string;
+  nombre: string;
+  requiereClave: boolean;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  _count?: {
+    equipos: number;
+  };
+}
+
+export interface CrearTipoEquipoDto {
+  nombre: string;
+  requiereClave?: boolean;
+}
+
+export interface ActualizarTipoEquipoDto {
+  nombre?: string;
+  requiereClave?: boolean;
+  activo?: boolean;
+}
+
+export interface CrearProductoDto {
+  nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
@@ -159,6 +209,7 @@ export interface CrearProductoDto {
 export interface ActualizarProductoDto {
   nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
@@ -212,7 +263,8 @@ export interface CrearDetalleVentaDto {
 }
 
 export interface CrearVentaDto {
-  clienteNombre?: string;
+  clienteId?: string | null;
+  clienteNombre?: string | null;
   metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
   detalles: CrearDetalleVentaDto[];
 }
@@ -418,8 +470,12 @@ export interface Cliente {
 export interface EquipoCliente {
   id: string;
   clienteId: string;
+  tipoEquipoId?: string | null;
   tipoEquipo: string;
+  tipoEquipoRel?: TipoEquipo | null;
+  marcaId?: string | null;
   marca: string | null;
+  marcaRel?: Marca | null;
   modelo: string | null;
   numeroSerie: string | null;
   // contrasenaPatron: nunca se incluye en el tipo general (se revela por endpoint específico)
@@ -445,7 +501,16 @@ export interface EquipoOrden {
   estado: EstadoEquipoOrden;
   createdAt: string;
   updatedAt: string;
-  equipo?: { id: string; tipoEquipo: string; marca: string | null; modelo: string | null; numeroSerie: string | null };
+  equipo?: {
+    id: string;
+    tipoEquipo: string;
+    tipoEquipoId?: string | null;
+    marca: string | null;
+    marcaId?: string | null;
+    modelo: string | null;
+    numeroSerie: string | null;
+    contrasenaPatron?: string | null;
+  };
   items?: ItemOrden[];
   notas?: NotaTecnica[];
 }
@@ -543,7 +608,9 @@ export interface ActualizarClienteDto {
 
 // DTOs Equipos
 export interface CrearEquipoDto {
+  tipoEquipoId?: string | null;
   tipoEquipo: string;
+  marcaId?: string | null;
   marca?: string | null;
   modelo?: string | null;
   numeroSerie?: string | null;
@@ -551,7 +618,9 @@ export interface CrearEquipoDto {
 }
 
 export interface ActualizarEquipoDto {
+  tipoEquipoId?: string | null;
   tipoEquipo?: string;
+  marcaId?: string | null;
   marca?: string | null;
   modelo?: string | null;
   numeroSerie?: string | null;
