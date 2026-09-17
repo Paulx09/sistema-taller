@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { TipoItem } from '@prisma/client';
 import categoriaService from '../services/categoria.service';
 
 export class CategoriaController {
@@ -7,12 +8,13 @@ export class CategoriaController {
     try {
       const skip = req.query.skip ? Number(req.query.skip) : undefined;
       const take = req.query.take ? Number(req.query.take) : undefined;
+      const tipo = req.query.tipo as TipoItem | undefined;
 
-      const { categorias, total } = await categoriaService.listarTodas({ skip, take });
+      const { categorias, total } = await categoriaService.listarTodas({ tipo, skip, take });
       res.json({
         success: true,
         data: categorias,
-        total
+        total,
       });
     } catch (error) {
       next(error);
@@ -28,13 +30,13 @@ export class CategoriaController {
       if (!categoria) {
         return res.status(404).json({
           success: false,
-          error: 'Categoría no encontrada'
+          error: 'Categoría no encontrada',
         });
       }
 
       res.json({
         success: true,
-        data: categoria
+        data: categoria,
       });
     } catch (error) {
       next(error);
@@ -48,7 +50,7 @@ export class CategoriaController {
       res.status(201).json({
         success: true,
         data: categoria,
-        mensaje: 'Categoría creada exitosamente'
+        mensaje: 'Categoría creada exitosamente',
       });
     } catch (error) {
       next(error);
@@ -63,7 +65,7 @@ export class CategoriaController {
       res.json({
         success: true,
         data: categoria,
-        mensaje: 'Categoría actualizada exitosamente'
+        mensaje: 'Categoría actualizada exitosamente',
       });
     } catch (error) {
       next(error);
@@ -77,7 +79,7 @@ export class CategoriaController {
       await categoriaService.eliminar(id);
       res.json({
         success: true,
-        mensaje: 'Categoría eliminada exitosamente'
+        mensaje: 'Categoría eliminada exitosamente',
       });
     } catch (error) {
       next(error);

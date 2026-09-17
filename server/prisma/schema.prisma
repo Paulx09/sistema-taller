@@ -9,6 +9,11 @@ datasource db {
 
 // FASE 1: INVENTARIO, UBICACIONES Y VENTAS
 
+enum TipoItem {
+  PRODUCTO
+  SERVICIO
+}
+
 // ENUM para tipos de movimiento de stock
 enum TipoMovimiento {
   ENTRADA
@@ -38,12 +43,14 @@ model Usuario {
 
 model Categoria {
   id          String     @id @default(uuid())
-  nombre      String     @unique @db.VarChar(50)
+  nombre      String     @db.VarChar(50)
+  tipo        TipoItem   @default(PRODUCTO)
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   deletedAt   DateTime?  @map("deleted_at")
   productos   Producto[]
 
+  @@unique([tipo, nombre])
   @@map("categorias")
 }
 
@@ -76,6 +83,7 @@ model Ubicacion {
 
 model Producto {
   id              String            @id @default(uuid())
+  tipo            TipoItem          @default(PRODUCTO)
   nombre          String            @db.VarChar(150)
   marca           String?           @db.VarChar(50)
   modelo          String?           @db.VarChar(50)
@@ -88,11 +96,11 @@ model Producto {
   marcaRel        Marca?            @relation(fields: [marcaId], references: [id])
   ubicacionId     String?           @map("ubicacion_id")
   ubicacion       Ubicacion?        @relation(fields: [ubicacionId], references: [id])
-  precioCompra    Decimal           @map("precio_compra") @db.Decimal(10, 2)
+  precioCompra    Decimal           @default(0) @map("precio_compra") @db.Decimal(10, 2)
   precioVenta     Decimal           @map("precio_venta") @db.Decimal(10, 2)
   margenReferencia Decimal?         @map("margen_referencia") @db.Decimal(5, 2)
   stockActual     Int               @default(0) @map("stock_actual")
-  stockMinimo     Int               @default(1) @map("stock_minimo")
+  stockMinimo     Int               @default(0) @map("stock_minimo")
   imagenUrl       String?           @map("imagen_url")
   specs           Json?             // JSONB para especificaciones flexibles
   esServicio      Boolean           @default(false) @map("es_servicio")
