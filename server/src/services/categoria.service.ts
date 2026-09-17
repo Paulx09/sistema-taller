@@ -1,26 +1,32 @@
 import prisma from '../config/database';
-import { Categoria } from '@prisma/client';
+import { Categoria, TipoItem } from '@prisma/client';
 
 interface FiltrosCategorias {
+  tipo?: TipoItem;
   skip?: number;
   take?: number;
 }
 
 export class CategoriaService {
-  // Listar todas las categorías (excluye eliminadas) con paginación
+  // Listar todas las categorías (excluye eliminadas) con paginación y filtro opcional por tipo
   async listarTodas(filtros: FiltrosCategorias = {}) {
-    const { skip = 0, take = 50 } = filtros;
+    const { tipo, skip = 0, take = 50 } = filtros;
+
+    const where = {
+      deletedAt: null,
+      ...(tipo && { tipo }),
+    };
 
     const [categorias, total] = await Promise.all([
       prisma.categoria.findMany({
-        where: { deletedAt: null },
+        where,
         orderBy: { nombre: 'asc' },
         skip,
-        take
+        take,
       }),
       prisma.categoria.count({
-        where: { deletedAt: null }
-      })
+        where,
+      }),
     ]);
 
     return { categorias, total };
@@ -31,7 +37,7 @@ export class CategoriaService {
     return await prisma.categoria.findFirst({
       where: { 
         id,
-        deletedAt: null 
+        deletedAt: null,
       },
       include: {
         productos: {
@@ -39,29 +45,34 @@ export class CategoriaService {
           select: {
             id: true,
             nombre: true,
+            tipo: true,
             precioVenta: true,
-            stockActual: true
-          }
-        }
-      }
+            stockActual: true,
+          },
+        },
+      },
     });
   }
 
   // Crear nueva categoría
-  async crear(data: { nombre: string }): Promise<Categoria> {
+  async crear(data: { nombre: string; tipo?: TipoItem }): Promise<Categoria> {
     return await prisma.categoria.create({
-      data
+      data: {
+        nombre: data.nombre.toUpperCase().trim(),
+        tipo: data.tipo || 'PRODUCTO',
+      },
     });
   }
 
   // Actualizar categoría
-  async actualizar(id: string, data: { nombre: string }): Promise<Categoria> {
+  async actualizar(id: string, data: { nombre?: string; tipo?: TipoItem }): Promise<Categoria> {
     return await prisma.categoria.update({
       where: { id },
       data: {
-        ...data,
-        updatedAt: new Date()
-      }
+        ...(data.nombre && { nombre: data.nombre.toUpperCase().trim() }),
+        ...(data.tipo && { tipo: data.tipo }),
+        updatedAt: new Date(),
+      },
     });
   }
 
@@ -71,8 +82,8 @@ export class CategoriaService {
     const productosAsignados = await prisma.producto.count({
       where: { 
         categoriaId: id,
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     });
 
     if (productosAsignados > 0) {
@@ -84,8 +95,8 @@ export class CategoriaService {
       where: { id },
       data: { 
         deletedAt: new Date(),
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     });
   }
 }

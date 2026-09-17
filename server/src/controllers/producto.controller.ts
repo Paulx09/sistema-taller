@@ -7,7 +7,7 @@ export class ProductoController {
   // GET /api/productos
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = req.query;
+      const { busqueda, tipo, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = req.query;
 
       // Convertir esServicio string a boolean
       let esServicioBool: boolean | undefined;
@@ -16,6 +16,7 @@ export class ProductoController {
 
       const filtros = {
         busqueda: busqueda as string | undefined,
+        tipo: tipo as any,
         categoriaId: categoriaId as string | undefined,
         esServicio: esServicioBool,
         bajoStock: bajoStock === 'true' ? true : undefined,
@@ -245,11 +246,8 @@ export class ProductoController {
 
       const producto = await productoService.ajustarStock(
         id,
-        cantidad,
-        tipo,
-        motivo,
-        usuarioId,
-        numerosSerie
+        { cantidad, tipo, motivo, numerosSerie },
+        usuarioId
       );
 
       res.json({

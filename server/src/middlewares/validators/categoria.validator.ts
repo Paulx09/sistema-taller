@@ -3,30 +3,37 @@ import { Request, Response, NextFunction } from 'express';
 
 // Esquema para crear categoría
 const crearCategoriaSchema = z.object({
-  nombre: z.string()
+  nombre: z
+    .string()
     .min(1, 'El nombre es requerido')
     .max(50, 'El nombre no puede exceder 50 caracteres')
     .trim()
+    .transform((val) => val.toUpperCase()),
+  tipo: z.enum(['PRODUCTO', 'SERVICIO']).default('PRODUCTO').optional(),
 });
 
 // Esquema para actualizar categoría
 const actualizarCategoriaSchema = z.object({
-  nombre: z.string()
+  nombre: z
+    .string()
     .min(1, 'El nombre es requerido')
     .max(50, 'El nombre no puede exceder 50 caracteres')
     .trim()
+    .transform((val) => val.toUpperCase())
+    .optional(),
+  tipo: z.enum(['PRODUCTO', 'SERVICIO']).optional(),
 });
 
 // Esquema para validar ID de parámetro (UUID)
 const idParamSchema = z.object({
-  id: z.uuid('El ID debe ser un UUID válido')
+  id: z.string().uuid('El ID debe ser un UUID válido'),
 });
 
 // Middleware de validación genérico
 const validate = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      schema.parse(req.body);
+      req.body = schema.parse(req.body);
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -34,8 +41,8 @@ const validate = (schema: z.ZodSchema) => {
           error: 'Validación fallida',
           details: error.issues.map((issue) => ({
             campo: issue.path.join('.'),
-            mensaje: issue.message
-          }))
+            mensaje: issue.message,
+          })),
         });
       }
       next(error);
@@ -52,7 +59,7 @@ const validateId = (req: Request, res: Response, next: NextFunction) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         error: 'ID inválido',
-        mensaje: 'El ID debe ser un UUID válido'
+        mensaje: 'El ID debe ser un UUID válido',
       });
     }
     next(error);
@@ -62,5 +69,5 @@ const validateId = (req: Request, res: Response, next: NextFunction) => {
 export const categoriaValidator = {
   crear: validate(crearCategoriaSchema),
   actualizar: validate(actualizarCategoriaSchema),
-  validarId: validateId
+  validarId: validateId,
 };
