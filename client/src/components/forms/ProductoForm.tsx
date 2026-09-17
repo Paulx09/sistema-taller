@@ -2,15 +2,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
-import { FEATURES } from '@/config/features';
-import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
-import { serieService } from '@/services/serie.service';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
 import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
 import { UbicacionCombobox } from '@/components/forms/UbicacionCombobox';
 import { useMarcas } from '@/hooks/useMarcas';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Form,
   FormControl,
@@ -23,92 +20,82 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Loader2, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import type {
   Producto,
   CrearProductoDto,
   ActualizarProductoDto,
   Categoria,
-  Marca,
-  Ubicacion,
+  TipoItem,
 } from '@/types';
 
 // Helper para construir URL completa de imagen
 const getImageUrl = (imagenUrl: string | null): string | null => {
   if (!imagenUrl) return null;
   if (imagenUrl.startsWith('http')) return imagenUrl;
-  // Si es ruta relativa, agregar la URL del backend
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  const baseUrl = API_URL.replace('/api', ''); // Eliminar /api si existe
+  const baseUrl = API_URL.replace('/api', '');
   return `${baseUrl}${imagenUrl}`;
 };
 
-const productoSchema = z.object({
-  nombre: z.string().max(200, 'El nombre no puede exceder 200 caracteres').optional().or(z.literal('')),
-  descripcion: z
-    .string()
-    .max(255, 'La descripción no puede exceder 255 caracteres')
-    .optional()
-    .or(z.literal('')),
-  categoriaId: z
-    .string({ message: 'La categoría es requerida' })
-    .uuid('ID de categoría inválido'),
-  ubicacionId: z
-    .string()
-    .uuid('ID de ubicación inválido')
-    .optional()
-    .or(z.literal('')),
-  marcaId: z.string().optional().or(z.literal('')),
-  marca: z.string().max(100).optional().or(z.literal('')),
-  modelo: z.string().max(100).optional().or(z.literal('')),
-  sku: z.string().max(50).optional().or(z.literal('')),
-  codigoBarras: z.string().max(50).optional().or(z.literal('')),
-  precioCompra: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
-  precioVenta: z.string().min(1, 'Requerido').regex(/^\d*\.?\d*$/, 'Debe ser un número válido'),
-  margenReferencia: z.string().regex(/^\d*\.?\d*$/, 'Debe ser un número válido').optional().or(z.literal('')),
-  stockActual: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
-  stockMinimo: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
-  esServicio: z.boolean().optional(),
-  esSegundaMano: z.boolean().optional(),
-  requiereSerie: z.boolean().optional(),
-  garantiaProveedorMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
-  garantiaClienteMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional(),
-  padreId: z
-    .string()
-    .uuid('ID de producto padre inválido')
-    .optional()
-    .or(z.literal('')),
-  imagenUrl: z.string().optional().or(z.literal('')),
-}).superRefine((data, ctx) => {
-  if (!data.esServicio) {
-    const stockMin = Number.parseInt(data.stockMinimo || '0');
-    const precioV = Number.parseFloat(data.precioVenta || '0');
-    const precioC = Number.parseFloat(data.precioCompra || '0');
-
-    if (!data.ubicacionId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Requerido para productos físicos',
-        path: ['ubicacionId'],
-      });
+const productoSchema = z
+  .object({
+    tipo: z.enum(['PRODUCTO', 'SERVICIO']),
+    categoriaId: z
+      .string({ message: 'La categoría es requerida' })
+      .min(1, 'La categoría es requerida'),
+    modelo: z.string().max(100).optional().or(z.literal('')),
+    descripcion: z.string().max(255).optional().or(z.literal('')),
+    precioCompra: z
+      .string()
+      .regex(/^\d*\.?\d*$/, 'Debe ser un número válido')
+      .optional()
+      .or(z.literal('')),
+    precioVenta: z
+      .string()
+      .min(1, 'El precio de venta es requerido')
+      .regex(/^\d*\.?\d*$/, 'Debe ser un número válido')
+      .refine((val) => Number.parseFloat(val) > 0, 'El precio debe ser mayor a 0'),
+    margenReferencia: z
+      .string()
+      .regex(/^\d*\.?\d*$/, 'Debe ser un número válido')
+      .optional()
+      .or(z.literal('')),
+    stockActual: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional().or(z.literal('')),
+    stockMinimo: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional().or(z.literal('')),
+    sku: z.string().max(50).optional().or(z.literal('')),
+    codigoBarras: z.string().max(50).optional().or(z.literal('')),
+    requiereSerie: z.boolean().optional(),
+    garantiaProveedorMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional().or(z.literal('')),
+    garantiaClienteMeses: z.string().regex(/^\d*$/, 'Debe ser un número entero').optional().or(z.literal('')),
+    padreId: z.string().optional().or(z.literal('')),
+    imagenUrl: z.string().optional().or(z.literal('')),
+  })
+  .superRefine((data, ctx) => {
+    if (data.tipo === 'PRODUCTO') {
+      const precioV = Number.parseFloat(data.precioVenta || '0');
+      const precioC = Number.parseFloat(data.precioCompra || '0');
+      if (precioC > 0 && precioV > 0 && precioV < precioC) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'El precio de venta debe ser mayor o igual al precio de compra',
+          path: ['precioVenta'],
+        });
+      }
     }
-    if (stockMin < 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "El stock mínimo no puede ser negativo",
-        path: ["stockMinimo"],
-      });
-    }
-    if (precioV <= precioC) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "El precio de venta debe ser mayor al precio de compra (no se puede vender a pérdida)",
-        path: ["precioVenta"],
-      });
-    }
-  }
-});
+  });
 
 type ProductoFormValues = z.infer<typeof productoSchema>;
 
@@ -118,17 +105,9 @@ interface ProductoFormProps {
   onCreate: (data: CrearProductoDto | FormData) => Promise<Producto>;
   onUpdate: (id: string, data: ActualizarProductoDto | FormData) => Promise<Producto>;
   categorias: Categoria[];
-  ubicaciones: Ubicacion[];
-  marcas?: Marca[];
   onCategoriaCreada?: (categoria: Categoria) => void;
   onCategoriaActualizada?: (categoria: Categoria) => void;
   onCategoriaEliminada?: (id: string) => void;
-  onUbicacionCreada?: (ubicacion: Ubicacion) => void;
-  onUbicacionActualizada?: (ubicacion: Ubicacion) => void;
-  onUbicacionEliminada?: (id: string) => void;
-  onMarcaCreada?: (marca: Marca) => void;
-  onMarcaActualizada?: (marca: Marca) => void;
-  onMarcaEliminada?: (id: string) => void;
 }
 
 export function ProductoForm({
@@ -137,887 +116,483 @@ export function ProductoForm({
   onCreate,
   onUpdate,
   categorias,
-  ubicaciones,
-  marcas,
   onCategoriaCreada,
   onCategoriaActualizada,
   onCategoriaEliminada,
-  onUbicacionCreada,
-  onUbicacionActualizada,
-  onUbicacionEliminada,
-  onMarcaCreada,
-  onMarcaActualizada,
-  onMarcaEliminada,
 }: Readonly<ProductoFormProps>) {
-  const { marcas: marcasHook, refetch: refetchMarcas } = useMarcas();
-  const marcasList = marcas || marcasHook;
-
-  const [esServicio, setEsServicio] = useState(producto?.esServicio || false);
-  const [modoMargen, setModoMargen] = useState<boolean>(false); // false = Modo Precio, true = Modo Margen
+  const [atributosOpen, setAtributosOpen] = useState(false);
   const [imagenFile, setImagenFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(
-    getImageUrl(producto?.imagenUrl || null)
+  const [imagenPreview, setImagenPreview] = useState<string | null>(
+    producto?.imagenUrl ? getImageUrl(producto.imagenUrl) : null
   );
+  const [isCalculatedPrice, setIsCalculatedPrice] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Estados para modal de series retroactivas
-  const [seriesModalOpen, setSeriesModalOpen] = useState(false);
-  const [, setSeriesRetroactivas] = useState<string[]>([]);
-  const [cantidadSeriesPendientes, setCantidadSeriesPendientes] = useState(0);
-  // Ref síncrono para evitar stale closures al verificar series escaneadas
-  const seriesRetroactivasRef = useRef<string[]>([]);
-  // Guarda los datos del form cuando hay que escanear antes de guardar (nuevo producto)
-  const pendingSubmitRef = useRef<ProductoFormValues | null>(null);
-  const prevRequiereSerieRef = useRef<boolean>(producto?.requiereSerie || false);
+
+  const initialTipo: TipoItem = producto?.tipo || (producto?.esServicio ? 'SERVICIO' : 'PRODUCTO');
 
   const form = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
     defaultValues: {
-      nombre: producto?.nombre || '',
-      descripcion: producto?.descripcion || '',
+      tipo: initialTipo,
       categoriaId: producto?.categoriaId || '',
-      ubicacionId: producto?.ubicacionId || '',
-      marcaId: producto?.marcaId || '',
-      marca: producto?.marca || '',
       modelo: producto?.modelo || '',
+      descripcion: producto?.descripcion || '',
+      precioCompra: producto?.precioCompra !== undefined && producto?.precioCompra !== null ? producto.precioCompra.toString() : '',
+      precioVenta: producto?.precioVenta !== undefined && producto?.precioVenta !== null ? producto.precioVenta.toString() : '',
+      margenReferencia: producto?.margenReferencia !== undefined && producto?.margenReferencia !== null ? producto.margenReferencia.toString() : '',
+      stockActual: producto?.stockActual !== undefined && producto?.stockActual !== null ? producto.stockActual.toString() : '',
+      stockMinimo: producto?.stockMinimo !== undefined && producto?.stockMinimo !== null ? producto.stockMinimo.toString() : '',
       sku: producto?.sku || '',
       codigoBarras: producto?.codigoBarras || '',
-      precioCompra: producto?.precioCompra?.toString() || '',
-      precioVenta: producto?.precioVenta?.toString() || '',
-      margenReferencia: producto?.margenReferencia?.toString() || '',
-      stockActual: producto?.stockActual?.toString() || '',
-      stockMinimo: producto?.stockMinimo?.toString() || '',
-      esServicio: producto?.esServicio || false,
-      esSegundaMano: producto?.esSegundaMano || false,
       requiereSerie: producto?.requiereSerie || false,
-      garantiaProveedorMeses: producto?.garantiaProveedorMeses?.toString() || '0',
-      garantiaClienteMeses: producto?.garantiaClienteMeses?.toString() || '0',
+      garantiaProveedorMeses: producto?.garantiaProveedorMeses !== undefined && producto?.garantiaProveedorMeses !== null ? producto.garantiaProveedorMeses.toString() : '',
+      garantiaClienteMeses: producto?.garantiaClienteMeses !== undefined && producto?.garantiaClienteMeses !== null ? producto.garantiaClienteMeses.toString() : '',
       padreId: producto?.padreId || '',
       imagenUrl: producto?.imagenUrl || '',
     },
   });
 
-  // Limpiar campos cuando se marca como servicio
+  const selectedTipo = form.watch('tipo');
+  const isServicio = selectedTipo === 'SERVICIO';
+
+  // Recalcular precio sugerido si cambian precioCompra o margenReferencia
+  const precioCompraWatch = form.watch('precioCompra');
+  const margenReferenciaWatch = form.watch('margenReferencia');
+
   useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'esServicio' && value.esServicio) {
-        // Resetear campos que no aplican para servicios
-        form.setValue('marca', '');
-        form.setValue('marcaId', '');
-        form.setValue('modelo', '');
-        form.setValue('ubicacionId', '');
-        form.setValue('stockActual', '0');
-        form.setValue('stockMinimo', '0');
-        form.setValue('precioCompra', '0');
-        if (FEATURES.ENABLE_PRODUCT_SKU) form.setValue('sku', '');
-        if (FEATURES.ENABLE_PRODUCT_BARCODE) form.setValue('codigoBarras', '');
-        // Resetear campos específicos de productos físicos
-        form.setValue('esSegundaMano', false);
-        form.setValue('requiereSerie', false);
-        form.setValue('garantiaProveedorMeses', '0');
-        form.setValue('garantiaClienteMeses', '0');
-        setEsServicio(true);
-      } else if (name === 'esServicio' && !value.esServicio) {
-        setEsServicio(false);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
+    if (isServicio) return;
+    const compra = Number.parseFloat(precioCompraWatch || '0');
+    const margen = Number.parseFloat(margenReferenciaWatch || '0');
 
-  // Detectar cuando se activa requiereSerie en producto con stock existente
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'requiereSerie' && value.requiereSerie && !prevRequiereSerieRef.current) {
-        // Se acaba de activar requiereSerie
-        const stockActual = producto?.stockActual || 0;
-        
-        if (producto && stockActual > 0) {
-          // Producto en edición con stock existente: pedir solo series faltantes
-          serieService
-            .obtenerEstadisticas(producto.id)
-            .then((estadisticas) => {
-              const seriesDisponibles = estadisticas.DISPONIBLE ?? 0;
-              const faltantes = stockActual - seriesDisponibles;
-
-              if (faltantes > 0) {
-                setCantidadSeriesPendientes(faltantes);
-                setSeriesModalOpen(true);
-              }
-
-              if (faltantes < 0) {
-                form.setValue('requiereSerie', false);
-                prevRequiereSerieRef.current = false;
-              }
-            })
-            .catch(() => {
-              form.setValue('requiereSerie', false);
-              prevRequiereSerieRef.current = false;
-            });
-        }
-        
-        prevRequiereSerieRef.current = true;
-      } else if (name === 'requiereSerie' && !value.requiereSerie) {
-        prevRequiereSerieRef.current = false;
-        setSeriesRetroactivas([]); // Limpiar series si se desactiva
-        seriesRetroactivasRef.current = [];
-        setCantidadSeriesPendientes(0);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, producto]);
-
-  // Calcular precio de venta automáticamente en Modo Margen
-  useEffect(() => {
-    if (!modoMargen) return;
-
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'precioCompra' || name === 'margenReferencia') {
-        const precioCompra = Number.parseFloat(value.precioCompra || '0');
-        const margen = Number.parseFloat(value.margenReferencia || '0');
-
-        if (precioCompra > 0 && margen >= 0) {
-          const precioVenta = precioCompra * (1 + margen / 100);
-          form.setValue('precioVenta', precioVenta.toFixed(2));
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, modoMargen]);
-
-  // Calcular margen automáticamente en Modo Precio
-  useEffect(() => {
-    if (modoMargen) return; // Solo aplica en modo precio
-
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'precioCompra' || name === 'precioVenta') {
-        const precioCompra = Number.parseFloat(value.precioCompra || '0');
-        const precioVenta = Number.parseFloat(value.precioVenta || '0');
-
-        if (precioCompra > 0 && precioVenta > precioCompra) {
-          const margen = ((precioVenta - precioCompra) / precioCompra) * 100;
-          form.setValue('margenReferencia', margen.toFixed(2));
-        } else if (precioVenta === 0 || precioCompra === 0) {
-          // Limpiar margen si los precios no son válidos
-          form.setValue('margenReferencia', '');
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, modoMargen]);
-
-  // Corregir margenReferencia desactualizado al cargar producto en edición
-  useEffect(() => {
-    if (!producto) return; // Solo para productos en edición
-    
-    const precioCompra = Number.parseFloat(producto.precioCompra?.toString() || '0');
-    const precioVenta = Number.parseFloat(producto.precioVenta?.toString() || '0');
-    const margenGuardado = Number.parseFloat(producto.margenReferencia?.toString() || '0');
-    
-    // Calcular margen real basado en los precios actuales
-    if (precioCompra > 0 && precioVenta > precioCompra) {
-      const margenReal = ((precioVenta - precioCompra) / precioCompra) * 100;
-      
-      // Si el margen guardado difiere del real por más de 0.5%, corregirlo
-      const diferencia = Math.abs(margenReal - margenGuardado);
-      if (diferencia > 0.5) {
-        form.setValue('margenReferencia', margenReal.toFixed(2));
-      }
+    if (compra > 0 && margen > 0 && isCalculatedPrice) {
+      const sugerido = compra * (1 + margen / 100);
+      form.setValue('precioVenta', sugerido.toFixed(2));
     }
-  }, [producto, form]);
-
-  const onSubmit = async (data: ProductoFormValues) => {
-    // NUEVO PRODUCTO: Si requiere serie y tiene stock inicial, abrir escáner ANTES de guardar
-    if (!producto && data.requiereSerie && Number.parseInt(data.stockActual || '0') > 0 && seriesRetroactivasRef.current.length === 0) {
-      pendingSubmitRef.current = data;
-      setCantidadSeriesPendientes(Number.parseInt(data.stockActual || '0'));
-      setSeriesModalOpen(true);
-      return; // Esperar a que se completen las series; handleSeriesCompletas re-lanzará el guardado
-    }
-
-    // Si requiere serie y hay faltantes, exigir solo las series faltantes
-    if (producto && data.requiereSerie && producto.stockActual > 0 && seriesRetroactivasRef.current.length === 0) {
-      try {
-        const estadisticas = await serieService.obtenerEstadisticas(producto.id);
-        const seriesDisponibles = estadisticas.DISPONIBLE ?? 0;
-        const faltantes = producto.stockActual - seriesDisponibles;
-
-        if (faltantes > 0) {
-          setCantidadSeriesPendientes(faltantes);
-          setSeriesModalOpen(true);
-          return;
-        }
-
-        if (faltantes < 0) {
-          form.setValue('requiereSerie', false);
-          prevRequiereSerieRef.current = false;
-          return;
-        }
-      } catch {
-        form.setValue('requiereSerie', false);
-        prevRequiereSerieRef.current = false;
-        return;
-      }
-    }
-
-    try {
-      // Crear FormData para enviar archivo
-      const formData = new FormData();
-      
-      // Agregar todos los campos
-      if (data.nombre) formData.append('nombre', data.nombre);
-      if (data.descripcion) formData.append('descripcion', data.descripcion);
-      formData.append('categoriaId', data.categoriaId);
-      if (data.ubicacionId) formData.append('ubicacionId', data.ubicacionId);
-      if (data.marcaId) formData.append('marcaId', data.marcaId);
-      if (data.marca) formData.append('marca', data.marca);
-      if (data.modelo) formData.append('modelo', data.modelo);
-      if (FEATURES.ENABLE_PRODUCT_SKU && data.sku) formData.append('sku', data.sku);
-      if (FEATURES.ENABLE_PRODUCT_BARCODE && data.codigoBarras) formData.append('codigoBarras', data.codigoBarras);
-      formData.append('precioCompra', data.precioCompra);
-      formData.append('precioVenta', data.precioVenta);
-      if (data.margenReferencia) formData.append('margenReferencia', data.margenReferencia);
-      
-      if (!esServicio) {
-        // stockActual solo se envía al CREAR (trazabilidad - las ediciones usan PATCH /stock)
-        if (!producto) {
-          formData.append('stockActual', data.stockActual || '0');
-        }
-        // stockMinimo sí se puede actualizar siempre
-        formData.append('stockMinimo', data.stockMinimo || '0');
-      }
-      
-      formData.append('esServicio', data.esServicio ? 'true' : 'false');
-      formData.append('esSegundaMano', data.esSegundaMano ? 'true' : 'false');
-      formData.append('requiereSerie', data.requiereSerie ? 'true' : 'false');
-      formData.append('garantiaProveedorMeses', data.garantiaProveedorMeses || '0');
-      formData.append('garantiaClienteMeses', data.garantiaClienteMeses || '0');
-      if (data.padreId) formData.append('padreId', data.padreId);
-      
-      // Agregar series retroactivas usando el ref (evita stale closures)
-      if (seriesRetroactivasRef.current.length > 0) {
-        formData.append('seriesRetroactivas', JSON.stringify(seriesRetroactivasRef.current));
-      }
-      
-      // Agregar archivo si existe (solo si la funcionalidad está habilitada)
-      if (FEATURES.ENABLE_PRODUCT_IMAGES && imagenFile) {
-        formData.append('imagen', imagenFile);
-      }
-
-      if (producto) {
-        await onUpdate(producto.id, formData);
-      } else {
-        await onCreate(formData);
-      }
-      
-      onSuccess();
-      form.reset();
-      setImagenFile(null);
-      setPreviewUrl(null);
-      seriesRetroactivasRef.current = [];
-      setSeriesRetroactivas([]);
-    } catch (error) {
-      console.error('Error al guardar:', error);
-    }
-  };
-
-  const handleSeriesCompletas = (series: string[]) => {
-    // Actualizar ref síncronamente para evitar stale closures
-    seriesRetroactivasRef.current = series;
-    setSeriesRetroactivas(series);
-    setSeriesModalOpen(false);
-
-    // Si había un submit pendiente (nuevo producto esperando escaneo), re-lanzar guardado
-    if (pendingSubmitRef.current !== null) {
-      pendingSubmitRef.current = null;
-      form.handleSubmit(onSubmit)();
-    }
-  };
+  }, [precioCompraWatch, margenReferenciaWatch, isCalculatedPrice, form, isServicio]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImagenFile(file);
-      // Crear preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
+        setImagenPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleRemoveImage = () => {
+    setImagenFile(null);
+    setImagenPreview(null);
+    form.setValue('imagenUrl', '');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const onSubmit = async (data: ProductoFormValues) => {
+    try {
+      const isServ = data.tipo === 'SERVICIO';
+
+      const payloadData = {
+        tipo: data.tipo,
+        categoriaId: data.categoriaId,
+        modelo: isServ ? undefined : data.modelo?.trim().toUpperCase() || undefined,
+        descripcion: data.descripcion ? data.descripcion.trim().toUpperCase() : undefined,
+        precioCompra: isServ ? 0 : Number.parseFloat(data.precioCompra || '0'),
+        precioVenta: Number.parseFloat(data.precioVenta),
+        margenReferencia: isServ || !data.margenReferencia ? undefined : Number.parseFloat(data.margenReferencia),
+        stockActual: isServ ? 0 : Number.parseInt(data.stockActual || '0', 10),
+        stockMinimo: isServ ? 0 : Number.parseInt(data.stockMinimo || '1', 10),
+        sku: isServ ? undefined : data.sku?.trim().toUpperCase() || undefined,
+        codigoBarras: isServ ? undefined : data.codigoBarras?.trim().toUpperCase() || undefined,
+        requiereSerie: isServ ? false : data.requiereSerie || false,
+        garantiaProveedorMeses: isServ ? 0 : Number.parseInt(data.garantiaProveedorMeses || '0', 10),
+        garantiaClienteMeses: isServ ? 0 : Number.parseInt(data.garantiaClienteMeses || '0', 10),
+        padreId: isServ ? undefined : data.padreId || undefined,
+        esServicio: isServ,
+        esSegundaMano: false,
+      };
+
+      if (producto) {
+        // Al Editar: enviamos stockMinimo y excluimos stockActual del payload PUT
+        const { stockActual, ...updatePayload } = payloadData;
+
+        if (imagenFile) {
+          const formData = new FormData();
+          Object.entries(updatePayload).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              formData.append(key, typeof value === 'boolean' ? String(value) : (value as any));
+            }
+          });
+          formData.append('imagen', imagenFile);
+          await onUpdate(producto.id, formData);
+        } else {
+          await onUpdate(producto.id, updatePayload as ActualizarProductoDto);
+        }
+      } else {
+        // Al Crear: enviamos stockActual y stockMinimo
+        if (imagenFile) {
+          const formData = new FormData();
+          Object.entries(payloadData).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              formData.append(key, typeof value === 'boolean' ? String(value) : (value as any));
+            }
+          });
+          formData.append('imagen', imagenFile);
+          await onCreate(formData);
+        } else {
+          await onCreate(payloadData as CrearProductoDto);
+        }
+      }
+
+      onSuccess();
+    } catch (error) {
+      console.error('Error al guardar producto:', error);
+    }
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 py-4">
-        
-        {/* Sección: Identificación y Clasificación */}
-        <section className="space-y-4">
-           <div className="flex items-center gap-2 border-b border-border pb-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">category</span>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Identificación y Clasificación</h3>
-           </div>
-           
-           <div className="grid grid-cols-1 gap-4">
-              {/* Fila 1: Categoría y Marca */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="categoriaId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Categoría *</FormLabel>
-                      <CategoriaCombobox
-                        value={field.value}
-                        onChange={field.onChange}
-                        categorias={categorias}
-                        onCategoriaCreada={onCategoriaCreada}
-                        onCategoriaActualizada={onCategoriaActualizada}
-                        onCategoriaEliminada={onCategoriaEliminada}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* Campo Tipo (Opciones fijas: PRODUCTO / SERVICIO) */}
+        <div className="bg-muted/40 p-3 rounded-lg border">
+          <FormField
+            control={form.control}
+            name="tipo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Tipo de Registro *
+                </FormLabel>
+                <Select
+                  onValueChange={(val: TipoItem) => {
+                    field.onChange(val);
+                    form.setValue('categoriaId', ''); // Resetear categoría al cambiar de tipo
+                  }}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger className="h-10 bg-background font-semibold text-foreground">
+                      <SelectValue placeholder="Selecciona el tipo" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="PRODUCTO">PRODUCTO (Ítem físico con stock y modelo)</SelectItem>
+                    <SelectItem value="SERVICIO">SERVICIO (Mano de obra / Reparación / Mantenimiento)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Categoría (filtrada por el tipo seleccionado) */}
+        <FormField
+          control={form.control}
+          name="categoriaId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Categoría *</FormLabel>
+              <FormControl>
+                <CategoriaCombobox
+                  value={field.value}
+                  onChange={(id) => field.onChange(id)}
+                  categorias={categorias}
+                  tipo={selectedTipo}
+                  showCreateButton={!producto}
+                  showSettingsButton={true}
+                  onCategoriaCreada={onCategoriaCreada}
+                  onCategoriaActualizada={onCategoriaActualizada}
+                  onCategoriaEliminada={onCategoriaEliminada}
+                  placeholder={`Seleccionar categoría de ${selectedTipo.toLowerCase()}...`}
                 />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-                {!esServicio ? (
-                  <FormField
-                    control={form.control}
-                    name="marcaId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marca</FormLabel>
-                        <MarcaCombobox
-                          value={field.value || form.watch('marca')}
-                          onChange={(marcaId, marcaNombre) => {
-                            field.onChange(marcaId);
-                            if (marcaNombre) form.setValue('marca', marcaNombre);
-                          }}
-                          marcas={marcasList}
-                          onMarcaCreada={(m) => {
-                            refetchMarcas();
-                            onMarcaCreada?.(m);
-                          }}
-                          onMarcaActualizada={(m) => {
-                            refetchMarcas();
-                            onMarcaActualizada?.(m);
-                          }}
-                          onMarcaEliminada={(id) => {
-                            refetchMarcas();
-                            onMarcaEliminada?.(id);
-                          }}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
+        {/* Si es PRODUCTO: campo Modelo */}
+        {!isServicio && (
+          <FormField
+            control={form.control}
+            name="modelo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Modelo *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Ej: LOGITECH G502 / L355 / 240GB"
+                    {...field}
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                   />
-                ) : (
-                  <div />
-                )}
-              </div>
+                </FormControl>
+                <FormDescription className="text-xs">
+                  El nombre comercial completo (DETALLE) será: Categoría + Modelo
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
-              {/* Fila 2: Modelo y Ubicación */}
-              {!esServicio && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="modelo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modelo</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej. ThinkPad T480 / DDR4 8GB 3200MHz" {...field} className="bg-background border-border" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+        {/* Campo Descripción (común a ambos) */}
+        <FormField
+          control={form.control}
+          name="descripcion"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descripción (Opcional)</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Detalles adicionales, especificaciones breves..."
+                  rows={2}
+                  {...field}
+                  onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-                  <FormField
-                    control={form.control}
-                    name="ubicacionId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ubicación Física</FormLabel>
-                        <UbicacionCombobox
-                          value={field.value}
-                          onChange={field.onChange}
-                          ubicaciones={ubicaciones}
-                          onUbicacionCreada={onUbicacionCreada}
-                          onUbicacionActualizada={onUbicacionActualizada}
-                          onUbicacionEliminada={onUbicacionEliminada}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+        {/* Sección de Precios y Stock */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+          {/* Si es PRODUCTO: Precio de Compra */}
+          {!isServicio && (
+            <FormField
+              control={form.control}
+              name="precioCompra"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precio Compra (S/)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="0.00" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
+            />
+          )}
 
-              {/* Fila 3: Descripción (Siempre visible) */}
+          {/* Precio de Venta (obligatorio para ambos) */}
+          <FormField
+            control={form.control}
+            name="precioVenta"
+            render={({ field }) => (
+              <FormItem className={isServicio ? 'md:col-span-2' : ''}>
+                <FormLabel className="font-semibold text-primary">Precio Venta (S/) *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="0.00"
+                    {...field}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      setIsCalculatedPrice(false);
+                    }}
+                    className="font-semibold text-base"
+                  />
+                </FormControl>
+                {isServicio && (
+                  <FormDescription className="text-xs text-muted-foreground">
+                    Este precio es referencial; durante las ventas se podrá editar dinámicamente y actualizará el catálogo al finalizar.
+                  </FormDescription>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Si es PRODUCTO: Stock Actual y Mínimo */}
+        {!isServicio && (
+          <div className="grid grid-cols-2 gap-4">
+            {!producto && (
               <FormField
                 control={form.control}
-                name="descripcion"
+                name="stockActual"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descripción</FormLabel>
+                    <FormLabel>Stock Inicial</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Detalles adicionales o especificaciones técnicas breves..." 
-                        {...field} 
-                        className="bg-background border-border resize-none"
-                        rows={2}
-                      />
+                      <Input placeholder="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            )}
 
-              {/* Estado Switches */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg border border-border">
-                <FormField
-                  control={form.control}
-                  name="esServicio"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                       <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium text-foreground block">Es Servicio / Mano de Obra</FormLabel>
-                          <FormDescription className="text-xs text-muted-foreground">No consume stock ni ubicación física.</FormDescription>
-                       </div>
-                       <FormControl>
-                          <Switch checked={field.value} onCheckedChange={(c) => { field.onChange(c); setEsServicio(c); }} />
-                       </FormControl>
-                    </FormItem>
-                  )}
-                />
-                {!esServicio && (
+            <FormField
+              control={form.control}
+              name="stockMinimo"
+              render={({ field }) => (
+                <FormItem className={producto ? 'col-span-2' : ''}>
+                  <FormLabel>Stock Mínimo (Alerta)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="1" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {/* Sección Atributos y Configuración Avanzada (Compactada/Colapsable) */}
+        {!isServicio && (
+          <div className="border rounded-lg p-3 bg-muted/20">
+            <Collapsible open={atributosOpen} onOpenChange={setAtributosOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full flex justify-between items-center p-0 h-8 hover:bg-transparent font-medium text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Atributos y Configuración Avanzada
+                  </span>
+                  {atributosOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="space-y-4 pt-3 mt-2 border-t text-sm">
+                <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
-                    name="esSegundaMano"
+                    name="sku"
                     render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
+                      <FormItem>
+                        <FormLabel className="text-xs">SKU</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="SKU-..."
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="codigoBarras"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Código de Barras</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="775..."
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-3 pt-2 border-t">
+                  <FormField
+                    control={form.control}
+                    name="requiereSerie"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-md border p-2.5">
                         <div className="space-y-0.5">
-                            <FormLabel className="text-sm font-medium text-foreground block">Es Segunda Mano / Usado</FormLabel>
-                            <FormDescription className="text-xs text-muted-foreground">Indica producto de reuso o reacondicionado.</FormDescription>
+                          <FormLabel className="text-xs font-medium">Control por Números de Serie</FormLabel>
+                          <FormDescription className="text-[11px]">
+                            Control individual de series para garantías
+                          </FormDescription>
                         </div>
                         <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
                         </FormControl>
                       </FormItem>
                     )}
                   />
-                )}
-              </div>
 
-              {/* Feature: SKU y Código de Barras */}
-              {!esServicio && (FEATURES.ENABLE_PRODUCT_SKU || FEATURES.ENABLE_PRODUCT_BARCODE) && (
-                <div className="grid grid-cols-2 gap-4">
-                  {FEATURES.ENABLE_PRODUCT_SKU && (
-                    <FormField
-                      control={form.control}
-                      name="sku"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>SKU</FormLabel>
-                          <FormControl>
-                            <Input placeholder="GEN-AUTO-001" {...field} className="bg-background border-border font-mono text-sm" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  {FEATURES.ENABLE_PRODUCT_BARCODE && (
-                    <FormField
-                      control={form.control}
-                      name="codigoBarras"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Código de Barras</FormLabel>
-                          <FormControl>
-                            <Input placeholder="EAN/UPC" {...field} className="bg-background border-border font-mono text-sm" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
-              )}
-           </div>
-        </section>
-
-        {/* Sección: Precios y Stock */}
-        <section className="space-y-4">
-           <div className="flex items-center gap-2 border-b border-border pb-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">payments</span>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Precios y Stock</h3>
-              {!esServicio && (
-                <div className="ml-auto flex items-center gap-2">
-                  <Badge variant={!modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(false)}>
-                    Por Precio
-                  </Badge>
-                  <Badge variant={modoMargen ? "default" : "outline"} className="cursor-pointer" onClick={() => setModoMargen(true)}>
-                    Por Margen %
-                  </Badge>
-                </div>
-              )}
-           </div>
-           
-           {/* Fila 1: Precios y Margen */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {!esServicio && (
-                <FormField
-                  control={form.control}
-                  name="precioCompra"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Precio Compra (S/.)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="text" 
-                          className="bg-background border-border" 
-                          placeholder="0.00"
-                          {...field} 
-                          value={field.value === '0' ? '' : field.value}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (/^\d*\.?\d{0,2}$/.test(value)) {
-                                field.onChange(value);
-                            }
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                      <FormDescription>CPP - Costo Promedio</FormDescription>
-                    </FormItem>
-                  )}
-                />
-              )}
-              
-              {/* Modo Precio: Usuario ingresa precio venta manualmente */}
-              {!modoMargen && (
-                <FormField
-                  control={form.control}
-                  name="precioVenta"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Precio Venta (S/.)</FormLabel>
-                      <FormControl>
-                          <Input 
-                            type="text" 
-                            className="bg-background border-border" 
-                            placeholder="0.00"
-                            {...field} 
-                            value={field.value === '0' ? '' : field.value}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*\.?\d{0,2}$/.test(value)) {
-                                  field.onChange(value);
-                              }
-                            }}
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              
-              {/* Modo Margen: Usuario ingresa porcentaje de margen */}
-              {modoMargen && (
-                <FormField
-                  control={form.control}
-                  name="margenReferencia"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Margen Deseado (%)</FormLabel>
-                      <FormControl>
-                          <Input 
-                            type="text" 
-                            className="bg-background border-border" 
-                            placeholder="30"
-                            {...field} 
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*\.?\d{0,2}$/.test(value)) {
-                                  field.onChange(value);
-                              }
-                            }}
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              
-              {/* Modo Margen: Mostrar precio de venta calculado */}
-              {modoMargen && !esServicio && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Precio Venta</label>
-                  <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center font-semibold">
-                    S/. {form.watch('precioVenta') || '0.00'}
-                  </div>
-                </div>
-              )}
-              
-              {/* Modo Precio: Mostrar margen calculado (como antes) */}
-              {!modoMargen && !esServicio && (
-                  <div className="space-y-2">
-                      <label className="text-sm font-medium text-muted-foreground">Ganancia / Margen</label>
-                      <div className="h-10 px-3 py-2 rounded-md border border-border bg-muted/50 text-sm flex items-center justify-between text-muted-foreground font-mono">
-                          <span>
-                              S/. {((Number.parseFloat(form.watch('precioVenta') || '0') || 0) - (Number.parseFloat(form.watch('precioCompra') || '0') || 0)).toFixed(2)}
-                          </span>
-                          <span className={cn(
-                              "text-xs font-bold px-1.5 py-0.5 rounded",
-                              ((Number.parseFloat(form.watch('precioVenta') || '0') || 0) - (Number.parseFloat(form.watch('precioCompra') || '0') || 0)) > 0 
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
-                                  : "bg-destructive/10 text-destructive"
-                          )}>
-                              {(() => {
-                                  const compra = Number.parseFloat(form.watch('precioCompra') || '0') || 0;
-                                  const venta = Number.parseFloat(form.watch('precioVenta') || '0') || 0;
-                                  if (!compra) return '0%';
-                                  const margen = ((venta - compra) / compra) * 100;
-                                  return `${margen.toFixed(1)}%`;
-                              })()}
-                          </span>
-                      </div>
-                  </div>
-              )}
-           </div>
-
-           {/* Fila 2: Stocks */}
-           {!esServicio && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {!producto && (
+                  {form.watch('requiereSerie') && (
+                    <div className="grid grid-cols-2 gap-3 bg-muted/40 p-2.5 rounded-md">
                       <FormField
                         control={form.control}
-                        name="stockActual"
+                        name="garantiaProveedorMeses"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Stock Inicial</FormLabel>
+                            <FormLabel className="text-xs">Garantía Prov. (Meses)</FormLabel>
                             <FormControl>
-                                <Input 
-                                  type="text" 
-                                  className="bg-background border-border" 
-                                  placeholder="0"
-                                  {...field} 
-                                  value={field.value === '0' ? '' : field.value}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    if (/^\d*$/.test(value)) {
-                                        field.onChange(value);
-                                    }
-                                  }}
-                                />
+                              <Input placeholder="0" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                   )}
-                   <FormField
-                     control={form.control}
-                     name="stockMinimo"
-                     render={({ field }) => (
-                       <FormItem>
-                         <FormLabel>Stock Mínimo</FormLabel>
-                         <FormControl>
-                            <Input 
-                              type="text" 
-                              className="bg-background border-border" 
-                              placeholder="0"
-                              {...field} 
-                              value={field.value === '0' ? '' : field.value}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (/^\d*$/.test(value)) {
-                                    field.onChange(value);
-                                }
-                              }}
-                            />
-                         </FormControl>
-                         <FormMessage />
-                       </FormItem>
-                     )}
-                   />
-               </div>
-           )}
-        </section>
 
-        {/* Sección: Atributos y Configuración (FASE 3: Series y Garantías) */}
-        {!esServicio && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 border-b border-border pb-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">settings</span>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Atributos y Configuración</h3>
-            </div>
-            
-            <div className="space-y-4">
-              {/* Switch: Requiere Número de Serie */}
-              <FormField
-                control={form.control}
-                name="requiereSerie"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between bg-muted/40 p-4 rounded-lg border border-border">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-sm font-medium text-foreground block">
-                        ¿Requiere Número de Serie?
-                      </FormLabel>
-                      <FormDescription className="text-xs text-muted-foreground">
-                        Activar para productos que necesitan seguimiento individual (laptops, celulares, equipos).
-                      </FormDescription>
+                      <FormField
+                        control={form.control}
+                        name="garantiaClienteMeses"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Garantía Cliente (Meses)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              {/* Garantías */}
-              <div className="bg-muted/40 p-4 rounded-lg border border-border space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="material-symbols-outlined text-primary text-[16px]">verified_user</span>
-                  <h4 className="text-sm font-medium text-foreground">Garantías</h4>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="garantiaProveedorMeses"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Garantía Proveedor (Meses)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="text"
-                            placeholder="0"
-                            {...field}
-                            className="bg-background border-border"
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*$/.test(value)) {
-                                field.onChange(value);
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          Garantía que ofrece el proveedor
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="garantiaClienteMeses"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Garantía Cliente (Meses)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="text"
-                            placeholder="0"
-                            {...field}
-                            className="bg-background border-border"
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*$/.test(value)) {
-                                field.onChange(value);
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          Garantía que ofreces a tus clientes
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-        
-        {/* Feature: Imagen - Controlado por config/features.ts */}
-        {FEATURES.ENABLE_PRODUCT_IMAGES && (
-          <section className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-border pb-2">
-                <span className="material-symbols-outlined text-primary text-[20px]">image</span>
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Imagen</h3>
-            </div>
-              <FormField
-                  control={form.control}
-                  name="imagenUrl"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Imagen del Producto</FormLabel>
-                      <FormControl>
-                        <div className="space-y-4">
-                          <Input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="bg-background border-border cursor-pointer"
-                          />
-                          {previewUrl && (
-                            <div className="relative w-32 h-32 border rounded-md overflow-hidden">
-                              <img
-                                src={previewUrl}
-                                alt="Preview"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Formatos: JPG, PNG, WebP, GIF (Máx. 5MB). Se redimensionará automáticamente.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
                   )}
-              />
-          </section>
+                </div>
+
+                {/* Subida de Imagen */}
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-xs">Imagen del Producto</Label>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                  />
+                  {imagenPreview && (
+                    <div className="relative inline-block mt-2">
+                      <img
+                        src={imagenPreview}
+                        alt="Preview"
+                        className="h-20 w-20 object-cover rounded border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute -top-2 -right-2 h-5 w-5 p-0 rounded-full"
+                        onClick={handleRemoveImage}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
         )}
 
-        <div className="flex justify-end pt-4 border-t border-border">
-          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full sm:w-auto font-bold shadow-md shadow-primary/20">
-            {form.formState.isSubmitting && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            {producto ? 'Guardar Cambios' : 'Guardar Producto'}
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {producto ? 'Actualizar' : 'Crear Registro'}
           </Button>
         </div>
       </form>
-
-      {/* Modal para registrar series retroactivas (nuevo producto o edición con stock existente) */}
-      {seriesModalOpen && (
-        <SeriesEscanerModal
-          isOpen={seriesModalOpen}
-          onClose={() => {
-            setSeriesModalOpen(false);
-            pendingSubmitRef.current = null; // Cancelar submit pendiente si lo hay
-            // Solo desactivar requiereSerie si el usuario cerró sin completar el escaneo
-            // Usar ref en lugar de state para evitar stale closures
-            if (seriesRetroactivasRef.current.length === 0) {
-              form.setValue('requiereSerie', false);
-              prevRequiereSerieRef.current = false;
-            }
-          }}
-          productoNombre={producto?.nombre || form.getValues('nombre') || 'Producto'}
-          cantidad={cantidadSeriesPendientes}
-          onSeriesCompletas={handleSeriesCompletas}
-          modo="compra"
-        />
-      )}
     </Form>
   );
 }

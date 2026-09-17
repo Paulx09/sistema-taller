@@ -1,12 +1,9 @@
-import { useState, useEffect } from 'react';
-import { FEATURES } from '@/config/features';
+import { useState } from 'react';
 import { useProductos } from '@/hooks/useProductos';
 import { useCategorias } from '@/hooks/useCategorias';
-import { useMarcas } from '@/hooks/useMarcas';
-import { useUbicaciones } from '@/hooks/useUbicaciones';
-import { productoService } from '@/services/producto.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -21,7 +18,6 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from '@/components/ui/sheet';
 import {
   Dialog,
@@ -41,81 +37,56 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination } from '@/components/Pagination';
 import { SeriesDetalleModal } from '@/components/SeriesDetalleModal';
-
-// Helper para construir URL completa de imagen
-const getImageUrl = (imagenUrl: string | null): string | null => {
-  if (!imagenUrl) return null;
-  if (imagenUrl.startsWith('http')) return imagenUrl;
-  // Si es ruta relativa, agregar la URL del backend
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  const baseUrl = API_URL.replace('/api', ''); // Eliminar /api si existe
-  return `${baseUrl}${imagenUrl}`;
-};
-import { Plus, Pencil, Trash2, Loader2, Eye, History, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Eye, Search, AlertCircle, Wrench, Package, QrCode } from 'lucide-react';
 import { ProductoForm } from '@/components/forms/ProductoForm';
 import { ProductoDetalle } from '@/components/ProductoDetalle';
-import type { Producto } from '@/types';
+import type { Producto, TipoItem } from '@/types';
 import { cn } from '@/lib/utils';
 
 export function ProductosPage() {
   const [busqueda, setBusqueda] = useState('');
+  const [tipoFilter, setTipoFilter] = useState<'all' | TipoItem>('all');
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
-  const [marcaFilter, setMarcaFilter] = useState<string>('all');
-  const [servicioFilter, setServicioFilter] = useState<string>('all');
-  const [pendientesFilter, setPendientesFilter] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
-  const [countPendientes, setCountPendientes] = useState(0);
 
   // Calcular skip para la paginación
   const skip = (currentPage - 1) * itemsPerPage;
 
-  const getEsServicioValue = () => {
-    if (servicioFilter === 'true') return true;
-    if (servicioFilter === 'false') return false;
-    return undefined;
-  };
-
   const { productos, total, loading, error, createProducto, updateProducto, deleteProducto, refetch } =
     useProductos({
       busqueda: busqueda || undefined,
+      tipo: tipoFilter === 'all' ? undefined : tipoFilter,
       categoriaId: categoriaFilter === 'all' ? undefined : categoriaFilter,
-      marcaId: marcaFilter === 'all' ? undefined : marcaFilter,
-      esServicio: getEsServicioValue(),
-      preciosPendientes: pendientesFilter || undefined,
       skip,
       take: itemsPerPage,
     });
 
-  // Resetear a página 1 cuando cambien los filtros
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [busqueda, categoriaFilter, marcaFilter, servicioFilter, pendientesFilter, itemsPerPage]);
-
-  // Obtener count de productos con precios pendientes
-  useEffect(() => {
-    const fetchCountPendientes = async () => {
-      try {
-        const { total: count } = await productoService.getAll({
-          preciosPendientes: true,
-          take: 1, // Solo necesitamos el count
-        });
-        setCountPendientes(count);
-      } catch (err) {
-        console.error('Error al obtener count de pendientes:', err);
-      }
-    };
-    
-    fetchCountPendientes();
-  }, [productos]); // Se actualiza cuando cambia la lista de productos
-
+  // Categorías completas y filtradas según el tipo seleccionado
   const { categorias, refetch: refetchCategorias } = useCategorias();
-  const { marcas, refetch: refetchMarcas } = useMarcas();
-  const { ubicaciones, refetch: refetchUbicaciones } = useUbicaciones();
+  const categoriasFiltradas = tipoFilter === 'all' 
+    ? categorias 
+    : categorias.filter((c) => !c.tipo || c.tipo === tipoFilter);
+
+  const handleTipoChange = (value: 'all' | TipoItem) => {
+    setTipoFilter(value);
+    setCategoriaFilter('all');
+    setCurrentPage(1);
+  };
+
+  const handleCategoriaChange = (value: string) => {
+    setCategoriaFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handleBusquedaChange = (value: string) => {
+    setBusqueda(value);
+    setCurrentPage(1);
+  };
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
-  const [viewingProducto, setViewingProducto] = useState<Producto | null>(null); // Nuevo estado
+  const [viewingProducto, setViewingProducto] = useState<Producto | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     isOpen: boolean;
@@ -126,7 +97,7 @@ export function ProductosPage() {
     productoId: null,
     mensaje: '',
   });
-  
+
   // Estado para modal de series
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
   const [productoSeriesId, setProductoSeriesId] = useState<string | null>(null);
@@ -149,7 +120,7 @@ export function ProductosPage() {
     setEditingProducto(null);
     setSheetOpen(true);
   };
-  
+
   const handleVerSeries = (productoId: string, productoNombre: string) => {
     setProductoSeriesId(productoId);
     setProductoSeriesNombre(productoNombre);
@@ -161,24 +132,18 @@ export function ProductosPage() {
       await deleteProducto(id, force);
       setDeleteConfirmId(null);
       setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
+      refetch();
     } catch (err: any) {
-      console.error('Error al eliminar:', err);
-      
-      // Detectar si es un error 409 que requiere confirmación
-      if (err.response?.status === 409 && err.response?.data?.requiereConfirmacion) {
+      if (err.requiresConfirmation || err.response?.data?.requiereConfirmacion) {
         setDeleteWarningDialog({
           isOpen: true,
           productoId: id,
-          mensaje: err.response.data.mensaje,
+          mensaje: err.response?.data?.mensaje || 'Este ítem tiene ventas asociadas. ¿Deseas archivarlo de todas formas?',
         });
         setDeleteConfirmId(null);
+      } else {
+        console.error('Error al eliminar producto:', err);
       }
-    }
-  };
-
-  const handleForceDelete = async () => {
-    if (deleteWarningDialog.productoId) {
-      await handleDelete(deleteWarningDialog.productoId, true);
     }
   };
 
@@ -188,345 +153,325 @@ export function ProductosPage() {
     setViewingProducto(null);
   };
 
+  const formatPrecio = (precio: number) => {
+    return new Intl.NumberFormat('es-PE', {
+      style: 'currency',
+      currency: 'PEN',
+    }).format(precio);
+  };
+
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Header Page */}
-      <div className="flex flex-col gap-4 pb-2">
-         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Inventario Maestro</h2>
-              <p className="text-muted-foreground text-sm mt-1">Gestión y control de existencias.</p>
-            </div>
-            <div className="flex gap-2">
-               <Sheet open={sheetOpen} onOpenChange={(open) => {
-                   setSheetOpen(open);
-                   if (!open) handleCloseSheet();
-               }}>
-                  <SheetTrigger asChild>
-                    <Button onClick={handleCreate} className="font-bold shadow-sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Nuevo Producto
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-                    <SheetHeader className="border-b pb-4">
-                      <SheetTitle className="text-xl font-bold">
-                        {viewingProducto 
-                            ? 'Detalle del Producto' 
-                            : (editingProducto ? 'Editar Producto' : 'Agregar Nuevo Producto')}
-                      </SheetTitle>
-                      <SheetDescription>
-                        {viewingProducto
-                            ? 'Información completa e historial de movimientos.'
-                            : (editingProducto
-                                ? 'Modifica la información del producto en inventario.'
-                                : 'Complete la información para registrar en inventario.')}
-                      </SheetDescription>
-                    </SheetHeader>
-                    
-                    {viewingProducto ? (
-                        <ProductoDetalle 
-                            producto={viewingProducto} 
-                            onRefresh={refetch}
-                        />
-                    ) : (
-                        <ProductoForm
-                          producto={editingProducto}
-                          onSuccess={() => {
-                            handleCloseSheet();
-                            refetch();
-                          }}
-                          onCreate={createProducto}
-                          onUpdate={updateProducto}
-                          categorias={categorias}
-                          marcas={marcas}
-                          ubicaciones={ubicaciones}
-                          onCategoriaCreada={() => refetchCategorias()}
-                          onCategoriaActualizada={() => refetchCategorias()}
-                          onCategoriaEliminada={() => refetchCategorias()}
-                          onUbicacionCreada={() => refetchUbicaciones()}
-                          onUbicacionActualizada={() => refetchUbicaciones()}
-                          onUbicacionEliminada={() => refetchUbicaciones()}
-                          onMarcaCreada={() => refetchMarcas()}
-                          onMarcaActualizada={() => refetchMarcas()}
-                          onMarcaEliminada={() => refetchMarcas()}
-                        />
-                    )}
-                  </SheetContent>
-                </Sheet>
-            </div>
-         </div>
-         
-         {/* Filters Bar */}
-         <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-card p-3 rounded-lg border shadow-sm sticky top-0 z-20">
-             <div className="relative flex-1 w-full md:max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="material-symbols-outlined text-muted-foreground text-[18px]">search</span>
-                </div>
-                <Input
-                  placeholder="Buscar producto, marca o modelo..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  className="pl-9 bg-background border-input focus:ring-1 h-9"
-                />
-             </div>
-             
-             <div className="flex items-center gap-2 overflow-x-auto pb-3 md:pb-0">
-                <Select value={marcaFilter} onValueChange={setMarcaFilter}>
-                  <SelectTrigger className="w-[160px] bg-background text-sm">
-                    <SelectValue placeholder="Marca" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las marcas</SelectItem>
-                    {marcas.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-                  <SelectTrigger className="w-[170px] bg-background text-sm">
-                    <SelectValue placeholder="Categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las categorías</SelectItem>
-                    {categorias.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={servicioFilter} onValueChange={setServicioFilter}>
-                  <SelectTrigger className="w-[140px] bg-background text-sm">
-                    <SelectValue placeholder="Tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los tipos</SelectItem>
-                    <SelectItem value="false">Productos</SelectItem>
-                    <SelectItem value="true">Servicios</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                {countPendientes > 0 && (
-                  <Button 
-                    variant={pendientesFilter ? "default" : "outline"} 
-                    size="sm"
-                    className={cn(
-                      "h-9 text-sm whitespace-nowrap",
-                      !pendientesFilter && "border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                    )}
-                    onClick={() => setPendientesFilter(!pendientesFilter)}
-                  >
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                    {countPendientes} sin precio
-                  </Button>
-                )}
-             </div>
-         </div>
-
-         {/* Error Alert */}
-         {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-         )}
-
-         {/* Products Table */}
-         <div className="bg-card border rounded-lg shadow-sm flex-1 overflow-hidden flex flex-col mb-4">
-            <div className="overflow-auto flex-1">
-               <Table>
-                 <TableHeader className="bg-muted/50 sticky top-0 z-10 w-full">
-                   <TableRow className="hover:bg-transparent">
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Producto / Detalle</TableHead>
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Marca / Modelo</TableHead>
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Categoría</TableHead>
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Stock</TableHead>
-                     <TableHead className="text-xs font-bold uppercase tracking-wider h-10 text-left">Ubicación</TableHead>
-                     <TableHead className="text-right text-xs font-bold uppercase tracking-wider h-10">Precio</TableHead>
-                     <TableHead className="text-right text-xs font-bold uppercase tracking-wider h-10 w-[100px]">Acciones</TableHead>
-                   </TableRow>
-                 </TableHeader>
-                 <TableBody className="divide-y">
-                    {loading && productos.length === 0 ? (
-                       <TableRow>
-                          <TableCell colSpan={7} className="h-32 text-center">
-                             <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                          </TableCell>
-                       </TableRow>
-                    ) : productos.length === 0 ? (
-                       <TableRow>
-                          <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                             No se encontraron productos
-                          </TableCell>
-                       </TableRow>
-                    ) : (
-                       productos.map((producto) => (
-                           <TableRow key={producto.id} className="hover:bg-muted/50 transition-colors group">
-                              <TableCell className="py-2.5">
-                                 <div className="flex items-center">
-                                    {/* Feature: Imagen del producto - Controlado por config/features.ts */}
-                                    {FEATURES.ENABLE_PRODUCT_IMAGES && (
-                                      <div className="h-10 w-10 flex-shrink-0 rounded-md bg-muted border border-border flex items-center justify-center overflow-hidden text-muted-foreground mr-3">
-                                        {getImageUrl(producto.imagenUrl) ? (
-                                          <img 
-                                            src={getImageUrl(producto.imagenUrl)!} 
-                                            alt={producto.nombre} 
-                                            className="h-full w-full object-cover" 
-                                            onError={(e) => {
-                                              // Si la imagen falla al cargar, mostrar el icono
-                                              e.currentTarget.style.display = 'none';
-                                              e.currentTarget.parentElement!.innerHTML = '<span class="material-symbols-outlined text-[18px]">image</span>';
-                                            }}
-                                          />
-                                        ) : (
-                                          <span className="material-symbols-outlined text-[18px]">image</span>
-                                        )}
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 max-w-sm">
-                                       <div className="text-sm font-semibold text-foreground truncate">{producto.nombre}</div>
-                                       {producto.descripcion && (
-                                         <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{producto.descripcion}</p>
-                                       )}
-                                       {/* Feature: SKU - Controlado por config/features.ts */}
-                                       {FEATURES.ENABLE_PRODUCT_SKU && producto.sku && (
-                                         <div className="text-[11px] text-muted-foreground font-mono mt-0.5">SKU: {producto.sku}</div>
-                                       )}
-                                    </div>
-                                 </div>
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                 <div className="flex flex-col">
-                                   <span className="text-sm font-medium text-foreground">
-                                     {producto.marcaRel?.nombre || producto.marca || 'Genérico'}
-                                   </span>
-                                   {producto.modelo && (
-                                     <span className="text-xs text-muted-foreground">
-                                       Mod: {producto.modelo}
-                                     </span>
-                                   )}
-                                 </div>
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                 <span className="px-2.5 py-0.5 inline-flex text-xs leading-4 font-medium rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
-                                    {producto.categoria?.nombre || 'Sin Categoría'}
-                                 </span>
-                              </TableCell>
-                              <TableCell className="py-2.5 text-left">
-                                 {producto.esServicio ? (
-                                    <span className="text-xs text-muted-foreground italic font-medium px-2 py-0.5 bg-muted rounded">Servicio</span>
-                                 ) : (
-                                    <div className="flex items-center justify-left gap-2">
-                                       <div className={cn("h-2.5 w-2.5 rounded-full", 
-                                          producto.stockActual <= producto.stockMinimo ? "bg-destructive animate-pulse" : "bg-emerald-500"
-                                       )}></div>
-                                       <span className={cn("text-sm font-semibold", 
-                                          producto.stockActual <= producto.stockMinimo ? "text-destructive" : "text-foreground"
-                                       )}>{producto.stockActual}</span>
-                                    </div>
-                                 )}
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground py-2.5">
-                                 {producto.esServicio ? (
-                                    <span className="text-xs italic">--</span>
-                                 ) : (
-                                    <span className="font-medium text-foreground/80">{producto.ubicacion?.nombre || '-'}</span>
-                                 )}
-                              </TableCell>
-                              <TableCell className="text-right text-sm font-bold font-mono py-2.5">
-                                 S/ {producto.precioVenta.toFixed(2)}
-                              </TableCell>
-                              <TableCell className="text-right py-2.5">
-                                  <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                      {producto.requiereSerie && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-muted-foreground hover:text-primary" 
-                                          onClick={() => handleVerSeries(producto.id, producto.nombre)}
-                                          title="Ver historial de series"
-                                        >
-                                           <History className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleVerDetalle(producto)}>
-                                         <Eye className="h-4 w-4" />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleEdit(producto)}>
-                                         <Pencil className="h-4 w-4" />
-                                      </Button>
-                                      {deleteConfirmId === producto.id ? (
-                                        <div className="flex gap-1 items-center">
-                                          <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="h-8 px-2 text-xs"
-                                            onClick={() => handleDelete(producto.id)}
-                                          >
-                                            Confirmar
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 px-2 text-xs"
-                                            onClick={() => setDeleteConfirmId(null)}
-                                          >
-                                            Cancelar
-                                          </Button>
-                                        </div>
-                                      ) : (
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteConfirmId(producto.id)}>
-                                           <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                  </div>
-                              </TableCell>
-                           </TableRow>
-                       ))
-                    )}
-                 </TableBody>
-               </Table>
-            </div>
-            {/* Paginación */}
-            <Pagination
-              currentPage={currentPage}
-              totalItems={total}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-              onItemsPerPageChange={setItemsPerPage}
-            />
-         </div>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
+            Inventario y Catálogo
+          </h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Gestión centralizada de Productos y Servicios
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleCreate} className="shadow-sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Registro
+          </Button>
+        </div>
       </div>
 
-      {/* Dialog de advertencia para eliminación con historial */}
-      <Dialog 
-        open={deleteWarningDialog.isOpen} 
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
-          }
-        }}
+      {/* Barra de Filtros (Orden: Tipo -> Categoría -> Búsqueda) */}
+      <div className="bg-card p-3.5 rounded-lg border shadow-sm flex flex-col md:flex-row gap-3 items-center">
+        {/* 1° Filtro: TIPO */}
+        <div className="w-full md:w-48 shrink-0">
+          <Select
+            value={tipoFilter}
+            onValueChange={handleTipoChange}
+          >
+            <SelectTrigger className="bg-background h-9">
+              <SelectValue placeholder="Tipo..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">TODOS LOS TIPOS</SelectItem>
+              <SelectItem value="PRODUCTO">📦 PRODUCTOS</SelectItem>
+              <SelectItem value="SERVICIO">🔧 SERVICIOS</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 2° Filtro: CATEGORÍA (Dependiente del Tipo) */}
+        <div className="w-full md:w-56 shrink-0">
+          <Select value={categoriaFilter} onValueChange={handleCategoriaChange}>
+            <SelectTrigger className="bg-background h-9">
+              <SelectValue placeholder="Categoría..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">TODAS LAS CATEGORÍAS</SelectItem>
+              {categoriasFiltradas.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 3° Filtro: Búsqueda por texto */}
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por detalle, modelo o código..."
+            value={busqueda}
+            onChange={(e) => handleBusquedaChange(e.target.value)}
+            className="pl-9 bg-background h-9"
+          />
+        </div>
+      </div>
+
+      {/* Mensaje de error */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Tabla de Productos / Servicios */}
+      <div className="bg-card border rounded-lg shadow-sm overflow-hidden flex flex-col">
+        <Table>
+          <TableHeader className="bg-muted/50 sticky top-0 z-10 w-full">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 pl-4">
+                DETALLE
+              </TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 w-28 text-center">
+                TIPO
+              </TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 w-28 text-center">
+                STOCK
+              </TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 w-32 text-right pr-4">
+                PRECIO
+              </TableHead>
+              <TableHead className="text-right text-xs font-bold uppercase tracking-wider h-10 pr-4 w-32">
+                ACCIONES
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="divide-y">
+            {loading && productos.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  Cargando catálogo...
+                </TableCell>
+              </TableRow>
+            ) : productos.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  No se encontraron registros
+                </TableCell>
+              </TableRow>
+            ) : (
+              productos.map((prod) => {
+                const isServ = prod.tipo === 'SERVICIO' || prod.esServicio;
+                const stockBajo = !isServ && prod.stockActual <= prod.stockMinimo;
+
+                return (
+                  <TableRow key={prod.id} className="hover:bg-muted/50 transition-colors group">
+                    {/* Columna DETALLE */}
+                    <TableCell className="py-2.5 pl-4">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-sm text-foreground uppercase tracking-wide">
+                          {prod.nombre}
+                        </span>
+                        {prod.descripcion && (
+                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            {prod.descripcion}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Columna TIPO */}
+                    <TableCell className="py-2.5 text-center">
+                      {isServ ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-semibold text-[11px] gap-1 px-2 py-0.5">
+                          <Wrench className="h-3 w-3" />
+                          SERVICIO
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 font-semibold text-[11px] gap-1 px-2 py-0.5">
+                          <Package className="h-3 w-3" />
+                          PRODUCTO
+                        </Badge>
+                      )}
+                    </TableCell>
+
+                    {/* Columna STOCK */}
+                    <TableCell className="py-2.5 text-center">
+                      {isServ ? (
+                        <span className="text-xs text-muted-foreground font-medium italic">
+                          Servicio
+                        </span>
+                      ) : (
+                        <Badge
+                          variant={stockBajo ? 'destructive' : 'secondary'}
+                          className={cn(
+                            'font-mono text-xs px-2.5 py-0.5',
+                            stockBajo ? 'bg-destructive/15 text-destructive font-bold border-destructive/30' : ''
+                          )}
+                        >
+                          {prod.stockActual}
+                        </Badge>
+                      )}
+                    </TableCell>
+
+                    {/* Columna PRECIO */}
+                    <TableCell className="py-2.5 text-right pr-4 font-semibold text-sm text-foreground">
+                      {formatPrecio(prod.precioVenta)}
+                    </TableCell>
+
+                    {/* Columna ACCIONES */}
+                    <TableCell className="py-2.5 pr-4 text-right">
+                      <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleVerDetalle(prod)}
+                          title="Ver detalle"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {prod.requiereSerie && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => handleVerSeries(prod.id, prod.nombre)}
+                            title="Ver Series"
+                          >
+                            <QrCode className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleEdit(prod)}
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {deleteConfirmId === prod.id ? (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 text-xs px-2"
+                              onClick={() => handleDelete(prod.id)}
+                            >
+                              Confirmar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs px-2"
+                              onClick={() => setDeleteConfirmId(null)}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteConfirmId(prod.id)}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+
+        <Pagination
+          currentPage={currentPage}
+          totalItems={total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
+      </div>
+
+      {/* Sheet para Crear / Editar / Ver Detalle */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {viewingProducto
+                ? viewingProducto.nombre
+                : editingProducto
+                ? 'Editar Registro'
+                : 'Nuevo Registro'}
+            </SheetTitle>
+            <SheetDescription>
+              {viewingProducto
+                ? 'Detalles técnicos y movimientos del registro'
+                : editingProducto
+                ? 'Modifica los campos del registro'
+                : 'Registra un nuevo producto físico o servicio en el catálogo'}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4">
+            {viewingProducto ? (
+              <ProductoDetalle producto={viewingProducto} onRefresh={refetch} />
+            ) : (
+              <ProductoForm
+                producto={editingProducto}
+                onSuccess={() => {
+                  handleCloseSheet();
+                  refetch();
+                  refetchCategorias();
+                }}
+                onCreate={createProducto}
+                onUpdate={updateProducto}
+                categorias={categorias}
+                onCategoriaCreada={() => refetchCategorias()}
+                onCategoriaActualizada={() => refetchCategorias()}
+                onCategoriaEliminada={() => refetchCategorias()}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Diálogo de advertencia para eliminar */}
+      <Dialog
+        open={deleteWarningDialog.isOpen}
+        onOpenChange={(open) =>
+          !open && setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' })
+        }
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>⚠️ Confirmación Requerida</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertCircle className="h-5 w-5" />
+              ¿Archivar registro con historial?
+            </DialogTitle>
+            <DialogDescription className="py-2 text-sm text-muted-foreground">
               {deleteWarningDialog.mensaje}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Alert variant="destructive">
-              <AlertDescription>
-                <strong>Nota:</strong> Esta acción ocultará el producto del sistema pero conservará el historial.
-                Los reportes históricos mantendrán la información.
-              </AlertDescription>
-            </Alert>
-          </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' })}
@@ -535,24 +480,24 @@ export function ProductosPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={handleForceDelete}
+              onClick={() => {
+                if (deleteWarningDialog.productoId) {
+                  handleDelete(deleteWarningDialog.productoId, true);
+                }
+              }}
             >
-              Confirmar Eliminación
+              Sí, archivar registro
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-      {/* Modal de historial de series */}
-      {productoSeriesId && (
+
+      {/* Modal de Series */}
+      {seriesModalOpen && (
         <SeriesDetalleModal
           isOpen={seriesModalOpen}
-          onClose={() => {
-            setSeriesModalOpen(false);
-            setProductoSeriesId(null);
-            setProductoSeriesNombre('');
-          }}
-          productoId={productoSeriesId}
+          onClose={() => setSeriesModalOpen(false)}
+          productoId={productoSeriesId || ''}
           productoNombre={productoSeriesNombre}
         />
       )}

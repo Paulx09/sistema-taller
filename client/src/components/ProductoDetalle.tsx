@@ -150,8 +150,11 @@ export function ProductoDetalle({ producto, onRefresh }: Readonly<ProductoDetall
       <Tabs defaultValue="info">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="info">Información</TabsTrigger>
-          <TabsTrigger value="movimientos">
-            Movimientos {productoCompleto.esServicio ? '(N/A)' : ''}
+          <TabsTrigger 
+            value="movimientos" 
+            disabled={productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio}
+          >
+            Movimientos {(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) ? '(Deshabilitado)' : ''}
           </TabsTrigger>
         </TabsList>
 
@@ -159,49 +162,50 @@ export function ProductoDetalle({ producto, onRefresh }: Readonly<ProductoDetall
           {/* Información General */}
           <Card>
             <CardHeader>
-              <CardTitle>{productoCompleto.nombre}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="uppercase tracking-wide">{productoCompleto.nombre}</CardTitle>
+                <Badge variant={productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio ? 'secondary' : 'outline'}>
+                  {productoCompleto.tipo || (productoCompleto.esServicio ? 'SERVICIO' : 'PRODUCTO')}
+                </Badge>
+              </div>
               <CardDescription>{productoCompleto.descripcion || 'Sin descripción'}</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Categoría</p>
-                <p>{productoCompleto.categoria?.nombre || '-'}</p>
+                <p className="font-medium">{productoCompleto.categoria?.nombre || '-'}</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Ubicación</p>
-                <p>{productoCompleto.ubicacion?.nombre || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Marca</p>
-                <p>{productoCompleto.marcaRel?.nombre || productoCompleto.marca || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Modelo</p>
-                <p>{productoCompleto.modelo || '-'}</p>
-              </div>
-              {/* Feature: SKU - Controlado por config/features.ts */}
-              {FEATURES.ENABLE_PRODUCT_SKU && (
+              {!(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Modelo</p>
+                  <p className="font-medium">{productoCompleto.modelo || '-'}</p>
+                </div>
+              )}
+              {/* Feature: SKU */}
+              {FEATURES.ENABLE_PRODUCT_SKU && !(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) && (
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">SKU</p>
                   <p>{productoCompleto.sku || '-'}</p>
                 </div>
               )}
-              {/* Feature: Código de Barras - Controlado por config/features.ts */}
-              {FEATURES.ENABLE_PRODUCT_BARCODE && (
+              {/* Feature: Código de Barras */}
+              {FEATURES.ENABLE_PRODUCT_BARCODE && !(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) && (
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Código de Barras</p>
                   <p>{productoCompleto.codigoBarras || '-'}</p>
                 </div>
               )}
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Costo Promedio</p>
-                <p className="font-semibold">S/. {productoCompleto.precioCompra.toFixed(2)}</p>
-              </div>
+              {!(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Costo Promedio</p>
+                  <p className="font-semibold">S/. {productoCompleto.precioCompra.toFixed(2)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Precio Venta</p>
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-lg">S/. {productoCompleto.precioVenta.toFixed(2)}</p>
-                  {productoCompleto.margenReferencia && (
+                  {productoCompleto.margenReferencia && !(productoCompleto.tipo === 'SERVICIO' || productoCompleto.esServicio) && (
                     <Button 
                       size="sm" 
                       variant="outline"

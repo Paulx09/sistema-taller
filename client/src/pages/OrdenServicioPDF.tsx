@@ -656,7 +656,7 @@ export function EquipoPDFDoc({
             <>
               {/* Cabecera */}
               <View style={s.tableHead}>
-                <Text style={[s.tableHeadCell, { flex: 3 }]}>Descripcion</Text>
+                <Text style={[s.tableHeadCell, { flex: 3 }]}>DETALLE</Text>
                 <Text style={[s.tableHeadCell, { width: 55 }]}>Tipo</Text>
                 <Text style={[s.tableHeadCell, { width: 38, textAlign: 'right' }]}>
                   Cant.
@@ -676,16 +676,14 @@ export function EquipoPDFDoc({
                     <Text style={[s.tableCell, { fontFamily: 'Helvetica-Bold' }]}>
                       {item.producto?.nombre ?? '—'}
                     </Text>
-                    {(item.producto?.marca || item.producto?.modelo) && (
+                    {item.producto?.descripcion && (
                       <Text style={s.tableCellMuted}>
-                        {[item.producto.marca, item.producto.modelo]
-                          .filter(Boolean)
-                          .join(' ')}
+                        {item.producto.descripcion}
                       </Text>
                     )}
                   </View>
                   <Text style={[s.tableCell, { width: 55, color: C.gray500 }]}>
-                    {item.producto?.esServicio ? 'Servicio' : 'Repuesto'}
+                    {item.producto?.tipo === 'SERVICIO' || item.producto?.esServicio ? 'Servicio' : 'Repuesto'}
                   </Text>
                   <Text style={[s.tableCell, { width: 38, textAlign: 'right' }]}>
                     {item.cantidad}

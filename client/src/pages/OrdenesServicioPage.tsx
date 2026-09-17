@@ -257,10 +257,6 @@ export function OrdenesServicioPage() {
       setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
       return;
     }
-    if (!formNuevoEquipo.marca?.trim() && !formNuevoEquipo.marcaId) {
-      setErrorNuevoEquipo('La marca es obligatoria.');
-      return;
-    }
     if (!formNuevoEquipo.modelo?.trim()) {
       setErrorNuevoEquipo('El modelo es obligatorio.');
       return;
@@ -275,11 +271,11 @@ export function OrdenesServicioPage() {
       if (editingEquipoId) {
         const equipoActualizado = await equipoClienteService.update(editingEquipoId, {
           tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
-          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim().toUpperCase(),
           marcaId: formNuevoEquipo.marcaId || null,
-          marca: formNuevoEquipo.marca?.trim() || null,
-          modelo: formNuevoEquipo.modelo?.trim() || null,
-          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          marca: formNuevoEquipo.marca?.trim().toUpperCase() || null,
+          modelo: formNuevoEquipo.modelo?.trim().toUpperCase() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim().toUpperCase() || null,
           contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
         });
         setEquipos((prev) => prev.map((e) => (e.id === editingEquipoId ? equipoActualizado : e)));
@@ -292,11 +288,11 @@ export function OrdenesServicioPage() {
       } else {
         const nuevoEquipo = await equipoClienteService.create(clienteId, {
           tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
-          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim().toUpperCase(),
           marcaId: formNuevoEquipo.marcaId || null,
-          marca: formNuevoEquipo.marca?.trim() || null,
-          modelo: formNuevoEquipo.modelo?.trim() || null,
-          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          marca: formNuevoEquipo.marca?.trim().toUpperCase() || null,
+          modelo: formNuevoEquipo.modelo?.trim().toUpperCase() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim().toUpperCase() || null,
           contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
         });
         setEquipos((prev) => [...prev, nuevoEquipo]);
@@ -1067,7 +1063,7 @@ export function OrdenesServicioPage() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium">
-                      Marca <span className="text-destructive">*</span>
+                      Marca
                     </label>
                     <MarcaCombobox
                       value={formNuevoEquipo.marcaId || ''}

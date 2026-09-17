@@ -183,17 +183,15 @@ export function Dashboard() {
              <table className="w-full text-left">
                <thead>
                  <tr className="bg-muted/40 border-b border-border">
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Producto</th>
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Marca/Modelo</th>
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Cant.</th>
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ubicación</th>
-                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">Acción</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">DETALLE</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">CANT</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">ACCIÓN</th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-border">
                  {currentItems.length === 0 ? (
                     <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                        <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground text-sm">
                             Todo en orden. No hay productos con stock bajo.
                         </td>
                     </tr>
@@ -202,32 +200,26 @@ export function Dashboard() {
                         <tr key={prod.id} className="group hover:bg-muted/50 transition-colors">
                            <td className="px-6 py-4">
                              <div className="flex items-center gap-3">
-                               <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center text-muted-foreground border border-border">
+                               <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center text-muted-foreground border border-border shrink-0">
                                   <span className="material-symbols-outlined text-[20px]">inventory_2</span>
                                </div>
-                               <span className="font-medium text-sm text-foreground">{prod.nombre}</span>
+                               <div className="min-w-0">
+                                 <p className="font-semibold text-sm text-foreground">{prod.nombre}</p>
+                                 {prod.descripcion && (
+                                   <p className="text-xs text-muted-foreground truncate max-w-md">{prod.descripcion}</p>
+                                 )}
+                               </div>
                              </div>
-                           </td>
-                           <td className="px-6 py-4 text-sm text-muted-foreground">
-                             {prod.marca && prod.modelo 
-                               ? `${prod.marca} ${prod.modelo}`
-                               : prod.marca || prod.modelo || '-'}
                            </td>
                            <td className="px-6 py-4 text-center">
                               <span className={cn(
-                                "inline-flex items-center justify-center h-6 px-2 rounded-md text-xs font-bold border",
+                                "inline-flex items-center justify-center h-6 px-2.5 rounded-md text-xs font-bold border",
                                 prod.stockActual === 0 
                                     ? "bg-destructive/10 text-destructive border-destructive/20"
                                     : "bg-warning/10 text-warning-700 border-warning/20 text-orange-700"
                               )}>
                                 {prod.stockActual}
                               </span>
-                           </td>
-                           <td className="px-6 py-4 text-sm text-muted-foreground">
-                             <div className="flex items-center gap-1.5">
-                               <span className="material-symbols-outlined text-[16px] text-muted-foreground">shelves</span>
-                               <span>{prod.ubicacion?.nombre || 'Sin ubicación'}</span>
-                             </div>
                            </td>
                            <td className="px-6 py-4 text-right">
                              <Button

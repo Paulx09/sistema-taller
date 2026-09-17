@@ -1,5 +1,7 @@
 // Tipos que coinciden con el schema de Prisma
 
+export type TipoItem = 'PRODUCTO' | 'SERVICIO';
+
 export interface Usuario {
   id: string;
   username: string;
@@ -11,6 +13,7 @@ export interface Usuario {
 export interface Categoria {
   id: string;
   nombre: string;
+  tipo?: TipoItem;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -36,6 +39,7 @@ export interface Ubicacion {
 
 export interface Producto {
   id: string;
+  tipo: TipoItem;
   nombre: string;
   marca: string | null;
   marcaId?: string | null;
@@ -144,45 +148,16 @@ export interface ActualizarUbicacionDto {
 
 export interface CrearCategoriaDto {
   nombre: string;
+  tipo?: TipoItem;
 }
 
 export interface ActualizarCategoriaDto {
-  nombre: string;
-}
-
-export interface CrearMarcaDto {
-  nombre: string;
-}
-
-export interface ActualizarMarcaDto {
-  nombre: string;
-}
-
-export interface TipoEquipo {
-  id: string;
-  nombre: string;
-  requiereClave: boolean;
-  activo: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-  _count?: {
-    equipos: number;
-  };
-}
-
-export interface CrearTipoEquipoDto {
-  nombre: string;
-  requiereClave?: boolean;
-}
-
-export interface ActualizarTipoEquipoDto {
   nombre?: string;
-  requiereClave?: boolean;
-  activo?: boolean;
+  tipo?: TipoItem;
 }
 
 export interface CrearProductoDto {
+  tipo?: TipoItem;
   nombre?: string;
   marca?: string;
   marcaId?: string;
@@ -192,8 +167,9 @@ export interface CrearProductoDto {
   descripcion?: string;
   categoriaId: string;
   ubicacionId?: string;
-  precioCompra: number;
+  precioCompra?: number;
   precioVenta: number;
+  margenReferencia?: number;
   stockActual?: number;
   stockMinimo?: number;
   imagenUrl?: string;
@@ -207,6 +183,7 @@ export interface CrearProductoDto {
 }
 
 export interface ActualizarProductoDto {
+  tipo?: TipoItem;
   nombre?: string;
   marca?: string;
   marcaId?: string;
@@ -218,6 +195,7 @@ export interface ActualizarProductoDto {
   ubicacionId?: string;
   precioCompra?: number;
   precioVenta?: number;
+  margenReferencia?: number;
   stockMinimo?: number;
   imagenUrl?: string;
   specs?: Record<string, unknown>;
@@ -573,6 +551,8 @@ export interface ItemOrden {
   producto?: {
     id: string;
     nombre: string;
+    tipo?: TipoItem;
+    descripcion?: string | null;
     marca: string | null;
     modelo: string | null;
     sku: string | null;

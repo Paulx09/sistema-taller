@@ -346,6 +346,26 @@ export function VentasPage() {
     );
   };
 
+  const cambiarPrecioUnitario = (productoId: string, val: string) => {
+    if (val === '' || val === '.') {
+      setCarritoSync((prev) =>
+        prev.map((i) => {
+          if (i.producto.id !== productoId) return i;
+          return { ...i, precioUnitario: 0 };
+        })
+      );
+      return;
+    }
+    const p = Number.parseFloat(val);
+    if (Number.isNaN(p) || p < 0) return;
+    setCarritoSync((prev) =>
+      prev.map((i) => {
+        if (i.producto.id !== productoId) return i;
+        return { ...i, precioUnitario: p };
+      })
+    );
+  };
+
   const quitarItem = (productoId: string) =>
     setCarritoSync((prev) => prev.filter((i) => i.producto.id !== productoId));
 
@@ -421,6 +441,20 @@ export function VentasPage() {
   // Finalizar venta
   const finalizarVenta = async () => {
     if (carrito.length === 0) return;
+
+    // Validar precios mayores a 0
+    const itemsSinPrecio = carrito.filter(
+      (item) => !item.precioUnitario || Number(item.precioUnitario) <= 0
+    );
+    if (itemsSinPrecio.length > 0) {
+      const nombres = itemsSinPrecio.map((i) => i.producto.nombre).join(', ');
+      toast({
+        title: 'Precio inválido',
+        description: `Ingresa un precio válido (mayor a 0.00) para: ${nombres}`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Validar que productos con requiereSerie tengan todas sus series
     const faltanSeries = carrito.filter(
@@ -563,8 +597,6 @@ export function VentasPage() {
           <section className="flex flex-col flex-1 border-r border-border bg-muted/20 overflow-hidden">
             {/* Header búsqueda */}
             <div className="p-5 pb-3 bg-background border-b border-border shadow-sm z-10 flex-shrink-0">
-              <h2 className="text-xl font-bold tracking-tight mb-1">Nueva Venta</h2>
-              <p className="text-sm text-muted-foreground mb-3">Busca y agrega productos al carrito</p>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -661,10 +693,16 @@ export function VentasPage() {
                               </span>
                             )}
                           </div>
-                          <h3 className="font-semibold text-sm line-clamp-2 mb-0.5">{p.nombre}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {[p.marca, p.modelo].filter(Boolean).join(' · ') || p.categoria?.nombre || '—'}
-                          </p>
+                          <h3 className="font-semibold text-sm line-clamp-2 mb-0.5 uppercase">{p.nombre}</h3>
+                          {p.descripcion ? (
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {p.descripcion}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              {p.categoria?.nombre || '—'}
+                            </p>
+                          )}
                         </div>
                         <div className="mt-3 flex items-center justify-between">
                           <span className="text-base font-bold">{fmt(p.precioVenta)}</span>
@@ -758,58 +796,85 @@ export function VentasPage() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-muted/40 sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[32%]">Producto</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[32%]">Detalle</th>
                       <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[18%]">Cant.</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">P.Unit</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[20%]">P.Unit</th>
                       <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">Total</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[14%]">Series</th>
+                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[10%]">Series</th>
                       <th className="py-2.5 pr-3 w-6" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {carrito.map((item) => (
-                      <tr key={item.producto.id} className={cn("group hover:bg-muted/30 transition-colors", Number(item.precioUnitario) < Number(item.producto.precioCompra) && "bg-red-50/50 dark:bg-red-950/20")}>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-sm leading-tight">{item.producto.nombre}</span>
-                            {Number(item.precioUnitario) < Number(item.producto.precioCompra) && (
-                              <span title={`Precio de venta (${fmt(item.precioUnitario)}) menor al costo (${fmt(Number(item.producto.precioCompra))})`}>
-                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                    {carrito.map((item) => {
+                      const isItemServicio = item.producto.tipo === 'SERVICIO' || item.producto.esServicio;
+
+                      return (
+                        <tr key={item.producto.id} className={cn("group hover:bg-muted/30 transition-colors", Number(item.precioUnitario) < Number(item.producto.precioCompra) && "bg-red-50/50 dark:bg-red-950/20")}>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-sm leading-tight uppercase">{item.producto.nombre}</span>
+                              {Number(item.precioUnitario) < Number(item.producto.precioCompra) && (
+                                <span title={`Precio de venta (${fmt(item.precioUnitario)}) menor al costo (${fmt(Number(item.producto.precioCompra))})`}>
+                                  <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                </span>
+                              )}
+                            </div>
+                            {item.producto.descripcion && (
+                              <div className="text-xs text-muted-foreground leading-tight mt-0.5 line-clamp-1">
+                                {item.producto.descripcion}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => cambiarCantidad(item.producto.id, -1)}
+                                className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <input
+                                type="text"
+                                value={item.cantidad}
+                                onChange={(e) => setCantidad(item.producto.id, e.target.value)}
+                                className="w-10 text-center text-sm border border-border rounded bg-background py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <button
+                                onClick={() => cambiarCantidad(item.producto.id, 1)}
+                                className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            {isItemServicio ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-muted-foreground">S/</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  value={item.precioUnitario === 0 ? '' : item.precioUnitario}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                      cambiarPrecioUnitario(item.producto.id, val);
+                                    }
+                                  }}
+                                  className="w-20 text-right text-sm border border-primary/50 rounded bg-background px-1.5 py-0.5 font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                  title="Precio de servicio editable (actualizará el catálogo)"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground font-medium">
+                                {fmt(item.precioUnitario)}
                               </span>
                             )}
-                          </div>
-                          <div className="text-xs text-muted-foreground leading-tight mt-0.5">
-                            {[item.producto.marca, item.producto.modelo].filter(Boolean).join(' · ') || '—'}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => cambiarCantidad(item.producto.id, -1)}
-                              className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </button>
-                            <input
-                              type="text"
-                              value={item.cantidad}
-                              onChange={(e) => setCantidad(item.producto.id, e.target.value)}
-                              className="w-10 text-center text-sm border border-border rounded bg-background py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <button
-                              onClick={() => cambiarCantidad(item.producto.id, 1)}
-                              className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5 text-right text-sm text-muted-foreground font-medium">
-                          {fmt(item.precioUnitario)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-sm font-bold">
-                          {fmt(item.precioUnitario * item.cantidad)}
-                        </td>
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-sm font-bold">
+                            {fmt(item.precioUnitario * item.cantidad)}
+                          </td>
                         <td className="px-2 py-2.5 text-center">
                           {item.producto.requiereSerie ? (
                             <div className="flex flex-col items-center gap-1">
@@ -843,7 +908,8 @@ export function VentasPage() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               )}
@@ -950,7 +1016,7 @@ export function VentasPage() {
           <div className="max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold">Ventas de Hoy</h2>
+                <h2 className="text-xl font-bold">Hoy</h2>
                 <p className="text-sm text-muted-foreground">
                   {new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
@@ -1121,15 +1187,6 @@ export function VentasPage() {
       {vista === 'historial-completo' && (
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold">Historial Completo de Ventas</h2>
-                <p className="text-sm text-muted-foreground">
-                  Busca y consulta todas las ventas registradas
-                </p>
-              </div>
-            </div>
-
             {/* Filtros */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
               <div>
