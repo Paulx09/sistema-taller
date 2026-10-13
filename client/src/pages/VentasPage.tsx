@@ -346,6 +346,26 @@ export function VentasPage() {
     );
   };
 
+  const cambiarPrecioUnitario = (productoId: string, val: string) => {
+    if (val === '' || val === '.') {
+      setCarritoSync((prev) =>
+        prev.map((i) => {
+          if (i.producto.id !== productoId) return i;
+          return { ...i, precioUnitario: 0 };
+        })
+      );
+      return;
+    }
+    const p = Number.parseFloat(val);
+    if (Number.isNaN(p) || p < 0) return;
+    setCarritoSync((prev) =>
+      prev.map((i) => {
+        if (i.producto.id !== productoId) return i;
+        return { ...i, precioUnitario: p };
+      })
+    );
+  };
+
   const quitarItem = (productoId: string) =>
     setCarritoSync((prev) => prev.filter((i) => i.producto.id !== productoId));
 
@@ -421,6 +441,20 @@ export function VentasPage() {
   // Finalizar venta
   const finalizarVenta = async () => {
     if (carrito.length === 0) return;
+
+    // Validar precios mayores a 0
+    const itemsSinPrecio = carrito.filter(
+      (item) => !item.precioUnitario || Number(item.precioUnitario) <= 0
+    );
+    if (itemsSinPrecio.length > 0) {
+      const nombres = itemsSinPrecio.map((i) => i.producto.nombre).join(', ');
+      toast({
+        title: 'Precio inválido',
+        description: `Ingresa un precio válido (mayor a 0.00) para: ${nombres}`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Validar que productos con requiereSerie tengan todas sus series
     const faltanSeries = carrito.filter(
@@ -563,8 +597,6 @@ export function VentasPage() {
           <section className="flex flex-col flex-1 border-r border-border bg-muted/20 overflow-hidden">
             {/* Header búsqueda */}
             <div className="p-5 pb-3 bg-background border-b border-border shadow-sm z-10 flex-shrink-0">
-              <h2 className="text-xl font-bold tracking-tight mb-1">Nueva Venta</h2>
-              <p className="text-sm text-muted-foreground mb-3">Busca y agrega productos al carrito</p>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -585,7 +617,7 @@ export function VentasPage() {
                 )}
               </div>
 
-              {/* Filtro por categoría */}
+              {/* Filtro por categoría
               <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-hide">
                 <button
                   onClick={() => setCategoriaFiltro('')}
@@ -612,7 +644,7 @@ export function VentasPage() {
                     {cat.nombre}
                   </button>
                 ))}
-              </div>
+              </div> */}
             </div>
 
             {/* Grid de productos */}
@@ -627,7 +659,7 @@ export function VentasPage() {
                   <p className="text-sm">No se encontraron productos</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
                   {productos.map((p) => {
                     const stock = stockLabel(p);
                     const enCarrito = carrito.find((i) => i.producto.id === p.id);
@@ -661,10 +693,16 @@ export function VentasPage() {
                               </span>
                             )}
                           </div>
-                          <h3 className="font-semibold text-sm line-clamp-2 mb-0.5">{p.nombre}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {[p.marca, p.modelo].filter(Boolean).join(' · ') || p.categoria?.nombre || '—'}
-                          </p>
+                          <h3 className="font-semibold text-sm line-clamp-2 mb-0.5 uppercase">{p.nombre}</h3>
+                          {p.descripcion ? (
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {p.descripcion}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              {p.categoria?.nombre || '—'}
+                            </p>
+                          )}
                         </div>
                         <div className="mt-3 flex items-center justify-between">
                           <span className="text-base font-bold">{fmt(p.precioVenta)}</span>
@@ -686,10 +724,10 @@ export function VentasPage() {
           </section>
 
           {/* Columna derecha: Carrito + Checkout */}
-          <section className="flex flex-col w-full max-w-md xl:max-w-lg bg-background flex-shrink-0 border-l border-border">
+          <section className="flex flex-col w-full max-w-[380px] lg:max-w-[410px] xl:max-w-[440px] bg-background flex-shrink-0 border-l border-border">
             {/* Header carrito */}
-            <div className="px-5 py-3.5 border-b border-border flex justify-between items-center flex-shrink-0">
-              <h2 className="text-lg font-bold flex items-center gap-2">
+            <div className="px-4 py-3 border-b border-border flex justify-between items-center flex-shrink-0">
+              <h2 className="text-base font-bold flex items-center gap-2">
                 Carrito
                 {carrito.length > 0 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
@@ -700,7 +738,7 @@ export function VentasPage() {
               {carrito.length > 0 && (
                 <button
                   onClick={vaciarCarrito}
-                  className="text-xs text-destructive hover:text-destructive/80 font-medium flex items-center gap-1 transition-colors"
+                  className="text-xs text-destructive hover:text-destructive/80 font-medium flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Vaciar
@@ -709,7 +747,7 @@ export function VentasPage() {
             </div>
 
             {/* 1. CAMPOS (Parte Superior) */}
-            <div className="p-4 border-b border-border bg-muted/10 space-y-3 flex-shrink-0">
+            <div className="p-3 border-b border-border bg-muted/10 space-y-2.5 flex-shrink-0">
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Cliente
@@ -734,7 +772,7 @@ export function VentasPage() {
                   Método de Pago
                 </label>
                 <Select value={metodoPago} onValueChange={(v) => setMetodoPago(v as MetodoPago)}>
-                  <SelectTrigger className="w-full bg-background text-sm h-9">
+                  <SelectTrigger className="w-full bg-background text-sm h-8">
                     <SelectValue placeholder="Método de pago" />
                   </SelectTrigger>
                   <SelectContent>
@@ -746,106 +784,146 @@ export function VentasPage() {
               </div>
             </div>
 
-            {/* 2. TABLA DE PRODUCTOS (Área central con scroll) */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            {/* 2. LISTA DE PRODUCTOS (Área central con scroll responsive) */}
+            <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
               {carrito.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
-                  <ShoppingCart className="h-12 w-12 mb-3 opacity-20" />
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center">
+                  <ShoppingCart className="h-10 w-10 mb-2 opacity-20" />
                   <p className="text-sm font-medium">El carrito está vacío</p>
-                  <p className="text-xs">Haz clic en un producto para agregarlo</p>
+                  <p className="text-xs text-muted-foreground/80 mt-0.5">Haz clic en un producto para agregarlo</p>
                 </div>
               ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-muted/40 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[32%]">Producto</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[18%]">Cant.</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">P.Unit</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right w-[16%]">Total</th>
-                      <th className="px-2 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center w-[14%]">Series</th>
-                      <th className="py-2.5 pr-3 w-6" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {carrito.map((item) => (
-                      <tr key={item.producto.id} className={cn("group hover:bg-muted/30 transition-colors", Number(item.precioUnitario) < Number(item.producto.precioCompra) && "bg-red-50/50 dark:bg-red-950/20")}>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-sm leading-tight">{item.producto.nombre}</span>
-                            {Number(item.precioUnitario) < Number(item.producto.precioCompra) && (
+                carrito.map((item) => {
+                  const isItemServicio = item.producto.tipo === 'SERVICIO' || item.producto.esServicio;
+                  const tienePerdida = Number(item.precioUnitario) < Number(item.producto.precioCompra);
+                  const subtotal = item.precioUnitario * item.cantidad;
+
+                  return (
+                    <div
+                      key={item.producto.id}
+                      className={cn(
+                        "p-3 transition-colors hover:bg-muted/30 flex flex-col gap-2",
+                        tienePerdida && "bg-red-50/50 dark:bg-red-950/20"
+                      )}
+                    >
+                      {/* Fila superior: Nombre, subtotal y botón eliminar */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0 pr-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-xs sm:text-sm leading-snug uppercase break-words text-foreground">
+                              {item.producto.nombre}
+                            </span>
+                            {tienePerdida && (
                               <span title={`Precio de venta (${fmt(item.precioUnitario)}) menor al costo (${fmt(Number(item.producto.precioCompra))})`}>
-                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 inline" />
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground leading-tight mt-0.5">
-                            {[item.producto.marca, item.producto.modelo].filter(Boolean).join(' · ') || '—'}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => cambiarCantidad(item.producto.id, -1)}
-                              className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </button>
-                            <input
-                              type="text"
-                              value={item.cantidad}
-                              onChange={(e) => setCantidad(item.producto.id, e.target.value)}
-                              className="w-10 text-center text-sm border border-border rounded bg-background py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <button
-                              onClick={() => cambiarCantidad(item.producto.id, 1)}
-                              className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 transition-colors"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5 text-right text-sm text-muted-foreground font-medium">
-                          {fmt(item.precioUnitario)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-sm font-bold">
-                          {fmt(item.precioUnitario * item.cantidad)}
-                        </td>
-                        <td className="px-2 py-2.5 text-center">
-                          {item.producto.requiereSerie ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <Badge
-                                variant={(item.numerosSerie?.length ?? 0) === item.cantidad ? "default" : "destructive"}
-                                className="text-xs whitespace-nowrap"
-                              >
-                                {(item.numerosSerie?.length ?? 0) === item.cantidad
-                                  ? "✓ Completo"
-                                  : `⚠ ${item.cantidad - (item.numerosSerie?.length ?? 0)}`}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => abrirModalSeries(item)}
-                                className="h-6 text-xs px-2"
-                              >
-                                <QrCode className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                          {item.producto.descripcion && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                              {item.producto.descripcion}
+                            </p>
                           )}
-                        </td>
-                        <td className="py-2.5 pr-3 text-right">
+                        </div>
+
+                        {/* Subtotal y Eliminar */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-sm font-bold tracking-tight text-foreground whitespace-nowrap">
+                            {fmt(subtotal)}
+                          </span>
                           <button
+                            type="button"
                             onClick={() => quitarItem(item.producto.id)}
+                            title="Quitar producto"
                             className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      {/* Fila inferior: Controles de Cantidad, Precio Unitario y Series */}
+                      <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap sm:flex-nowrap">
+                        {/* Selector de cantidad */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => cambiarCantidad(item.producto.id, -1)}
+                            className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 text-foreground transition-colors"
+                            title="Disminuir"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <input
+                            type="text"
+                            value={item.cantidad}
+                            onChange={(e) => setCantidad(item.producto.id, e.target.value)}
+                            className="w-9 h-6 text-center text-xs font-semibold border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => cambiarCantidad(item.producto.id, 1)}
+                            className="h-6 w-6 rounded flex items-center justify-center bg-muted hover:bg-muted-foreground/20 text-foreground transition-colors"
+                            title="Aumentar"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+
+                        {/* Precio Unitario */}
+                        <div className="flex items-center text-xs">
+                          {isItemServicio ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[11px] text-muted-foreground">P.U: S/</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                value={item.precioUnitario === 0 ? '' : item.precioUnitario}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                    cambiarPrecioUnitario(item.producto.id, val);
+                                  }
+                                }}
+                                className="w-16 h-6 text-right text-xs font-bold border border-primary/50 rounded bg-background px-1 text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Precio de servicio editable"
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">
+                              c/u <span className="font-semibold text-foreground/80">{fmt(item.precioUnitario)}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Series si aplica */}
+                        {item.producto.requiereSerie && (
+                          <div className="flex items-center gap-1 shrink-0 ml-auto sm:ml-0">
+                            <Badge
+                              variant={(item.numerosSerie?.length ?? 0) === item.cantidad ? "default" : "destructive"}
+                              className="text-[10px] px-1.5 py-0.5 whitespace-nowrap cursor-pointer"
+                              onClick={() => abrirModalSeries(item)}
+                            >
+                              {(item.numerosSerie?.length ?? 0) === item.cantidad
+                                ? "✓ OK"
+                                : `⚠ ${item.cantidad - (item.numerosSerie?.length ?? 0)}`}
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => abrirModalSeries(item)}
+                              className="h-6 w-6 p-0"
+                              title="Configurar números de serie"
+                            >
+                              <QrCode className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
@@ -906,7 +984,7 @@ export function VentasPage() {
                 )}
               </Button>
 
-              {/* Botones rápidos de última venta (PDF y WhatsApp) */}
+              {/* Botones rápidos de última venta (PDF y WhatsApp)
               {ultimaVenta && (
                 <div className="p-3 bg-card border rounded-xl space-y-2 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between text-xs">
@@ -938,7 +1016,7 @@ export function VentasPage() {
                     </Button>
                   </div>
                 </div>
-              )}
+              )} */}
             </div>
           </section>
         </div>
@@ -950,7 +1028,7 @@ export function VentasPage() {
           <div className="max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold">Ventas de Hoy</h2>
+                <h2 className="text-xl font-bold">Hoy</h2>
                 <p className="text-sm text-muted-foreground">
                   {new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
@@ -1121,15 +1199,6 @@ export function VentasPage() {
       {vista === 'historial-completo' && (
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold">Historial Completo de Ventas</h2>
-                <p className="text-sm text-muted-foreground">
-                  Busca y consulta todas las ventas registradas
-                </p>
-              </div>
-            </div>
-
             {/* Filtros */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
               <div>

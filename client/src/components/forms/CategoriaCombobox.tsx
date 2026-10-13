@@ -26,12 +26,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { categoriaService } from '@/services/categoria.service';
-import type { Categoria } from '@/types';
+import type { Categoria, TipoItem } from '@/types';
 
 interface CategoriaComboboxProps {
   value?: string; // id o nombre
   onChange: (categoriaId: string, categoriaNombre?: string) => void;
   categorias: Categoria[];
+  tipo?: TipoItem;
+  showCreateButton?: boolean;
+  showSettingsButton?: boolean;
   onCategoriaCreada?: (categoria: Categoria) => void;
   onCategoriaActualizada?: (categoria: Categoria) => void;
   onCategoriaEliminada?: (id: string) => void;
@@ -44,6 +47,9 @@ export function CategoriaCombobox({
   value,
   onChange,
   categorias,
+  tipo = 'PRODUCTO',
+  showCreateButton = true,
+  showSettingsButton = true,
   onCategoriaCreada,
   onCategoriaActualizada,
   onCategoriaEliminada,
@@ -55,15 +61,22 @@ export function CategoriaCombobox({
   const [crearOpen, setCrearOpen] = useState(false);
   const [gestionarOpen, setGestionarOpen] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
+  const [nuevoTipo, setNuevoTipo] = useState<TipoItem>(tipo);
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
   // Estados de gestión
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editandoNombre, setEditandoNombre] = useState('');
+  const [editandoTipo, setEditandoTipo] = useState<TipoItem>('PRODUCTO');
   const [guardandoEdit, setGuardandoEdit] = useState(false);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [gestionError, setGestionError] = useState<string | null>(null);
+
+  // Filtrar categorías por el tipo seleccionado si viene especificado
+  const categoriasFiltradas = tipo 
+    ? categorias.filter((c) => !c.tipo || c.tipo === tipo)
+    : categorias;
 
   // Label local para mostrar la categoría seleccionada
   const [selectedLabel, setSelectedLabel] = useState<string>(() => {
@@ -82,8 +95,12 @@ export function CategoriaCombobox({
     }
   }, [value, categorias]);
 
+  useEffect(() => {
+    setNuevoTipo(tipo);
+  }, [tipo]);
+
   const handleCrear = async () => {
-    const nombre = nuevoNombre.trim();
+    const nombre = nuevoNombre.trim().toUpperCase();
     if (!nombre) {
       setErrorCrear('El nombre es requerido');
       return;
@@ -91,7 +108,7 @@ export function CategoriaCombobox({
     setCreando(true);
     setErrorCrear(null);
     try {
-      const nueva = await categoriaService.create({ nombre });
+      const nueva = await categoriaService.create({ nombre, tipo: nuevoTipo });
       setSelectedLabel(nueva.nombre);
       onChange(nueva.id, nueva.nombre);
       onCategoriaCreada?.(nueva);
@@ -110,17 +127,18 @@ export function CategoriaCombobox({
 
   const handleOpenCrear = () => {
     setNuevoNombre('');
+    setNuevoTipo(tipo);
     setErrorCrear(null);
     setCrearOpen(true);
   };
 
   const handleGuardarEdicion = async (id: string) => {
-    const nombre = editandoNombre.trim();
+    const nombre = editandoNombre.trim().toUpperCase();
     if (!nombre) return;
     setGuardandoEdit(true);
     setGestionError(null);
     try {
-      const actualizada = await categoriaService.update(id, { nombre });
+      const actualizada = await categoriaService.update(id, { nombre, tipo: editandoTipo });
       onCategoriaActualizada?.(actualizada);
       onRefresh?.();
       if (value === id || selectedLabel === categorias.find((c) => c.id === id)?.nombre) {
@@ -184,7 +202,7 @@ export function CategoriaCombobox({
             <CommandInput placeholder="Buscar categoría..." />
             <CommandList>
               <CommandEmpty className="p-2 text-xs text-muted-foreground text-center">
-                No se encontraron categorías.
+                No se encontraron categorías de tipo {tipo}.
                 <Button
                   type="button"
                   variant="link"
@@ -199,7 +217,7 @@ export function CategoriaCombobox({
                 </Button>
               </CommandEmpty>
               <CommandGroup>
-                {categorias.map((cat) => (
+                {categoriasFiltradas.map((cat) => (
                   <CommandItem
                     key={cat.id}
                     value={cat.nombre}
@@ -215,7 +233,10 @@ export function CategoriaCombobox({
                         value === cat.id || value === cat.nombre ? 'opacity-100' : 'opacity-0'
                       )}
                     />
-                    {cat.nombre}
+                    <div className="flex items-center justify-between w-full">
+                      <span>{cat.nombre}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{cat.tipo}</span>
+                    </div>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -225,33 +246,37 @@ export function CategoriaCombobox({
       </Popover>
 
       {/* Botón rápido para crear categoría */}
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        disabled={disabled}
-        onClick={handleOpenCrear}
-        title="Nueva categoría"
-        className="shrink-0 h-9 w-9"
-      >
-        <Plus className="h-4 w-4" />
-      </Button>
+      {showCreateButton && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={disabled}
+          onClick={handleOpenCrear}
+          title="Nueva categoría"
+          className="shrink-0 h-9 w-9"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      )}
 
       {/* Botón para gestionar categorías en Pop-Up */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        disabled={disabled}
-        onClick={() => {
-          setGestionError(null);
-          setGestionarOpen(true);
-        }}
-        title="Gestionar categorías (editar o eliminar)"
-        className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
-      >
-        <Settings className="h-4 w-4" />
-      </Button>
+      {showSettingsButton && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          onClick={() => {
+            setGestionError(null);
+            setGestionarOpen(true);
+          }}
+          title="Gestionar categorías (editar o eliminar)"
+          className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      )}
 
       {/* Diálogo Pop-up: Crear Categoría */}
       <Dialog open={crearOpen} onOpenChange={setCrearOpen}>
@@ -259,28 +284,30 @@ export function CategoriaCombobox({
           <DialogHeader>
             <DialogTitle>Nueva Categoría</DialogTitle>
             <DialogDescription>
-              Ingresa el nombre de la categoría para clasificar productos.
+              Ingresa el nombre para clasificar ítems ({tipo.toLowerCase()}) en el sistema.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-1">
-            <Label htmlFor="nueva-cat-nombre">Nombre de la Categoría *</Label>
-            <Input
-              id="nueva-cat-nombre"
-              value={nuevoNombre}
-              onChange={(e) => {
-                setNuevoNombre(e.target.value);
-                setErrorCrear(null);
-              }}
-              placeholder="Ej: Laptops, Memorias RAM, Teclados..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleCrear();
-                }
-              }}
-              autoFocus
-            />
-            {errorCrear && <p className="text-xs text-destructive">{errorCrear}</p>}
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label htmlFor="nueva-cat-nombre">Nombre de la Categoría *</Label>
+              <Input
+                id="nueva-cat-nombre"
+                value={nuevoNombre}
+                onChange={(e) => {
+                  setNuevoNombre(e.target.value.toUpperCase());
+                  setErrorCrear(null);
+                }}
+                placeholder="Ej: MOUSE GAMER / LIMPIEZA DE CABEZAL"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCrear();
+                  }
+                }}
+                autoFocus
+              />
+              {errorCrear && <p className="text-xs text-destructive">{errorCrear}</p>}
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -331,9 +358,9 @@ export function CategoriaCombobox({
                     <div className="flex items-center gap-1.5 flex-1">
                       <Input
                         size={1}
-                        className="h-8 text-xs"
+                        className="h-8 text-xs flex-1"
                         value={editandoNombre}
-                        onChange={(e) => setEditandoNombre(e.target.value)}
+                        onChange={(e) => setEditandoNombre(e.target.value.toUpperCase())}
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleGuardarEdicion(c.id);
@@ -359,7 +386,12 @@ export function CategoriaCombobox({
                     </div>
                   ) : (
                     <>
-                      <span className="text-sm font-medium text-foreground truncate">{c.nombre}</span>
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-sm font-medium text-foreground truncate">{c.nombre}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-semibold">
+                          {c.tipo || 'PRODUCTO'}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
                           type="button"
@@ -369,8 +401,9 @@ export function CategoriaCombobox({
                           onClick={() => {
                             setEditandoId(c.id);
                             setEditandoNombre(c.nombre);
+                            setEditandoTipo(c.tipo || 'PRODUCTO');
                           }}
-                          title="Editar nombre de categoría"
+                          title="Editar categoría"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -397,19 +430,7 @@ export function CategoriaCombobox({
             )}
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setGestionarOpen(false);
-                handleOpenCrear();
-              }}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Nueva Categoría
-            </Button>
+          <DialogFooter className="flex justify-end items-center pt-2">
             <Button
               type="button"
               variant="secondary"

@@ -17,6 +17,8 @@ export interface DashboardMetrics {
 export interface ProductoBajoStock {
   id: string;
   nombre: string;
+  descripcion?: string | null;
+  tipo?: string;
   sku: string | null;
   marca: string | null;
   modelo: string | null;

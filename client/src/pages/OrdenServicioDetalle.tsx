@@ -249,7 +249,8 @@ export function OrdenServicioDetalle() {
     productoNombre: string;
     cantidad: string;
     precioUnitario: string;
-  }>({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '' });
+    esServicio?: boolean;
+  }>({ productoId: '', productoNombre: '', cantidad: '1', precioUnitario: '', esServicio: false });
   const [guardandoItem, setGuardandoItem] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
 
@@ -651,20 +652,16 @@ export function OrdenServicioDetalle() {
       setFichaError('El tipo de equipo es obligatorio.');
       return;
     }
-    if (!formFichaEquipo.marca?.trim() && !formFichaEquipo.marcaId) {
-      setFichaError('La marca es obligatoria.');
-      return;
-    }
     setGuardandoFicha(true);
     setFichaError(null);
     try {
       await equipoClienteService.update(target.equipoId, {
         tipoEquipoId: formFichaEquipo.tipoEquipoId || null,
-        tipoEquipo: formFichaEquipo.tipoEquipo.trim(),
+        tipoEquipo: formFichaEquipo.tipoEquipo.trim().toUpperCase(),
         marcaId: formFichaEquipo.marcaId || null,
-        marca: formFichaEquipo.marca?.trim() || null,
-        modelo: formFichaEquipo.modelo?.trim() || null,
-        numeroSerie: formFichaEquipo.numeroSerie?.trim() || null,
+        marca: formFichaEquipo.marca?.trim().toUpperCase() || null,
+        modelo: formFichaEquipo.modelo?.trim().toUpperCase() || null,
+        numeroSerie: formFichaEquipo.numeroSerie?.trim().toUpperCase() || null,
         contrasenaPatron: fichaRequiereClave ? (formFichaEquipo.contrasenaPatron?.trim() || null) : null,
       });
       setFichaDialogOpen(false);
@@ -749,10 +746,6 @@ export function OrdenServicioDetalle() {
       setErrorNuevoEquipo('El tipo de equipo es obligatorio.');
       return;
     }
-    if (!formNuevoEquipo.marca?.trim() && !formNuevoEquipo.marcaId) {
-      setErrorNuevoEquipo('La marca es obligatoria.');
-      return;
-    }
     if (!formNuevoEquipo.modelo?.trim()) {
       setErrorNuevoEquipo('El modelo es obligatorio.');
       return;
@@ -767,11 +760,11 @@ export function OrdenServicioDetalle() {
       if (editingEquipoInlineId) {
         const eqActualizado = await equipoClienteService.update(editingEquipoInlineId, {
           tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
-          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim().toUpperCase(),
           marcaId: formNuevoEquipo.marcaId || null,
-          marca: formNuevoEquipo.marca?.trim() || null,
-          modelo: formNuevoEquipo.modelo?.trim() || null,
-          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          marca: formNuevoEquipo.marca?.trim().toUpperCase() || null,
+          modelo: formNuevoEquipo.modelo?.trim().toUpperCase() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim().toUpperCase() || null,
           contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
         });
         setEquiposCliente((prev) =>
@@ -786,11 +779,11 @@ export function OrdenServicioDetalle() {
       } else {
         const eq = await clienteService.crearEquipo(orden.clienteId, {
           tipoEquipoId: formNuevoEquipo.tipoEquipoId || null,
-          tipoEquipo: formNuevoEquipo.tipoEquipo.trim(),
+          tipoEquipo: formNuevoEquipo.tipoEquipo.trim().toUpperCase(),
           marcaId: formNuevoEquipo.marcaId || null,
-          marca: formNuevoEquipo.marca?.trim() || null,
-          modelo: formNuevoEquipo.modelo?.trim() || null,
-          numeroSerie: formNuevoEquipo.numeroSerie?.trim() || null,
+          marca: formNuevoEquipo.marca?.trim().toUpperCase() || null,
+          modelo: formNuevoEquipo.modelo?.trim().toUpperCase() || null,
+          numeroSerie: formNuevoEquipo.numeroSerie?.trim().toUpperCase() || null,
           contrasenaPatron: tipoRequiereClave ? (formNuevoEquipo.contrasenaPatron?.trim() || null) : null,
         });
         setEquiposCliente((prev) => [...prev, eq]);
@@ -1349,7 +1342,7 @@ export function OrdenServicioDetalle() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/30 text-xs font-semibold uppercase text-muted-foreground">
-                      <th className="px-5 py-3 text-left">Descripción</th>
+                      <th className="px-5 py-3 text-left">DETALLE</th>
                       <th className="px-5 py-3 text-center">Cant.</th>
                       <th className="px-5 py-3 text-right">P. Unitario</th>
                       <th className="px-5 py-3 text-right">Subtotal</th>
@@ -1368,7 +1361,7 @@ export function OrdenServicioDetalle() {
                       </tr>
                     ) : (
                       equipoActivo.items!.map((item) => {
-                        const esServicio = item.producto?.esServicio ?? false;
+                        const esServicio = item.producto?.tipo === 'SERVICIO' || (item.producto?.esServicio ?? false);
                         const stockDisponible = esServicio
                           ? null
                           : (item.producto?.stockActual ?? 0) + item.cantidad;
@@ -1788,46 +1781,50 @@ export function OrdenServicioDetalle() {
                       : 'Escribe para buscar...'}
                   </p>
                 ) : (
-                  productos.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        const duplicado = equipoActivo?.items?.some(
-                          (it) => it.productoId === p.id
-                        );
-                        setItemForm((prev) => ({
-                          ...prev,
-                          productoId: p.id,
-                          productoNombre: p.nombre,
-                          precioUnitario: String(p.precioVenta),
-                        }));
-                        setBusquedaProducto(p.nombre);
-                        setProductos([]);
-                        if (duplicado) {
-                          setItemError('Este producto ya está registrado. Ajuste la cantidad.');
-                        } else {
-                          setItemError(null);
-                        }
-                      }}
-                      className={cn(
-                        'w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors border-b last:border-b-0 flex items-center justify-between gap-2',
-                        itemForm.productoId === p.id && 'bg-primary/10 text-primary'
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <span className="font-medium">{p.nombre}</span>
-                        {p.esServicio && (
-                          <span className="ml-1 text-[10px] text-muted-foreground border rounded px-1">
-                            servicio
-                          </span>
+                  productos.map((p) => {
+                    const isServicio = p.tipo === 'SERVICIO' || p.esServicio;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          const duplicado = equipoActivo?.items?.some(
+                            (it) => it.productoId === p.id
+                          );
+                          setItemForm((prev) => ({
+                            ...prev,
+                            productoId: p.id,
+                            productoNombre: p.nombre,
+                            precioUnitario: String(p.precioVenta),
+                            esServicio: isServicio,
+                          }));
+                          setBusquedaProducto(p.nombre);
+                          setProductos([]);
+                          if (duplicado) {
+                            setItemError('Este producto ya está registrado. Ajuste la cantidad.');
+                          } else {
+                            setItemError(null);
+                          }
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors border-b last:border-b-0 flex items-center justify-between gap-2',
+                          itemForm.productoId === p.id && 'bg-primary/10 text-primary'
                         )}
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        S/ {fmt(p.precioVenta)}
-                      </span>
-                    </button>
-                  ))
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium">{p.nombre}</span>
+                          {isServicio && (
+                            <span className="ml-1 text-[10px] text-muted-foreground border rounded px-1">
+                              servicio
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          S/ {fmt(p.precioVenta)}
+                        </span>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1848,14 +1845,21 @@ export function OrdenServicioDetalle() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Precio unitario (S/)</label>
+                <label className="text-sm font-medium">
+                  Precio unitario (S/) {itemForm.esServicio && <span className="text-[11px] text-primary font-normal">(Editable)</span>}
+                </label>
                 <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={itemForm.precioUnitario}
-                  disabled
-                  className="bg-muted/50 cursor-not-allowed"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*\.?\d*$/.test(val)) {
+                      setItemForm((p) => ({ ...p, precioUnitario: val }));
+                    }
+                  }}
+                  disabled={!itemForm.esServicio}
+                  className={!itemForm.esServicio ? 'bg-muted/50 cursor-not-allowed' : ''}
                 />
               </div>
             </div>
@@ -2024,7 +2028,7 @@ export function OrdenServicioDetalle() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium">
-                      Marca <span className="text-destructive">*</span>
+                      Marca
                     </label>
                     <MarcaCombobox
                       value={formNuevoEquipo.marcaId || ''}
@@ -2268,7 +2272,7 @@ export function OrdenServicioDetalle() {
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">
-                  Marca <span className="text-destructive">*</span>
+                  Marca
                 </label>
                 <MarcaCombobox
                   value={formFichaEquipo.marcaId || ''}

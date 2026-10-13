@@ -1,12 +1,14 @@
 import api from './api';
 import type {
   Categoria,
+  TipoItem,
   CrearCategoriaDto,
   ActualizarCategoriaDto,
   ApiResponse,
 } from '../types';
 
 interface GetAllCategoriasParams {
+  tipo?: TipoItem;
   skip?: number;
   take?: number;
 }
