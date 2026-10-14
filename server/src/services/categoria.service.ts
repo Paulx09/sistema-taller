@@ -54,23 +54,77 @@ export class CategoriaService {
     });
   }
 
-  // Crear nueva categoría
+  // Crear nueva categoría (o restaurar si estaba eliminada)
   async crear(data: { nombre: string; tipo?: TipoItem }): Promise<Categoria> {
+    const nombreNormalizado = data.nombre.toUpperCase().trim();
+    const tipo = data.tipo || 'PRODUCTO';
+
+    // Verificar si ya existe una categoría con ese nombre y tipo (incluyendo eliminadas)
+    const existente = await prisma.categoria.findFirst({
+      where: {
+        nombre: nombreNormalizado,
+        tipo,
+      },
+    });
+
+    if (existente) {
+      if (existente.deletedAt) {
+        // Restaurar si estaba eliminada
+        return await prisma.categoria.update({
+          where: { id: existente.id },
+          data: {
+            deletedAt: null,
+            updatedAt: new Date(),
+          },
+        });
+      }
+      throw new Error('Ya existe una categoría con ese nombre y tipo');
+    }
+
     return await prisma.categoria.create({
       data: {
-        nombre: data.nombre.toUpperCase().trim(),
-        tipo: data.tipo || 'PRODUCTO',
+        nombre: nombreNormalizado,
+        tipo,
       },
     });
   }
 
   // Actualizar categoría
   async actualizar(id: string, data: { nombre?: string; tipo?: TipoItem }): Promise<Categoria> {
+    const categoriaActual = await prisma.categoria.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!categoriaActual) {
+      throw new Error('Categoría no encontrada');
+    }
+
+    const nuevoNombre = data.nombre ? data.nombre.toUpperCase().trim() : categoriaActual.nombre;
+    const nuevoTipo = data.tipo || categoriaActual.tipo;
+
+    // Si cambió nombre o tipo, verificar colisión con otra categoría
+    if (nuevoNombre !== categoriaActual.nombre || nuevoTipo !== categoriaActual.tipo) {
+      const duplicada = await prisma.categoria.findFirst({
+        where: {
+          nombre: nuevoNombre,
+          tipo: nuevoTipo,
+          id: { not: id },
+        },
+      });
+
+      if (duplicada) {
+        if (duplicada.deletedAt) {
+          throw new Error('Ya existe una categoría eliminada con ese nombre y tipo. Créala para reactivarla.');
+        }
+        throw new Error('Ya existe una categoría con ese nombre y tipo');
+      }
+    }
+
     return await prisma.categoria.update({
       where: { id },
       data: {
-        ...(data.nombre && { nombre: data.nombre.toUpperCase().trim() }),
-        ...(data.tipo && { tipo: data.tipo }),
+        ...(data.nombre && { nombre: nuevoNombre }),
+        ...(data.tipo && { tipo: nuevoTipo }),
         updatedAt: new Date(),
       },
     });
