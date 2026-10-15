@@ -3,9 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState, useRef, useEffect } from 'react';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
-import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
-import { UbicacionCombobox } from '@/components/forms/UbicacionCombobox';
-import { useMarcas } from '@/hooks/useMarcas';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {

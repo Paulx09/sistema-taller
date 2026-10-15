@@ -143,6 +143,9 @@ export function VentasPage() {
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
   const [procesando, setProcesando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<Venta | null>(null);
+  void setCategoriaFiltro;
+  void categorias;
+  void ultimaVenta;
 
   // Estados para modal WhatsApp
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);

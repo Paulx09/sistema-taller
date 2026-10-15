@@ -156,6 +156,38 @@ export interface ActualizarCategoriaDto {
   tipo?: TipoItem;
 }
 
+export interface CrearMarcaDto {
+  nombre: string;
+}
+
+export interface ActualizarMarcaDto {
+  nombre: string;
+}
+
+export interface TipoEquipo {
+  id: string;
+  nombre: string;
+  requiereClave: boolean;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  _count?: {
+    equipos: number;
+  };
+}
+
+export interface CrearTipoEquipoDto {
+  nombre: string;
+  requiereClave?: boolean;
+}
+
+export interface ActualizarTipoEquipoDto {
+  nombre?: string;
+  requiereClave?: boolean;
+  activo?: boolean;
+}
+
 export interface CrearProductoDto {
   tipo?: TipoItem;
   nombre?: string;
