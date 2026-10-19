@@ -11,6 +11,8 @@ interface GetAllCategoriasParams {
   tipo?: TipoItem;
   skip?: number;
   take?: number;
+  limit?: number;
+  todas?: boolean;
 }
 
 export const categoriaService = {

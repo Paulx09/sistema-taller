@@ -5,24 +5,31 @@ interface FiltrosCategorias {
   tipo?: TipoItem;
   skip?: number;
   take?: number;
+  todas?: boolean;
 }
 
 export class CategoriaService {
-  // Listar todas las categorías (excluye eliminadas) con paginación y filtro opcional por tipo
+  // Listar todas las categorías (excluye eliminadas) con paginación opcional y filtro por tipo
   async listarTodas(filtros: FiltrosCategorias = {}) {
-    const { tipo, skip = 0, take = 50 } = filtros;
+    const { tipo, skip, take, todas } = filtros;
 
     const where = {
       deletedAt: null,
       ...(tipo && { tipo }),
     };
 
+    // Si se especifica todas=true o no se definen parámetros de paginación (take ni skip),
+    // no se limita la consulta para permitir que los selects y comboboxes reciban todas las opciones.
+    const isPaginado = !todas && (take !== undefined || skip !== undefined);
+    const takeParam = isPaginado ? (take ?? 50) : undefined;
+    const skipParam = isPaginado ? (skip ?? 0) : undefined;
+
     const [categorias, total] = await Promise.all([
       prisma.categoria.findMany({
         where,
         orderBy: { nombre: 'asc' },
-        skip,
-        take,
+        ...(skipParam !== undefined && { skip: skipParam }),
+        ...(takeParam !== undefined && { take: takeParam }),
       }),
       prisma.categoria.count({
         where,
