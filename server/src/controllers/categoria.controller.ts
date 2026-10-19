@@ -7,10 +7,12 @@ export class CategoriaController {
   async listarTodas(req: Request, res: Response, next: NextFunction) {
     try {
       const skip = req.query.skip ? Number(req.query.skip) : undefined;
-      const take = req.query.take ? Number(req.query.take) : undefined;
+      const rawLimit = req.query.take || req.query.limit;
+      const take = rawLimit && rawLimit !== 'all' ? Number(rawLimit) : undefined;
       const tipo = req.query.tipo as TipoItem | undefined;
+      const todas = req.query.todas === 'true' || req.query.all === 'true' || rawLimit === 'all';
 
-      const { categorias, total } = await categoriaService.listarTodas({ tipo, skip, take });
+      const { categorias, total } = await categoriaService.listarTodas({ tipo, skip, take, todas });
       res.json({
         success: true,
         data: categorias,

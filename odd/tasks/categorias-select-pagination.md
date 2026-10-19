@@ -17,15 +17,15 @@ En producción existen 57 categorías activas (`deleted_at IS NULL`). `Categoria
 
 ## Checklist
 - [x] **TASK-01**: Cargar las 57 categorías del backup en la base de datos local y comprobar la reproducción del fallo (RED: `GET /api/categorias` devuelve 50 de 57). (Route: direct inline)
-- [ ] **TASK-02**: Actualizar `categoria.controller.ts` y `categoria.service.ts` para admitir `todas: true` / sin límite cuando `take` no está definido o es explícitamente ilimitado, y soportar `limit` como alias de `take`. (Route: direct inline)
+- [x] **TASK-02**: Actualizar `categoria.controller.ts` y `categoria.service.ts` para admitir `todas: true` / sin límite cuando `take` no está definido o es explícitamente ilimitado, y soportar `limit` como alias de `take`. (Route: direct inline)
 - [ ] **TASK-03**: Actualizar `categoria.service.ts` y `useCategorias.ts` en el cliente para solicitar todas las categorías en selects/comboboxes. (Route: direct inline)
 - [ ] **TASK-04**: Ejecutar verificación funcional: comprobar que la API devuelve las 57 categorías, que el combobox muestra `TECLADO USB`, `TINTA`, etc., y que el build compila sin errores. (Route: direct inline)
 
 ## Verification Evidence
 - Task 1: Completado. Se sembraron las categorías del backup (`seed-production-categories.ts`). Se constató que `listarTodas` devuelve solo 50 de 57 categorías activas (`TECLADO USB: false`, `TINTA: false`, `SUPRESOR DE PICO: false`). Al intentar crear `TECLADO USB` arroja `Ya existe una categoría con ese nombre y tipo`.
-- Task 2: Pendiente
+- Task 2: Completado. Se modificaron `categoria.service.ts` y `categoria.controller.ts` para no limitar cuando no se envían parámetros de paginación o cuando se envía `todas: true`. Probado con `ts-node`: la llamada sin paginación devuelve las 57 categorías activas incluyendo `TECLADO USB`, `TECLADO INALAMBRICO`, `TINTA`, `SUPRESOR DE PICO`. Cuando se envía `take: 25`, pagina 25 de 57 normalmente. Build exitoso.
 - Task 3: Pendiente
 - Task 4: Pendiente
 
 ## Next Step
-Ejecutar TASK-02: actualizar `categoria.service.ts` y `categoria.controller.ts` para admitir listar todas las categorías sin paginación forzada.
+Ejecutar TASK-03: actualizar `categoria.service.ts` y `useCategorias.ts` en el cliente para asegurar soporte de `todas` y `limit`.
