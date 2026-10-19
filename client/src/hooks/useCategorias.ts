@@ -7,6 +7,8 @@ interface UseCategoriasParams {
   tipo?: TipoItem;
   skip?: number;
   take?: number;
+  limit?: number;
+  todas?: boolean;
 }
 
 export const useCategorias = (params?: UseCategoriasParams) => {
@@ -15,13 +17,19 @@ export const useCategorias = (params?: UseCategoriasParams) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { tipo, skip, take } = params || {};
+  const { tipo, skip, take, limit, todas } = params || {};
 
   const fetchCategorias = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { categorias: data, total: totalCount } = await categoriaService.getAll({ tipo, skip, take });
+      const { categorias: data, total: totalCount } = await categoriaService.getAll({
+        tipo,
+        skip,
+        take,
+        limit,
+        todas,
+      });
       setCategorias(data);
       setTotal(totalCount);
     } catch (err) {
@@ -30,7 +38,7 @@ export const useCategorias = (params?: UseCategoriasParams) => {
     } finally {
       setLoading(false);
     }
-  }, [tipo, skip, take]);
+  }, [tipo, skip, take, limit, todas]);
 
   const createCategoria = async (data: CrearCategoriaDto): Promise<Categoria> => {
     setLoading(true);
