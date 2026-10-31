@@ -13,7 +13,8 @@ const detalleVentaSchema = z.object({
 });
 
 const crearVentaSchema = z.object({
-  clienteNombre: z.string().max(100).trim().optional(),
+  clienteId: z.string().uuid().optional().nullable(),
+  clienteNombre: z.string().max(100).trim().optional().nullable(),
   metodoPago: z
     .enum(['EFECTIVO', 'TARJETA', 'YAPE_PLIN'], {
       message: 'Método de pago inválido. Debe ser EFECTIVO, TARJETA o YAPE_PLIN',

@@ -34,7 +34,12 @@ import { listarProveedores } from '@/services/proveedor.service';
 import { productoService } from '@/services/producto.service';
 import { SugerenciasPrecioModal } from '@/components/SugerenciasPrecioModal';
 import { CategoriaCombobox } from '@/components/forms/CategoriaCombobox';
+import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
+import { UbicacionCombobox } from '@/components/forms/UbicacionCombobox';
 import { ProveedorCombobox } from '@/components/forms/ProveedorCombobox';
+import { useMarcas } from '@/hooks/useMarcas';
+import { useCategorias } from '@/hooks/useCategorias';
+import { useUbicaciones } from '@/hooks/useUbicaciones';
 import api from '@/services/api';
 import type { Producto, Proveedor, Compra, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
 import { format } from 'date-fns';
@@ -99,18 +104,21 @@ export function ComprasPage() {
   const [confirmAnularNumero, setConfirmAnularNumero] = useState<string>('');
 
   // Modal crear producto rápido
+  const { marcas, refetch: refetchMarcas } = useMarcas();
+  const { categorias, refetch: refetchCategorias } = useCategorias();
+  const { ubicaciones, refetch: refetchUbicaciones } = useUbicaciones();
   const [crearProductoDialogOpen, setCrearProductoDialogOpen] = useState(false);
-  const [categorias, setCategorias] = useState<{ id: string; nombre: string }[]>([]);
-  const [ubicaciones, setUbicaciones] = useState<{ id: string; nombre: string }[]>([]);
   const [ubicacionSinClasificar, setUbicacionSinClasificar] = useState<string>('');
   const [creandoProducto, setCreandoProducto] = useState(false);
-  const [erroresProducto, setErroresProducto] = useState<{ nombre?: string; categoriaId?: string; ubicacionId?: string }>({});
+  const [erroresProducto, setErroresProducto] = useState<{ categoriaId?: string; ubicacionId?: string }>({});
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: '',
     categoriaId: '',
     ubicacionId: '',
+    marcaId: '',
     marca: '',
     modelo: '',
+    descripcion: '',
     stockMinimo: '1',
     requiereSerie: false,
     garantiaProveedorMeses: '',
@@ -121,29 +129,18 @@ export function ComprasPage() {
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
   const [productoSerieActual, setProductoSerieActual] = useState<ItemCompra | null>(null);
 
-  // Cargar categorías y ubicaciones
+  // Buscar ubicación "SIN CLASIFICAR" como default cuando carguen las ubicaciones
   useEffect(() => {
-    // Cargar categorías
-    api.get('/categorias?limit=100').then((r) => {
-      setCategorias(r.data.data || []);
-    });
-
-    // Cargar ubicaciones
-    api.get('/ubicaciones?limit=100').then((r) => {
-      const ubicacionesData = r.data.data || [];
-      setUbicaciones(ubicacionesData);
-      
-      // Buscar ubicación "SIN CLASIFICAR" como default
-      const sinClasificar = ubicacionesData.find(
-        (u: any) => u.nombre.toUpperCase() === 'SIN CLASIFICAR'
+    if (ubicaciones.length > 0 && !nuevoProducto.ubicacionId) {
+      const sinClasificar = ubicaciones.find(
+        (u) => u.nombre.toUpperCase() === 'SIN CLASIFICAR'
       );
-      
       if (sinClasificar) {
         setUbicacionSinClasificar(sinClasificar.id);
-        setNuevoProducto(prev => ({ ...prev, ubicacionId: sinClasificar.id }));
+        setNuevoProducto((prev) => ({ ...prev, ubicacionId: sinClasificar.id }));
       }
-    });
-  }, []);
+    }
+  }, [ubicaciones]);
 
   // Cargar proveedores
   useEffect(() => {
@@ -376,8 +373,7 @@ export function ComprasPage() {
 
   // Crear producto rápido
   const handleCrearProductoRapido = async () => {
-    const errores: { nombre?: string; categoriaId?: string; ubicacionId?: string } = {};
-    if (!nuevoProducto.nombre.trim()) errores.nombre = 'El nombre del producto es obligatorio';
+    const errores: { categoriaId?: string; ubicacionId?: string } = {};
     if (!nuevoProducto.categoriaId) errores.categoriaId = 'Debe seleccionar una categoría';
     if (!nuevoProducto.ubicacionId) errores.ubicacionId = 'Debe seleccionar una ubicación';
     if (Object.keys(errores).length > 0) {
@@ -394,11 +390,12 @@ export function ComprasPage() {
     setCreandoProducto(true);
     try {
       const productoCreado = await productoService.createRapido({
-        nombre: nuevoProducto.nombre,
         categoriaId: nuevoProducto.categoriaId,
         ubicacionId: nuevoProducto.ubicacionId,
+        marcaId: nuevoProducto.marcaId || undefined,
         marca: nuevoProducto.marca || undefined,
         modelo: nuevoProducto.modelo || undefined,
+        descripcion: nuevoProducto.descripcion || undefined,
         precioCompra: 0, // Se definirá con la compra
         precioVenta: 0, // Se calculará automáticamente en la primera compra
         stockActual: 0, // Stock inicial en 0 porque se añadirá con la compra
@@ -429,8 +426,10 @@ export function ComprasPage() {
         nombre: '',
         categoriaId: '',
         ubicacionId: ubicacionSinClasificar,
+        marcaId: '',
         marca: '',
         modelo: '',
+        descripcion: '',
         stockMinimo: '1',
         requiereSerie: false,
         garantiaProveedorMeses: '',
@@ -1029,154 +1028,183 @@ export function ComprasPage() {
       </Dialog>
 
       {/* Dialog: Crear Producto Rápido */}
-      <Dialog open={crearProductoDialogOpen} onOpenChange={(open) => { setCrearProductoDialogOpen(open); if (!open) setErroresProducto({}); }}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog 
+        open={crearProductoDialogOpen} 
+        onOpenChange={(open) => { 
+          setCrearProductoDialogOpen(open); 
+          if (!open) setErroresProducto({}); 
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Crear Producto Rápido</DialogTitle>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <PackagePlus className="h-5 w-5 text-primary" />
+              Crear Producto Rápido
+            </DialogTitle>
             <DialogDescription>
-              Cree un producto con datos básicos. Los precios se definirán al registrar la compra.
+              Cree un producto con datos básicos para incluirlo en la compra actual.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Nombre del Producto <span className="text-destructive">*</span>
-              </label>
-              <Input
-                value={nuevoProducto.nombre}
-                onChange={(e) => { setNuevoProducto({ ...nuevoProducto, nombre: e.target.value }); if (erroresProducto.nombre) setErroresProducto((p) => ({ ...p, nombre: undefined })); }}
-                placeholder="Ej: Teclado Mecánico RGB"
-                className={erroresProducto.nombre ? 'border-destructive focus-visible:ring-destructive' : ''}
-              />
-              {erroresProducto.nombre && <p className="text-xs text-destructive">{erroresProducto.nombre}</p>}
-            </div>
+          <div className="space-y-4 py-2">
+            {/* Grid 2 Columnas para datos principales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Categoría */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  Categoría <span className="text-destructive">*</span>
+                </label>
+                <CategoriaCombobox
+                  value={nuevoProducto.categoriaId}
+                  onChange={(value) => { 
+                    setNuevoProducto((p) => ({ ...p, categoriaId: value })); 
+                    if (erroresProducto.categoriaId) setErroresProducto((p) => ({ ...p, categoriaId: undefined })); 
+                  }}
+                  categorias={categorias}
+                  onCategoriaCreada={() => refetchCategorias()}
+                  onCategoriaActualizada={() => refetchCategorias()}
+                  onCategoriaEliminada={() => refetchCategorias()}
+                />
+                {erroresProducto.categoriaId && <p className="text-xs text-destructive">{erroresProducto.categoriaId}</p>}
+              </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Marca</label>
-                <Input
-                  value={nuevoProducto.marca}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, marca: e.target.value })}
-                  placeholder="Ej: Logitech"
+              {/* Marca */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Marca</label>
+                <MarcaCombobox
+                  value={nuevoProducto.marcaId || nuevoProducto.marca}
+                  onChange={(marcaId, marcaNombre) => {
+                    setNuevoProducto((p) => ({
+                      ...p,
+                      marcaId,
+                      marca: marcaNombre || p.marca,
+                    }));
+                  }}
+                  marcas={marcas}
+                  onMarcaCreada={() => refetchMarcas()}
+                  onMarcaActualizada={() => refetchMarcas()}
+                  onMarcaEliminada={() => refetchMarcas()}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Modelo</label>
+
+              {/* Modelo */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Modelo</label>
                 <Input
                   value={nuevoProducto.modelo}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, modelo: e.target.value })}
-                  placeholder="Ej: G512"
+                  onChange={(e) => setNuevoProducto((p) => ({ ...p, modelo: e.target.value }))}
+                  placeholder="Ej: ThinkPad T480 / DDR4 8GB 3200MHz"
+                  className="h-9"
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Categoría <span className="text-destructive">*</span>
-              </label>
-              <CategoriaCombobox
-                value={nuevoProducto.categoriaId}
-                onChange={(value) => { setNuevoProducto({ ...nuevoProducto, categoriaId: value }); if (erroresProducto.categoriaId) setErroresProducto((p) => ({ ...p, categoriaId: undefined })); }}
-                categorias={categorias}
-                onCategoriaCreada={(cat) => setCategorias((prev) => [...prev, cat])}
-              />
-              {erroresProducto.categoriaId && <p className="text-xs text-destructive">{erroresProducto.categoriaId}</p>}
-            </div>
+              {/* Ubicación */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  Ubicación Física <span className="text-destructive">*</span>
+                </label>
+                <UbicacionCombobox
+                  value={nuevoProducto.ubicacionId}
+                  onChange={(value) => { 
+                    setNuevoProducto((p) => ({ ...p, ubicacionId: value })); 
+                    if (erroresProducto.ubicacionId) setErroresProducto((p) => ({ ...p, ubicacionId: undefined })); 
+                  }}
+                  ubicaciones={ubicaciones}
+                  onUbicacionCreada={() => refetchUbicaciones()}
+                  onUbicacionActualizada={() => refetchUbicaciones()}
+                  onUbicacionEliminada={() => refetchUbicaciones()}
+                />
+                {erroresProducto.ubicacionId && <p className="text-xs text-destructive">{erroresProducto.ubicacionId}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Ubicación <span className="text-destructive">*</span>
-              </label>
-              <Select
-                value={nuevoProducto.ubicacionId}
-                onValueChange={(value) => { setNuevoProducto({ ...nuevoProducto, ubicacionId: value }); if (erroresProducto.ubicacionId) setErroresProducto((p) => ({ ...p, ubicacionId: undefined })); }}
-              >
-                <SelectTrigger className={erroresProducto.ubicacionId ? 'border-destructive focus:ring-destructive' : ''}>
-                  <SelectValue placeholder="Seleccione ubicación" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ubicaciones.map((ubi) => (
-                    <SelectItem key={ubi.id} value={ubi.id}>
-                      {ubi.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {erroresProducto.ubicacionId && <p className="text-xs text-destructive">{erroresProducto.ubicacionId}</p>}
-            </div>
+              {/* Descripción - Ancho completo */}
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-sm font-medium text-foreground">Descripción</label>
+                <Input
+                  value={nuevoProducto.descripcion}
+                  onChange={(e) => setNuevoProducto((p) => ({ ...p, descripcion: e.target.value }))}
+                  placeholder="Descripción breve, especificaciones o detalles técnicos (opcional)"
+                  className="h-9"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Stock Mínimo</label>
-              <Input
-                type="text"
-                value={nuevoProducto.stockMinimo}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Permitir solo números enteros
-                  if (/^\d*$/.test(value) || value === '') {
-                    setNuevoProducto({ ...nuevoProducto, stockMinimo: value });
-                  }
-                }}
-                placeholder="1"
-              />
-            </div>
-            
-            {/* Campos de series y garantía */}
-            <div className="space-y-3 pt-3 border-t">
-              <div className="flex items-center space-x-2">
+              {/* Stock Mínimo */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Stock Mínimo</label>
+                <Input
+                  type="text"
+                  value={nuevoProducto.stockMinimo}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*$/.test(value) || value === '') {
+                      setNuevoProducto({ ...nuevoProducto, stockMinimo: value });
+                    }
+                  }}
+                  placeholder="1"
+                  className="h-9"
+                />
+              </div>
+
+              {/* ¿Requiere Serie? */}
+              <div className="flex items-center space-x-3 p-2.5 bg-muted/40 rounded-lg border border-border mt-auto">
                 <input
                   type="checkbox"
                   id="requiereSerie"
                   checked={nuevoProducto.requiereSerie}
                   onChange={(e) => setNuevoProducto({ ...nuevoProducto, requiereSerie: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
                 />
-                <label htmlFor="requiereSerie" className="text-sm font-medium cursor-pointer">
+                <label htmlFor="requiereSerie" className="text-sm font-medium cursor-pointer select-none">
                   ¿Requiere Número de Serie?
+                  <span className="block text-xs text-muted-foreground font-normal">Para control de garantías y series únicas</span>
                 </label>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Garantía Proveedor (meses)</label>
-                  <Input
-                    type="text"
-                    value={nuevoProducto.garantiaProveedorMeses}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (/^\d*$/.test(value) || value === '') {
-                        setNuevoProducto({ ...nuevoProducto, garantiaProveedorMeses: value });
-                      }
-                    }}
-                    placeholder="0"
-                  />
+
+              {/* Garantías condicionales si requiere serie */}
+              {nuevoProducto.requiereSerie && (
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Garantía Proveedor (meses)</label>
+                    <Input
+                      type="text"
+                      value={nuevoProducto.garantiaProveedorMeses}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\d*$/.test(value) || value === '') {
+                          setNuevoProducto({ ...nuevoProducto, garantiaProveedorMeses: value });
+                        }
+                      }}
+                      placeholder="0"
+                      className="h-9 bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Garantía Cliente (meses)</label>
+                    <Input
+                      type="text"
+                      value={nuevoProducto.garantiaClienteMeses}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\d*$/.test(value) || value === '') {
+                          setNuevoProducto({ ...nuevoProducto, garantiaClienteMeses: value });
+                        }
+                      }}
+                      placeholder="0"
+                      className="h-9 bg-background"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Garantía Cliente (meses)</label>
-                  <Input
-                    type="text"
-                    value={nuevoProducto.garantiaClienteMeses}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (/^\d*$/.test(value) || value === '') {
-                        setNuevoProducto({ ...nuevoProducto, garantiaClienteMeses: value });
-                      }
-                    }}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
-            <Alert>
-              <AlertDescription className="text-xs">
-                <strong>Nota:</strong> El producto se agregará al detalle de compra con stock 0. Ingrese el costo unitario y cantidad después de crearlo. Los precios se pueden ajustar luego en Inventario.
+            <Alert className="bg-muted/30 border-muted">
+              <AlertDescription className="text-xs text-muted-foreground">
+                <strong>Nota:</strong> El producto se agregará a la orden de compra con stock 0. El costo unitario y cantidad se ingresan directamente en la tabla de compra.
               </AlertDescription>
             </Alert>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setCrearProductoDialogOpen(false)}
@@ -1186,7 +1214,7 @@ export function ComprasPage() {
             </Button>
             <Button onClick={handleCrearProductoRapido} disabled={creandoProducto}>
               {creandoProducto && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crear y Agregar
+              Crear y Agregar a Compra
             </Button>
           </DialogFooter>
         </DialogContent>

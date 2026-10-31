@@ -9,7 +9,8 @@ interface DetalleVentaInput {
 }
 
 interface CrearVentaData {
-  clienteNombre?: string;
+  clienteId?: string | null;
+  clienteNombre?: string | null;
   metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
   detalles: DetalleVentaInput[];
   usuarioId: string;
@@ -62,6 +63,9 @@ class VentaService {
         take,
         orderBy: { fecha: 'desc' },
         include: {
+          cliente: {
+            select: { id: true, nombre: true, dniRuc: true, telefono: true },
+          },
           usuario: {
             select: { id: true, username: true, nombreCompleto: true },
           },
@@ -107,6 +111,9 @@ class VentaService {
     const venta = await prisma.venta.findFirst({
       where: { id, deletedAt: null },
       include: {
+        cliente: {
+          select: { id: true, nombre: true, dniRuc: true, telefono: true },
+        },
         usuario: {
           select: { id: true, username: true, nombreCompleto: true },
         },
@@ -219,11 +226,28 @@ class VentaService {
       let gananciaTotal = new Prisma.Decimal(0);
 
       // Pre-cargar productos para cálculos y snapshot
-      const productosMap = new Map<string, { precioCompra: Prisma.Decimal; nombre: string; esServicio: boolean; garantiaClienteMeses: number }>();
+      const productosMap = new Map<
+        string,
+        {
+          precioCompra: Prisma.Decimal;
+          precioVenta: Prisma.Decimal;
+          nombre: string;
+          tipo: string;
+          esServicio: boolean;
+          garantiaClienteMeses: number;
+        }
+      >();
       for (const detalle of detalles) {
         const producto = await tx.producto.findUniqueOrThrow({
           where: { id: detalle.productoId },
-          select: { precioCompra: true, nombre: true, esServicio: true, garantiaClienteMeses: true },
+          select: {
+            precioCompra: true,
+            precioVenta: true,
+            nombre: true,
+            tipo: true,
+            esServicio: true,
+            garantiaClienteMeses: true,
+          },
         });
         productosMap.set(detalle.productoId, producto);
       }
@@ -244,22 +268,38 @@ class VentaService {
       const anio = ahora.getFullYear();
       const correlativo = await this.nextCorrelativo(tx, anio);
 
+      let finalClienteNombre = clienteNombre?.trim() || null;
+      if (data.clienteId && !finalClienteNombre) {
+        const cli = await tx.cliente.findUnique({
+          where: { id: data.clienteId },
+          select: { nombre: true },
+        });
+        if (cli) finalClienteNombre = cli.nombre;
+      }
+
       const nuevaVenta = await tx.venta.create({
         data: {
           codigoCorrelativo: correlativo,
           anioCorrelativo: anio,
           usuarioId,
-          clienteNombre: clienteNombre || null,
+          clienteId: data.clienteId || null,
+          clienteNombre: finalClienteNombre,
           metodoPago,
           total: totalVenta,
           gananciaTotal,
           estado: 'COMPLETADA',
         },
+        include: {
+          cliente: {
+            select: { id: true, nombre: true, dniRuc: true, telefono: true },
+          },
+        },
       });
 
-      // 2b. Crear DetalleVenta + descontar stock + registrar MovimientoStock por cada ítem
+      // 2b. Crear DetalleVenta + actualizar catálogo (servicios) o descontar stock (físicos)
       for (const detalle of detalles) {
         const producto = productosMap.get(detalle.productoId)!;
+        const isServicio = producto.tipo === 'SERVICIO' || producto.esServicio;
         const subtotal = new Prisma.Decimal(detalle.precioUnitario).mul(detalle.cantidad);
 
         // Crear DetalleVenta con snapshot del costo actual
@@ -292,9 +332,18 @@ class VentaService {
           }
         }
 
-        // Solo descontar stock y registrar movimiento para productos físicos
-        if (!producto.esServicio) {
-          // Descontar stock
+        // Si es SERVICIO: actualizar el precio de venta en catálogo si difiere del actual
+        if (isServicio) {
+          if (Number(producto.precioVenta) !== detalle.precioUnitario) {
+            await tx.producto.update({
+              where: { id: detalle.productoId },
+              data: {
+                precioVenta: new Prisma.Decimal(detalle.precioUnitario),
+              },
+            });
+          }
+        } else {
+          // Si es PRODUCTO FÍSICO: descontar stock y registrar movimiento
           await tx.producto.update({
             where: { id: detalle.productoId },
             data: {

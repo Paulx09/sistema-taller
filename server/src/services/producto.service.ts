@@ -1,16 +1,18 @@
 import prisma from '../config/database';
-import { Producto, Prisma } from '@prisma/client';
+import { Producto, Prisma, TipoItem } from '@prisma/client';
 
 interface CrearProductoData {
-  nombre: string;
+  tipo?: TipoItem;
+  nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
   descripcion?: string;
   categoriaId: string;
   ubicacionId?: string;
-  precioCompra: number;
+  precioCompra?: number;
   precioVenta: number;
   margenReferencia?: number;
   stockActual?: number;
@@ -27,8 +29,10 @@ interface CrearProductoData {
 }
 
 interface ActualizarProductoData {
+  tipo?: TipoItem;
   nombre?: string;
   marca?: string;
+  marcaId?: string;
   modelo?: string;
   sku?: string;
   codigoBarras?: string;
@@ -51,7 +55,9 @@ interface ActualizarProductoData {
 
 interface FiltrosProducto {
   busqueda?: string;
+  tipo?: TipoItem;
   categoriaId?: string;
+  marcaId?: string;
   esServicio?: boolean;
   bajoStock?: boolean;
   preciosPendientes?: boolean;
@@ -60,26 +66,62 @@ interface FiltrosProducto {
 }
 
 export class ProductoService {
+  // Helper para autogenerar nombre comercial a partir de Categoría + Modelo (o solo Categoría para Servicios)
+  private async generarNombreProducto(data: {
+    tipo?: TipoItem;
+    nombre?: string;
+    categoriaId?: string;
+    modelo?: string;
+  }): Promise<string> {
+    let categoriaNombre = '';
+    if (data.categoriaId) {
+      const cat = await prisma.categoria.findUnique({
+        where: { id: data.categoriaId },
+        select: { nombre: true, tipo: true },
+      });
+      categoriaNombre = cat?.nombre ? cat.nombre.trim().toUpperCase() : '';
+    }
+
+    const isService = data.tipo === 'SERVICIO';
+    const modelo = data.modelo?.trim().toUpperCase() || '';
+
+    if (isService) {
+      return categoriaNombre || data.nombre?.trim().toUpperCase() || 'SERVICIO SIN NOMBRE';
+    }
+
+    // Para productos: Categoría + Modelo (Ej: MOUSE GAMER LOGITECH 520)
+    const partes = [categoriaNombre, modelo].filter(Boolean);
+    const nombreGenerado = partes.join(' ').trim();
+
+    return nombreGenerado || data.nombre?.trim().toUpperCase() || 'PRODUCTO SIN NOMBRE';
+  }
+
   // Listar productos con filtros y paginación
   async listar(filtros: FiltrosProducto = {}) {
-    const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
+    const { busqueda, tipo, categoriaId, marcaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
 
     const where: Prisma.ProductoWhereInput = {
       deletedAt: null,
       ...(busqueda && {
         OR: [
           { nombre: { contains: busqueda, mode: 'insensitive' } },
-          { marca: { contains: busqueda, mode: 'insensitive' } },
           { modelo: { contains: busqueda, mode: 'insensitive' } },
+          { descripcion: { contains: busqueda, mode: 'insensitive' } },
           { sku: { contains: busqueda, mode: 'insensitive' } },
+          { codigoBarras: { contains: busqueda, mode: 'insensitive' } },
         ],
       }),
+      ...(tipo && { tipo }),
       ...(categoriaId && { categoriaId }),
+      ...(marcaId && { marcaId }),
       ...(esServicio !== undefined && { esServicio }),
       ...(bajoStock && {
+        tipo: 'PRODUCTO',
+        esServicio: false,
         stockActual: { lte: prisma.producto.fields.stockMinimo },
       }),
       ...(preciosPendientes && {
+        tipo: 'PRODUCTO',
         esServicio: false,
         OR: [
           { precioCompra: { equals: 0 } },
@@ -92,7 +134,8 @@ export class ProductoService {
       prisma.producto.findMany({
         where,
         include: {
-          categoria: { select: { id: true, nombre: true } },
+          categoria: { select: { id: true, nombre: true, tipo: true } },
+          marcaRel: { select: { id: true, nombre: true } },
           ubicacion: { select: { id: true, nombre: true } },
           padre: { select: { id: true, nombre: true } },
           historialCostos: {
@@ -109,7 +152,7 @@ export class ProductoService {
     ]);
 
     // Agregar ultimoCostoCompra a cada producto
-    const productosConUltimoCosto = productos.map(p => ({
+    const productosConUltimoCosto = productos.map((p) => ({
       ...p,
       ultimoCostoCompra: p.historialCostos[0]?.costo 
         ? Number(p.historialCostos[0].costo) 
@@ -119,24 +162,26 @@ export class ProductoService {
     return { productos: productosConUltimoCosto, total };
   }
 
-  // Búsqueda para combobox (productos físicos o también servicios según parámetro)
+  // Búsqueda para combobox (productos físicos o servicios)
   async buscarParaCombobox(query: string, excludeId?: string, incluirServicios = false) {
     return await prisma.producto.findMany({
       where: {
         deletedAt: null,
-        ...(!incluirServicios && { esServicio: false }),
+        ...(!incluirServicios && { tipo: 'PRODUCTO', esServicio: false }),
         ...(excludeId && { id: { not: excludeId } }),
         OR: [
           { nombre: { contains: query, mode: 'insensitive' } },
-          { marca:  { contains: query, mode: 'insensitive' } },
           { modelo: { contains: query, mode: 'insensitive' } },
+          { descripcion: { contains: query, mode: 'insensitive' } },
         ],
       },
       select: {
         id: true,
         nombre: true,
+        tipo: true,
         marca: true,
         modelo: true,
+        descripcion: true,
         stockActual: true,
         esServicio: true,
         precioVenta: true,
@@ -151,7 +196,8 @@ export class ProductoService {
     return await prisma.producto.findMany({
       where: {
         deletedAt: null,
-        esServicio: false, // Los servicios no tienen stock
+        tipo: 'PRODUCTO',
+        esServicio: false,
         stockActual: { lte: prisma.producto.fields.stockMinimo },
       },
       include: {
@@ -170,7 +216,8 @@ export class ProductoService {
     const productos = await prisma.producto.findMany({
       where: {
         deletedAt: null,
-        esServicio: false, // Excluir servicios, solo productos físicos
+        tipo: 'PRODUCTO',
+        esServicio: false,
         detalleVentas: {
           none: {
             createdAt: { gte: fechaLimite },
@@ -188,7 +235,6 @@ export class ProductoService {
       orderBy: { createdAt: 'asc' },
     });
 
-    // Calcular días sin movimiento para cada producto y filtrar por el criterio
     const hoy = new Date();
     const productosConDias = productos.map((producto) => {
       const ultimaVenta = producto.detalleVentas[0]?.createdAt || producto.createdAt;
@@ -199,6 +245,7 @@ export class ProductoService {
       return {
         id: producto.id,
         nombre: producto.nombre,
+        tipo: producto.tipo,
         stockActual: producto.stockActual,
         categoria: producto.categoria,
         ultimaVenta: producto.detalleVentas[0]?.createdAt || null,
@@ -206,7 +253,6 @@ export class ProductoService {
       };
     });
 
-    // Filtrar solo productos con días >= criterio seleccionado
     return productosConDias.filter((p) => p.diasSinMovimiento >= dias);
   }
 
@@ -219,6 +265,7 @@ export class ProductoService {
       },
       include: {
         categoria: true,
+        marcaRel: true,
         ubicacion: true,
         padre: { select: { id: true, nombre: true } },
         hijos: {
@@ -234,340 +281,297 @@ export class ProductoService {
         },
         historialCostos: {
           orderBy: { fechaRegistro: 'desc' },
-          take: 20, // Últimos 20 cambios de precio
+          take: 20,
         },
       },
     });
   }
 
-  // AJUSTE CRÍTICO: Crear con MovimientoStock automático
-  async crear(data: CrearProductoData, usuarioId: string): Promise<Producto> {
-    // Si es servicio, forzar valores por defecto en campos que no aplican
-    const esServicio = data.esServicio ?? false;
-    
-    const producto = await prisma.producto.create({
-      data: {
-        nombre: data.nombre,
-        marca: esServicio ? null : data.marca,
-        modelo: esServicio ? null : data.modelo,
-        sku: esServicio ? null : data.sku,
-        codigoBarras: esServicio ? null : data.codigoBarras,
-        descripcion: data.descripcion,
-        categoriaId: data.categoriaId,
-        ubicacionId: esServicio ? null : data.ubicacionId,
-        precioCompra: esServicio ? new Prisma.Decimal(0) : new Prisma.Decimal(data.precioCompra),
-        precioVenta: new Prisma.Decimal(data.precioVenta),
-        margenReferencia: data.margenReferencia ? new Prisma.Decimal(data.margenReferencia) : null,
-        stockActual: esServicio ? 0 : (data.stockActual ?? 0),
-        stockMinimo: esServicio ? 0 : (data.stockMinimo ?? 1),
-        imagenUrl: data.imagenUrl,
-        specs: data.specs,
-        esServicio,
-        esSegundaMano: data.esSegundaMano ?? false,
-        preciosPendientes: data.preciosPendientes ?? false,
-        padreId: data.padreId,
-        requiereSerie: data.requiereSerie ?? false,
-        garantiaProveedorMeses: data.garantiaProveedorMeses,
-        garantiaClienteMeses: data.garantiaClienteMeses,
-      },
+  // Crear producto o servicio
+  async crear(data: CrearProductoData, usuarioId?: string): Promise<Producto> {
+    const tipo: TipoItem = data.tipo || (data.esServicio ? 'SERVICIO' : 'PRODUCTO');
+    const esServicio = tipo === 'SERVICIO';
+
+    const nombre = await this.generarNombreProducto({
+      tipo,
+      nombre: data.nombre,
+      categoriaId: data.categoriaId,
+      modelo: data.modelo,
     });
 
-    // Si tiene stock inicial > 0, registrar movimiento automático
-    if (producto.stockActual > 0 && !producto.esServicio) {
-      await prisma.movimientoStock.create({
+    const padreId = data.padreId && data.padreId.trim() !== '' ? data.padreId.trim() : null;
+    const marcaId = data.marcaId && data.marcaId.trim() !== '' ? data.marcaId.trim() : null;
+    const ubicacionId = data.ubicacionId && data.ubicacionId.trim() !== '' ? data.ubicacionId.trim() : null;
+
+    return await prisma.$transaction(async (tx) => {
+      // Verificar si usuarioId existe realmente en BD para evitar P2003
+      let finalUsuarioId: string | null = null;
+      if (usuarioId) {
+        const userExists = await tx.usuario.findUnique({
+          where: { id: usuarioId },
+          select: { id: true },
+        });
+        if (userExists) {
+          finalUsuarioId = userExists.id;
+        }
+      }
+
+      const producto = await tx.producto.create({
         data: {
-          productoId: producto.id,
-          usuarioId,
-          tipo: 'INVENTARIO_INICIAL',
-          cantidad: producto.stockActual,
-          motivo: 'Stock inicial al crear producto',
+          tipo,
+          nombre,
+          marca: null,
+          marcaId,
+          modelo: esServicio ? null : (data.modelo ? data.modelo.trim().toUpperCase() : null),
+          sku: esServicio ? null : (data.sku ? data.sku.trim().toUpperCase() : null),
+          codigoBarras: esServicio ? null : (data.codigoBarras ? data.codigoBarras.trim().toUpperCase() : null),
+          descripcion: data.descripcion ? data.descripcion.trim().toUpperCase() : null,
+          categoriaId: data.categoriaId,
+          ubicacionId,
+          precioCompra: esServicio ? new Prisma.Decimal(0) : new Prisma.Decimal(data.precioCompra || 0),
+          precioVenta: new Prisma.Decimal(data.precioVenta),
+          margenReferencia: data.margenReferencia ? new Prisma.Decimal(data.margenReferencia) : null,
+          stockActual: esServicio ? 0 : (data.stockActual ?? 0),
+          stockMinimo: esServicio ? 0 : (data.stockMinimo ?? 0),
+          imagenUrl: data.imagenUrl,
+          specs: data.specs,
+          esServicio,
+          esSegundaMano: false,
+          preciosPendientes: data.preciosPendientes ?? false,
+          padreId,
+          requiereSerie: esServicio ? false : (data.requiereSerie ?? false),
+          garantiaProveedorMeses: esServicio ? 0 : (data.garantiaProveedorMeses ?? 0),
+          garantiaClienteMeses: esServicio ? 0 : (data.garantiaClienteMeses ?? 0),
         },
       });
-    }
 
-    // Registrar costo inicial en historial (solo si NO es servicio y tiene precio de compra REAL)
-    // Filtrar valores temporales < 1 (ej: Crear Producto Rápido usa 0.01)
-    if (!producto.esServicio && Number(producto.precioCompra) >= 1) {
-      await prisma.historialCosto.create({
-        data: {
-          productoId: producto.id,
-          costo: producto.precioCompra,
-          fechaRegistro: new Date(),
-        },
-      });
-    }
+      // Movimiento inicial solo para productos con stock > 0
+      if (producto.stockActual > 0 && !esServicio) {
+        await tx.movimientoStock.create({
+          data: {
+            productoId: producto.id,
+            usuarioId: finalUsuarioId,
+            tipo: 'INVENTARIO_INICIAL',
+            cantidad: producto.stockActual,
+            motivo: 'Stock inicial al crear producto',
+          },
+        });
+      }
 
-    return producto;
+      // Historial de costos solo para productos con costo > 0
+      if (!esServicio && Number(producto.precioCompra) > 0) {
+        await tx.historialCosto.create({
+          data: {
+            productoId: producto.id,
+            costo: producto.precioCompra,
+            fechaRegistro: new Date(),
+          },
+        });
+      }
+
+      return producto;
+    });
   }
 
   // Actualizar producto
   async actualizar(id: string, data: ActualizarProductoData): Promise<Producto> {
-    // Si se está marcando como servicio, limpiar campos que no aplican
-    const updateData: any = { ...data };
-    
-    if (data.esServicio === true) {
-      updateData.marca = null;
+    const productoActual = await prisma.producto.findUniqueOrThrow({
+      where: { id },
+      select: {
+        id: true,
+        tipo: true,
+        nombre: true,
+        modelo: true,
+        categoriaId: true,
+        precioCompra: true,
+        precioVenta: true,
+      },
+    });
+
+    const tipo: TipoItem = data.tipo || productoActual.tipo;
+    const esServicio = tipo === 'SERVICIO';
+
+    const categoriaId = data.categoriaId || productoActual.categoriaId;
+    const modelo = data.modelo !== undefined ? data.modelo : productoActual.modelo;
+
+    const nombre = await this.generarNombreProducto({
+      tipo,
+      nombre: data.nombre,
+      categoriaId,
+      modelo: modelo || undefined,
+    });
+
+    const updateData: any = {
+      tipo,
+      nombre,
+      esServicio,
+      categoriaId,
+      descripcion: data.descripcion !== undefined 
+        ? (data.descripcion ? data.descripcion.trim().toUpperCase() : null) 
+        : undefined,
+      imagenUrl: data.imagenUrl,
+      specs: data.specs,
+    };
+
+    if (data.padreId !== undefined) {
+      updateData.padreId = data.padreId && data.padreId.trim() !== '' ? data.padreId.trim() : null;
+    }
+
+    if (esServicio) {
       updateData.modelo = null;
+      updateData.marca = null;
+      updateData.marcaId = null;
       updateData.sku = null;
       updateData.codigoBarras = null;
       updateData.ubicacionId = null;
       updateData.precioCompra = new Prisma.Decimal(0);
       updateData.stockMinimo = 0;
-    }
-    
-    // Recalcular margenReferencia automáticamente si se actualiza precioCompra o precioVenta
-    // (pero solo si no se proveyó explícitamente un margenReferencia)
-    if (updateData.margenReferencia === undefined && (updateData.precioCompra || updateData.precioVenta)) {
-      // Obtener datos actuales del producto
-      const productoActual = await prisma.producto.findUnique({
-        where: { id },
-        select: { precioCompra: true, precioVenta: true },
-      });
-      
-      if (productoActual) {
-        const precioCompraFinal = updateData.precioCompra || Number(productoActual.precioCompra);
-        const precioVentaFinal = updateData.precioVenta || Number(productoActual.precioVenta);
-        
-        // Solo calcular si ambos precios son válidos (>= 1)
-        if (precioCompraFinal >= 1 && precioVentaFinal >= 1) {
-          const margenCalculado = ((precioVentaFinal - precioCompraFinal) / precioCompraFinal) * 100;
-          updateData.margenReferencia = new Prisma.Decimal(margenCalculado);
-        }
+      updateData.requiereSerie = false;
+      updateData.garantiaProveedorMeses = 0;
+      updateData.garantiaClienteMeses = 0;
+    } else {
+      if (data.modelo !== undefined) {
+        updateData.modelo = data.modelo ? data.modelo.trim().toUpperCase() : null;
+      }
+      if (data.sku !== undefined) {
+        updateData.sku = data.sku ? data.sku.trim().toUpperCase() : null;
+      }
+      if (data.codigoBarras !== undefined) {
+        updateData.codigoBarras = data.codigoBarras ? data.codigoBarras.trim().toUpperCase() : null;
+      }
+      if (data.precioCompra !== undefined) {
+        updateData.precioCompra = new Prisma.Decimal(data.precioCompra);
+      }
+      if (data.stockMinimo !== undefined) {
+        updateData.stockMinimo = data.stockMinimo;
+      }
+      if (data.requiereSerie !== undefined) {
+        updateData.requiereSerie = data.requiereSerie;
+      }
+      if (data.garantiaProveedorMeses !== undefined) {
+        updateData.garantiaProveedorMeses = data.garantiaProveedorMeses;
+      }
+      if (data.garantiaClienteMeses !== undefined) {
+        updateData.garantiaClienteMeses = data.garantiaClienteMeses;
       }
     }
-    
+
+    if (data.precioVenta !== undefined) {
+      updateData.precioVenta = new Prisma.Decimal(data.precioVenta);
+    }
+
+    // Recalcular margen si aplica
+    if (data.margenReferencia !== undefined) {
+      updateData.margenReferencia = data.margenReferencia ? new Prisma.Decimal(data.margenReferencia) : null;
+    } else if (!esServicio && (data.precioCompra !== undefined || data.precioVenta !== undefined)) {
+      const pCompra = data.precioCompra !== undefined ? data.precioCompra : Number(productoActual.precioCompra);
+      const pVenta = data.precioVenta !== undefined ? data.precioVenta : Number(productoActual.precioVenta);
+      if (pCompra > 0 && pVenta > 0) {
+        const margen = ((pVenta - pCompra) / pCompra) * 100;
+        updateData.margenReferencia = new Prisma.Decimal(margen);
+      }
+    }
+
     return await prisma.producto.update({
       where: { id },
-      data: {
-        ...updateData,
-        ...(updateData.precioCompra && { precioCompra: new Prisma.Decimal(updateData.precioCompra) }),
-        ...(updateData.precioVenta && { precioVenta: new Prisma.Decimal(updateData.precioVenta) }),
-        ...(updateData.margenReferencia !== undefined && { 
-          margenReferencia: updateData.margenReferencia ? new Prisma.Decimal(updateData.margenReferencia) : null 
-        }),
-        updatedAt: new Date(),
-      },
+      data: updateData,
     });
   }
 
-  // Ajuste manual de stock (con trazabilidad)
+  // Ajustar stock
   async ajustarStock(
     id: string,
-    cantidad: number,
-    tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE',
-    motivo: string,
-    usuarioId: string,
-    numerosSerie?: string[]
+    data: {
+      cantidad: number;
+      tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+      motivo: string;
+      numerosSerie?: string[];
+    },
+    usuarioId: string
   ): Promise<Producto> {
-    const producto = await prisma.producto.findUnique({ where: { id } });
+    const { cantidad, tipo, motivo } = data;
+
+    const producto = await prisma.producto.findFirst({
+      where: { id, deletedAt: null },
+    });
 
     if (!producto) {
       throw new Error('Producto no encontrado');
     }
 
-    if (producto.esServicio) {
-      throw new Error('No se puede ajustar stock de un servicio');
+    if (producto.tipo === 'SERVICIO' || producto.esServicio) {
+      throw new Error('No se puede ajustar el stock de un servicio');
     }
 
-    // Validar series si el producto requiere número de serie
-    if (producto.requiereSerie) {
-      if (tipo === 'ENTRADA') {
-        if (!numerosSerie || numerosSerie.length === 0) {
-          throw new Error('Este producto requiere números de serie. Debe proporcionar las series.');
-        }
-        if (numerosSerie.length !== cantidad) {
-          throw new Error(
-            `La cantidad de series (${numerosSerie.length}) no coincide con la cantidad a agregar (${cantidad})`
-          );
-        }
-      } else if (tipo === 'SALIDA') {
-        if (!numerosSerie || numerosSerie.length === 0) {
-          throw new Error('Este producto requiere números de serie. Debe seleccionar las series a retirar.');
-        }
-        if (numerosSerie.length !== cantidad) {
-          throw new Error(
-            `La cantidad de series (${numerosSerie.length}) no coincide con la cantidad a retirar (${cantidad})`
-          );
-        }
-        
-        // Validar que todas las series existen y están DISPONIBLES
-        const seriesExistentes = await prisma.productoSerie.findMany({
-          where: {
-            productoId: id,
-            numeroSerie: { in: numerosSerie },
-          },
+    let nuevoStock = producto.stockActual;
+    if (tipo === 'ENTRADA') {
+      nuevoStock += cantidad;
+    } else if (tipo === 'SALIDA') {
+      if (producto.stockActual < cantidad) {
+        throw new Error(`Stock insuficiente. Stock actual: ${producto.stockActual}, solicitado: ${cantidad}`);
+      }
+      nuevoStock -= cantidad;
+    } else if (tipo === 'AJUSTE') {
+      nuevoStock = cantidad;
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      let finalUsuarioId: string | null = null;
+      if (usuarioId) {
+        const userExists = await tx.usuario.findUnique({
+          where: { id: usuarioId },
+          select: { id: true },
         });
-        
-        if (seriesExistentes.length !== numerosSerie.length) {
-          throw new Error('Algunas series seleccionadas no existen para este producto');
-        }
-        
-        const seriesNoDisponibles = seriesExistentes.filter((s) => s.estado !== 'DISPONIBLE');
-        if (seriesNoDisponibles.length > 0) {
-          throw new Error(
-            `Las siguientes series no están disponibles: ${seriesNoDisponibles.map((s) => s.numeroSerie).join(', ')}`
-          );
+        if (userExists) {
+          finalUsuarioId = userExists.id;
         }
       }
-    }
 
-    // Calcular nuevo stock según tipo de movimiento
-    let nuevoStock: number;
-    if (tipo === 'ENTRADA') {
-      nuevoStock = producto.stockActual + cantidad;
-    } else if (tipo === 'SALIDA') {
-      nuevoStock = producto.stockActual - cantidad;
-    } else {
-      nuevoStock = cantidad; // AJUSTE directo
-    }
-
-    if (nuevoStock < 0) {
-      throw new Error('Stock no puede ser negativo');
-    }
-
-    // Validar que el usuario existe (trazabilidad obligatoria)
-    const usuarioExiste = await prisma.usuario.findUnique({ where: { id: usuarioId } });
-    if (!usuarioExiste) {
-      throw new Error('Sesión inválida. Por favor, cierre sesión y vuelva a iniciar.');
-    }
-
-    // Preparar operaciones de transacción
-    const transactionOperations: any[] = [
-      prisma.producto.update({
+      const productoActualizado = await tx.producto.update({
         where: { id },
-        data: { stockActual: nuevoStock, updatedAt: new Date() },
-      }),
-      prisma.movimientoStock.create({
+        data: { stockActual: nuevoStock },
+      });
+
+      await tx.movimientoStock.create({
         data: {
           productoId: id,
-          usuarioId,
+          usuarioId: finalUsuarioId,
           tipo,
-          cantidad,
+          cantidad: tipo === 'AJUSTE' ? Math.abs(nuevoStock - producto.stockActual) : cantidad,
           motivo,
         },
-      }),
-    ];
+      });
 
-    // Si hay series, agregarlas o actualizarlas según el tipo
-    if (numerosSerie && numerosSerie.length > 0) {
-      if (tipo === 'ENTRADA') {
-        // Crear nuevas series con estado DISPONIBLE
-        const seriesData = numerosSerie.map((numeroSerie) => ({
-          productoId: id,
-          numeroSerie,
-          estado: 'DISPONIBLE' as const,
-        }));
-        
-        transactionOperations.push(
-          prisma.productoSerie.createMany({
-            data: seriesData,
-          })
-        );
-      } else if (tipo === 'SALIDA') {
-        // Marcar series como DEVUELTO
-        transactionOperations.push(
-          prisma.productoSerie.updateMany({
-            where: {
-              productoId: id,
-              numeroSerie: { in: numerosSerie },
-            },
-            data: {
-              estado: 'DEVUELTO' as const,
-            },
-          })
-        );
-      }
-    }
-
-    // Actualizar stock, registrar movimiento y crear series en transacción
-    const [productoActualizado] = await prisma.$transaction(transactionOperations);
-
-    return productoActualizado;
+      return productoActualizado;
+    });
   }
 
-  // Soft delete con validaciones
-  async eliminar(id: string, forzar: boolean = false): Promise<Producto> {
-    const producto = await prisma.producto.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            detalleVentas: true,
-            detalleCompras: true,
-          },
-        },
-      },
+  // Eliminar producto (soft delete)
+  async eliminar(id: string, forzar = false): Promise<Producto> {
+    const tieneVentas = await prisma.detalleVenta.count({
+      where: { productoId: id },
     });
 
-    if (!producto) {
-      throw new Error('Producto no encontrado');
+    if (tieneVentas > 0 && !forzar) {
+      throw new Error('El producto tiene ventas registradas en el historial. ¿Deseas archivarlo de todas formas?|CONFIRMAR_REQUERIDO');
     }
 
-    if (producto.deletedAt !== null) {
-      throw new Error('El producto ya está eliminado');
-    }
-
-    // 1. BLOQUEO: Productos con hijos asignados
-    const hijos = await prisma.producto.count({
-      where: { padreId: id, deletedAt: null },
-    });
-
-    if (hijos > 0) {
-      throw new Error(`No se puede eliminar el producto porque tiene ${hijos} componente(s) asignado(s)`);
-    }
-
-    // 2. BLOQUEO: Productos con stock actual > 0
-    if (producto.stockActual > 0 && !producto.esServicio) {
-      throw new Error(
-        `No se puede eliminar el producto porque tiene stock actual de ${producto.stockActual} unidades. ` +
-        `Debe ajustar el stock a 0 antes de eliminar.`
-      );
-    }
-
-    // 3. ADVERTENCIA: Productos con historial de ventas/compras (requiere confirmación)
-    const tieneVentas = producto._count.detalleVentas > 0;
-    const tieneCompras = producto._count.detalleCompras > 0;
-
-    if ((tieneVentas || tieneCompras) && !forzar) {
-      const mensajes = [];
-      if (tieneVentas) mensajes.push(`${producto._count.detalleVentas} venta(s) registrada(s)`);
-      if (tieneCompras) mensajes.push(`${producto._count.detalleCompras} compra(s) registrada(s)`);
-      
-      throw new Error(
-        `ADVERTENCIA: Este producto tiene ${mensajes.join(' y ')}. ` +
-        `Eliminar afectará el historial. ¿Confirmar eliminación?|CONFIRMAR_REQUERIDO`
-      );
-    }
-
-    // Soft delete
     return await prisma.producto.update({
       where: { id },
       data: {
         deletedAt: new Date(),
-        updatedAt: new Date(),
+        sku: null,
+        codigoBarras: null,
       },
     });
   }
 
-  // Restaurar producto eliminado
+  // Restaurar producto
   async restaurar(id: string): Promise<Producto> {
-    const producto = await prisma.producto.findUnique({
-      where: { id },
-    });
-
-    if (!producto) {
-      throw new Error('Producto no encontrado');
-    }
-
-    if (producto.deletedAt === null) {
-      throw new Error('El producto no está eliminado');
-    }
-
     return await prisma.producto.update({
       where: { id },
       data: {
         deletedAt: null,
-        updatedAt: new Date(),
       },
     });
   }

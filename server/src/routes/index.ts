@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import ubicacionRoutes from './ubicacion.routes';
 import categoriaRoutes from './categoria.routes';
+import marcaRoutes from './marca.routes';
+import tipoEquipoRoutes from './tipo-equipo.routes';
 import productoRoutes from './producto.routes';
 import dashboardRoutes from './dashboard.routes';
 import authRoutes from './auth.routes';
@@ -19,6 +21,8 @@ const router = Router();
 router.use('/auth', authRoutes);
 router.use('/ubicaciones', ubicacionRoutes);
 router.use('/categorias', categoriaRoutes);
+router.use('/marcas', marcaRoutes);
+router.use('/tipos-equipo', tipoEquipoRoutes);
 router.use('/productos', productoRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/ventas', ventaRoutes);

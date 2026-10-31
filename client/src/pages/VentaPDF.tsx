@@ -367,9 +367,9 @@ export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
                 <Text style={[s.tableCell, { fontFamily: 'Helvetica-Bold' }]}>
                   {d.producto?.nombre ?? '—'}
                 </Text>
-                {(d.producto?.marca || d.producto?.modelo) && (
+                {d.producto?.descripcion && (
                   <Text style={s.tableCellMuted}>
-                    {[d.producto.marca, d.producto.modelo].filter(Boolean).join(' ')}
+                    {d.producto.descripcion}
                   </Text>
                 )}
               </View>

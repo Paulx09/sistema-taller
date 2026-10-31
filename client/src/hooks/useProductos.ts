@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { productoService } from '../services/producto.service';
 import { getErrorMessage } from '../lib/utils';
-import type { Producto, CrearProductoDto, ActualizarProductoDto, AjustarStockDto } from '../types';
+import type { Producto, CrearProductoDto, ActualizarProductoDto, AjustarStockDto, TipoItem } from '../types';
 
 interface UseProductosParams {
   busqueda?: string;
   categoriaId?: string;
+  marcaId?: string;
+  tipo?: TipoItem;
   esServicio?: boolean;
   bajoStock?: boolean;
   preciosPendientes?: boolean;
@@ -20,7 +22,7 @@ export const useProductos = (params?: UseProductosParams) => {
   const [error, setError] = useState<string | null>(null);
 
   // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
+  const { busqueda, categoriaId, marcaId, tipo, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -29,6 +31,8 @@ export const useProductos = (params?: UseProductosParams) => {
       const { productos: data, total: totalCount } = await productoService.getAll({
         busqueda,
         categoriaId,
+        marcaId,
+        tipo,
         esServicio,
         bajoStock,
         preciosPendientes,
@@ -43,7 +47,7 @@ export const useProductos = (params?: UseProductosParams) => {
     } finally {
       setLoading(false);
     }
-  }, [busqueda, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take]);
+  }, [busqueda, categoriaId, marcaId, tipo, esServicio, bajoStock, preciosPendientes, skip, take]);
 
   const getProductoById = async (id: string): Promise<Producto> => {
     setLoading(true);

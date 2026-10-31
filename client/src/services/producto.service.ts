@@ -46,7 +46,9 @@ export const productoService = {
   // GET /api/productos
   async getAll(params?: {
     busqueda?: string;
+    tipo?: 'PRODUCTO' | 'SERVICIO';
     categoriaId?: string;
+    marcaId?: string;
     esServicio?: boolean;
     bajoStock?: boolean;
     preciosPendientes?: boolean;

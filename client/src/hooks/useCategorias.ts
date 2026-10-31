@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { categoriaService } from '../services/categoria.service';
 import { getErrorMessage } from '../lib/utils';
-import type { Categoria, CrearCategoriaDto, ActualizarCategoriaDto } from '../types';
+import type { Categoria, TipoItem, CrearCategoriaDto, ActualizarCategoriaDto } from '../types';
 
 interface UseCategoriasParams {
+  tipo?: TipoItem;
   skip?: number;
   take?: number;
+  limit?: number;
+  todas?: boolean;
 }
 
 export const useCategorias = (params?: UseCategoriasParams) => {
@@ -14,14 +17,19 @@ export const useCategorias = (params?: UseCategoriasParams) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { skip, take } = params || {};
+  const { tipo, skip, take, limit, todas } = params || {};
 
   const fetchCategorias = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { categorias: data, total: totalCount } = await categoriaService.getAll({ skip, take });
+      const { categorias: data, total: totalCount } = await categoriaService.getAll({
+        tipo,
+        skip,
+        take,
+        limit,
+        todas,
+      });
       setCategorias(data);
       setTotal(totalCount);
     } catch (err) {
@@ -30,7 +38,7 @@ export const useCategorias = (params?: UseCategoriasParams) => {
     } finally {
       setLoading(false);
     }
-  }, [skip, take]);
+  }, [tipo, skip, take, limit, todas]);
 
   const createCategoria = async (data: CrearCategoriaDto): Promise<Categoria> => {
     setLoading(true);

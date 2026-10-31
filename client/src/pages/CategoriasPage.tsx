@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useCategorias } from '@/hooks/useCategorias';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -17,26 +18,39 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination } from '@/components/Pagination';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Wrench, Package } from 'lucide-react';
 import { CategoriaForm } from '@/components/forms/CategoriaForm';
-import type { Categoria } from '@/types';
+import type { Categoria, TipoItem } from '@/types';
 
 export function CategoriasPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [tipoFilter, setTipoFilter] = useState<'all' | TipoItem>('all');
 
   // Calcular skip para la paginación
   const skip = (currentPage - 1) * itemsPerPage;
 
   const { categorias, total, loading, error, createCategoria, updateCategoria, deleteCategoria } =
-    useCategorias({ skip, take: itemsPerPage });
+    useCategorias({
+      tipo: tipoFilter === 'all' ? undefined : tipoFilter,
+      skip,
+      take: itemsPerPage,
+    });
 
-  // Resetear a página 1 cuando cambien los items por página
+  // Resetear a página 1 cuando cambien los items por página o tipo
   useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage]);
+  }, [itemsPerPage, tipoFilter]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -80,35 +94,52 @@ export function CategoriasPage() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Categorías</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Gestiona las categorías de tus productos
+            Gestiona las categorías clasificadas por tipo (Productos y Servicios)
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Categoría
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingCategoria ? 'Editar Categoría' : 'Nueva Categoría'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingCategoria
-                  ? 'Modifica los datos de la categoría'
-                  : 'Completa los datos para crear una nueva categoría'}
-              </DialogDescription>
-            </DialogHeader>
-            <CategoriaForm
-              categoria={editingCategoria}
-              onSuccess={handleCloseDialog}
-              onCreate={createCategoria}
-              onUpdate={updateCategoria}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-3">
+          <Select
+            value={tipoFilter}
+            onValueChange={(val: 'all' | TipoItem) => setTipoFilter(val)}
+          >
+            <SelectTrigger className="w-44 bg-background h-9">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">TODOS LOS TIPOS</SelectItem>
+              <SelectItem value="PRODUCTO">📦 PRODUCTOS</SelectItem>
+              <SelectItem value="SERVICIO">🔧 SERVICIOS</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva Categoría
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingCategoria ? 'Editar Categoría' : 'Nueva Categoría'}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingCategoria
+                    ? 'Modifica los datos de la categoría'
+                    : 'Completa los datos para crear una nueva categoría'}
+                </DialogDescription>
+              </DialogHeader>
+              <CategoriaForm
+                categoria={editingCategoria}
+                tipoInicial={tipoFilter === 'all' ? 'PRODUCTO' : tipoFilter}
+                onSuccess={handleCloseDialog}
+                onCreate={createCategoria}
+                onUpdate={updateCategoria}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Mensaje de error */}
@@ -123,22 +154,44 @@ export function CategoriasPage() {
         <Table>
           <TableHeader className="bg-muted/50 sticky top-0 z-10 w-full">
             <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 pl-4 text-left">Nombre</TableHead>
-              <TableHead className="text-right text-xs font-bold uppercase tracking-wider h-10 pr-4">Acciones</TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 pl-4 text-left">
+                Nombre
+              </TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider h-10 w-36 text-center">
+                Tipo
+              </TableHead>
+              <TableHead className="text-right text-xs font-bold uppercase tracking-wider h-10 pr-4">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y">
             {categorias.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground h-32">
+                <TableCell colSpan={3} className="text-center text-muted-foreground h-32">
                   No hay categorías registradas
                 </TableCell>
               </TableRow>
             ) : (
               categorias.map((categoria) => (
                 <TableRow key={categoria.id} className="hover:bg-muted/50 transition-colors group">
-                  <TableCell className="py-2 pl-4 font-medium text-sm text-foreground">{categoria.nombre}</TableCell>
-                  <TableCell className="py-2 pr-4 text-right">
+                  <TableCell className="py-2.5 pl-4 font-medium text-sm text-foreground">
+                    {categoria.nombre}
+                  </TableCell>
+                  <TableCell className="py-2.5 text-center">
+                    {categoria.tipo === 'SERVICIO' ? (
+                      <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-semibold text-[11px] gap-1 px-2 py-0.5">
+                        <Wrench className="h-3 w-3" />
+                        SERVICIO
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 font-semibold text-[11px] gap-1 px-2 py-0.5">
+                        <Package className="h-3 w-3" />
+                        PRODUCTO
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-2.5 pr-4 text-right">
                     <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"

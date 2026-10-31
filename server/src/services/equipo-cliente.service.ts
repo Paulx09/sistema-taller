@@ -1,7 +1,9 @@
 import prisma from '../config/database';
 
 interface CrearEquipoData {
-  tipoEquipo: string;
+  tipoEquipoId?: string | null;
+  tipoEquipo?: string;
+  marcaId?: string | null;
   marca?: string | null;
   modelo?: string | null;
   numeroSerie?: string | null;
@@ -9,7 +11,9 @@ interface CrearEquipoData {
 }
 
 interface ActualizarEquipoData {
+  tipoEquipoId?: string | null;
   tipoEquipo?: string;
+  marcaId?: string | null;
   marca?: string | null;
   modelo?: string | null;
   numeroSerie?: string | null;
@@ -32,8 +36,16 @@ class EquipoClienteService {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
+        tipoEquipoId: true,
         tipoEquipo: true,
+        tipoEquipoRel: {
+          select: { id: true, nombre: true, requiereClave: true },
+        },
+        marcaId: true,
         marca: true,
+        marcaRel: {
+          select: { id: true, nombre: true },
+        },
         modelo: true,
         numeroSerie: true,
         // contrasenaPatron excluida por defecto
@@ -51,8 +63,16 @@ class EquipoClienteService {
       select: {
         id: true,
         clienteId: true,
+        tipoEquipoId: true,
         tipoEquipo: true,
+        tipoEquipoRel: {
+          select: { id: true, nombre: true, requiereClave: true },
+        },
+        marcaId: true,
         marca: true,
+        marcaRel: {
+          select: { id: true, nombre: true },
+        },
         modelo: true,
         numeroSerie: true,
         contrasenaPatron: incluirContrasena,
@@ -81,11 +101,27 @@ class EquipoClienteService {
       throw new Error('Cliente no encontrado');
     }
 
+    // Resolver nombre de tipo si se pasa tipoEquipoId
+    let tipoNombre = data.tipoEquipo || '';
+    if (data.tipoEquipoId) {
+      const tipoObj = await prisma.tipoEquipo.findUnique({ where: { id: data.tipoEquipoId } });
+      if (tipoObj) tipoNombre = tipoObj.nombre;
+    }
+
+    // Resolver nombre de marca si se pasa marcaId
+    let marcaNombre = data.marca ?? null;
+    if (data.marcaId) {
+      const marcaObj = await prisma.marca.findUnique({ where: { id: data.marcaId } });
+      if (marcaObj) marcaNombre = marcaObj.nombre;
+    }
+
     return prisma.equipoCliente.create({
       data: {
         clienteId,
-        tipoEquipo: data.tipoEquipo,
-        marca: data.marca ?? null,
+        tipoEquipoId: data.tipoEquipoId ?? null,
+        tipoEquipo: tipoNombre,
+        marcaId: data.marcaId ?? null,
+        marca: marcaNombre,
         modelo: data.modelo ?? null,
         numeroSerie: data.numeroSerie ?? null,
         contrasenaPatron: data.contrasenaPatron ?? null,
@@ -93,8 +129,16 @@ class EquipoClienteService {
       select: {
         id: true,
         clienteId: true,
+        tipoEquipoId: true,
         tipoEquipo: true,
+        tipoEquipoRel: {
+          select: { id: true, nombre: true, requiereClave: true },
+        },
+        marcaId: true,
         marca: true,
+        marcaRel: {
+          select: { id: true, nombre: true },
+        },
         modelo: true,
         numeroSerie: true,
         createdAt: true,
@@ -113,11 +157,25 @@ class EquipoClienteService {
       throw new Error('Equipo no encontrado');
     }
 
+    let tipoNombre = data.tipoEquipo;
+    if (data.tipoEquipoId) {
+      const tipoObj = await prisma.tipoEquipo.findUnique({ where: { id: data.tipoEquipoId } });
+      if (tipoObj) tipoNombre = tipoObj.nombre;
+    }
+
+    let marcaNombre = data.marca;
+    if (data.marcaId) {
+      const marcaObj = await prisma.marca.findUnique({ where: { id: data.marcaId } });
+      if (marcaObj) marcaNombre = marcaObj.nombre;
+    }
+
     return prisma.equipoCliente.update({
       where: { id },
       data: {
-        ...(data.tipoEquipo !== undefined && { tipoEquipo: data.tipoEquipo }),
-        ...(data.marca !== undefined && { marca: data.marca }),
+        ...(data.tipoEquipoId !== undefined && { tipoEquipoId: data.tipoEquipoId }),
+        ...(tipoNombre !== undefined && { tipoEquipo: tipoNombre }),
+        ...(data.marcaId !== undefined && { marcaId: data.marcaId }),
+        ...(marcaNombre !== undefined && { marca: marcaNombre }),
         ...(data.modelo !== undefined && { modelo: data.modelo }),
         ...(data.numeroSerie !== undefined && { numeroSerie: data.numeroSerie }),
         ...(data.contrasenaPatron !== undefined && { contrasenaPatron: data.contrasenaPatron }),
@@ -125,8 +183,16 @@ class EquipoClienteService {
       select: {
         id: true,
         clienteId: true,
+        tipoEquipoId: true,
         tipoEquipo: true,
+        tipoEquipoRel: {
+          select: { id: true, nombre: true, requiereClave: true },
+        },
+        marcaId: true,
         marca: true,
+        marcaRel: {
+          select: { id: true, nombre: true },
+        },
         modelo: true,
         numeroSerie: true,
         createdAt: true,

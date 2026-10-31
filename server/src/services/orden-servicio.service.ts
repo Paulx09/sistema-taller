@@ -534,7 +534,9 @@ class OrdenServicioService {
     });
     if (!producto) throw new Error('Producto no encontrado');
 
-    if (!producto.esServicio && producto.stockActual < data.cantidad) {
+    const esServicioProducto = (producto as any).tipo === 'SERVICIO' || producto.esServicio;
+
+    if (!esServicioProducto && producto.stockActual < data.cantidad) {
       throw new Error(
         `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stockActual}, solicitado: ${data.cantidad}`,
       );
@@ -554,7 +556,14 @@ class OrdenServicioService {
         },
       });
 
-      if (!producto.esServicio) {
+      if (esServicioProducto) {
+        if (Number(producto.precioVenta) !== Number(data.precioUnitario)) {
+          await tx.producto.update({
+            where: { id: data.productoId },
+            data: { precioVenta: new Prisma.Decimal(data.precioUnitario) },
+          });
+        }
+      } else {
         await tx.producto.update({
           where: { id: data.productoId },
           data: { stockActual: { decrement: data.cantidad } },
@@ -592,17 +601,19 @@ class OrdenServicioService {
       where: { id: itemId },
       include: {
         equipoOrden: { select: { ordenId: true, estado: true } },
-        producto: { select: { esServicio: true } },
+        producto: { select: { esServicio: true, tipo: true } },
       },
     });
     if (!item || item.equipoOrden.ordenId !== ordenId) {
       throw new Error('Item no encontrado en esta orden');
     }
 
+    const itemEsServicio = (item.producto as any).tipo === 'SERVICIO' || item.producto.esServicio;
+
     await prisma.$transaction(async (tx) => {
       await tx.itemOrden.delete({ where: { id: itemId } });
 
-      if (!item.producto.esServicio) {
+      if (!itemEsServicio) {
         await tx.producto.update({
           where: { id: item.productoId },
           data: { stockActual: { increment: item.cantidad } },
@@ -640,17 +651,18 @@ class OrdenServicioService {
       where: { id: itemId },
       include: {
         equipoOrden: { select: { ordenId: true, estado: true } },
-        producto: { select: { esServicio: true, stockActual: true, nombre: true } },
+        producto: { select: { esServicio: true, tipo: true, stockActual: true, nombre: true } },
       },
     });
     if (!item || item.equipoOrden.ordenId !== ordenId) {
       throw new Error('Item no encontrado en esta orden');
     }
 
+    const itemEsServicio = (item.producto as any).tipo === 'SERVICIO' || item.producto.esServicio;
     const oldCantidad = item.cantidad;
     const diff = nuevaCantidad - oldCantidad;
 
-    if (!item.producto.esServicio && diff > 0 && item.producto.stockActual < diff) {
+    if (!itemEsServicio && diff > 0 && item.producto.stockActual < diff) {
       throw new Error(
         `Stock insuficiente para "${item.producto.nombre}". Disponible: ${item.producto.stockActual}, adicional requerido: ${diff}`,
       );
@@ -664,7 +676,7 @@ class OrdenServicioService {
         data: { cantidad: nuevaCantidad, subtotal },
       });
 
-      if (!item.producto.esServicio && diff !== 0) {
+      if (!itemEsServicio && diff !== 0) {
         if (diff > 0) {
           await tx.producto.update({
             where: { id: item.productoId },
