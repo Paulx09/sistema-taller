@@ -49,7 +49,7 @@
   - Eliminar fallback silencioso de ceros en `dashboard.service.ts`, añadir `.catch()` en `VentasPage.tsx` y `ComprasPage.tsx`, y corregir log `[object Object]` en `api.ts`.
 
 ### Bloque C — Gestión de Usuarios ADMIN
-- [ ] **C1. Backend Usuarios (`server/`)**
+- [x] **C1. Backend Usuarios (`server/`)** *(Completado en TASK-04: `requireAdmin`, `rol != 'SISTEMA'` en `authService.login` y `listarUsuarios`, `/api/usuarios` `GET/POST/PATCH /:id/PATCH /:id/password` con Zod y `bcrypt`; `npm run build` OK)*
   - Excluir `rol = 'SISTEMA'` (`tienda_web`) en `authService.listarUsuarios()`.
   - Middleware `requireAdmin` + endpoints `/api/usuarios` (`GET`, `POST`, `PATCH /:id`, `PATCH /:id/password`) con validación Zod y hash `bcrypt`.
 - [ ] **C2. Frontend Usuarios (`client/`)**

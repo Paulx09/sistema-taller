@@ -15,11 +15,13 @@ import equipoClienteRoutes from './equipo-cliente.routes';
 import ordenServicioRoutes from './orden-servicio.routes';
 import backupRoutes from './backup.routes';
 import localRoutes from './local.routes';
+import usuarioRoutes from './usuario.routes';
 
 const router = Router();
 
 // Montar rutas
 router.use('/auth', authRoutes);
+router.use('/usuarios', usuarioRoutes);
 router.use('/locales', localRoutes);
 router.use('/ubicaciones', ubicacionRoutes);
 router.use('/categorias', categoriaRoutes);

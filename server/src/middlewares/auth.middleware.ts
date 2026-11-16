@@ -62,3 +62,19 @@ export const requireAuth = async (
     });
   }
 };
+
+export const requireAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (req.userRole !== 'ADMIN') {
+    res.status(403).json({
+      success: false,
+      error: 'Acceso denegado: se requiere rol ADMIN',
+    });
+    return;
+  }
+
+  next();
+};

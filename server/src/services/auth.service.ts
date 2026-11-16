@@ -30,7 +30,7 @@ class AuthService {
       where: { username },
     });
 
-    if (!user) {
+    if (!user || user.rol === 'SISTEMA') {
       throw new Error('Credenciales inválidas');
     }
 
@@ -65,6 +65,7 @@ class AuthService {
 
   async listarUsuarios() {
     return prisma.usuario.findMany({
+      where: { rol: { not: 'SISTEMA' } },
       select: { id: true, username: true, nombreCompleto: true, rol: true },
       orderBy: { nombreCompleto: 'asc' },
     });
