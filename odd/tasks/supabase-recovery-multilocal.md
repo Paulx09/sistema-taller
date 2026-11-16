@@ -29,9 +29,9 @@
 - [x] **TASK-01** `[route: inline]` — Documentación en `docs/PLAN_RECUPERACION_Y_MULTILOCAL.md` + Migración SQL aditiva en Supabase (9 tablas faltantes, tabla `locales` con Copacabana y Cielo Plaza, `local_id` nullable en `ventas` y `ordenes_servicio`, FKs pendientes en `movimientos_stock`) + revisión de `server/.env`.
   - *Acceptance:* Todas las tablas existen en Supabase, `locales` tiene 2 sedes activas, `aypcs-website` intacto.
   - *Checks:* `information_schema.tables` (28 tablas en `public`), `public.locales` (`COPACABANA`, `CIELO_PLAZA`), `new URL(DATABASE_URL)` OK con `AUTO_DB_BOOTSTRAP=false`.
-- [ ] **TASK-02** `[route: inline]` — Restauración segura del backup real (`backup_taller_2026-10-30_17-29`) sin modificar el archivo original y backfill de histórico a **Tienda Copacabana**.
+- [x] **TASK-02** `[route: inline]` — Restauración segura del backup real (`backup_taller_2026-10-30_17-29`) sin modificar el archivo original y backfill de histórico a **Tienda Copacabana**.
   - *Acceptance:* Datos reales restaurados, bot `tienda_web` preservado, ventas/OS históricas asignadas a `Tienda Copacabana`.
-  - *Checks:* Conteos SQL por tabla en Supabase y verificación de `aypcs-website` sin errores.
+  - *Checks:* `productos=144`, `categorias=62`, `ventas=96` (`ventas_con_local=96`), `ordenes_servicio=1` (`os_con_local=1`), `usuarios=2` (`admin` + `tienda_web`), `sedes_courier=29`, `productos_codigo_barras_key` creado.
 - [ ] **TASK-03** `[route: delegated]` — Backend Multi-Local y Métricas Mensuales (`schema.prisma`, `/api/locales`, `/api/ventas`, `/api/ordenes-servicio`, `/api/dashboard/metricas` con filtro `localId` y `mes`/`anio` + comparativa por tienda, y ajuste `database-bootstrap.ts`).
   - *Acceptance:* `prisma generate` y `npm run build` en `server/` pasan; API crea y filtra por local y calcula rendimiento mensual por local.
   - *Checks:* `cd server && npx prisma generate && npm run build`.
@@ -47,4 +47,7 @@
 
 ## Progress & Evidence
 - Rama creada: `feat/supabase-recovery-multilocal`.
-- Próximo paso: Leer de vuelta `odd/tasks/supabase-recovery-multilocal.md` y mirror en Engram, luego ejecutar TASK-01.
+- **TASK-01** completada — Commit `a2fd1ac` (`docs: add Supabase recovery and multi-local plan`).
+  - Migración `sistema_taller_complete_schema_and_locales` aplicada en Supabase (`ehzuznryngknijwcgjwq`).
+  - `server/.env` actualizado (`%40` en `DATABASE_URL` y `AUTO_DB_BOOTSTRAP=false`).
+- Próximo paso: Ejecutar TASK-02 (restauración segura desde `backup_taller_2026-10-30_17-29.sql`).

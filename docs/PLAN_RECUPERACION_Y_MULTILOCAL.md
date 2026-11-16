@@ -31,7 +31,7 @@
 - [x] **A2. Revisión de entorno (`server/.env` y bootstrap)** *(Codificado `%40` en `DATABASE_URL`, validado con `new URL(...)`, agregado `AUTO_DB_BOOTSTRAP=false`)*
   - Codificar `%40` en la contraseña de `DATABASE_URL`.
   - Controlar `AUTO_DB_BOOTSTRAP=false` en entornos conectados a Supabase compartido.
-- [ ] **A3. Restauración segura de `backup_taller_2026-10-30_17-29`**
+- [x] **A3. Restauración segura de `backup_taller_2026-10-30_17-29`** *(Restaurado sin modificar el archivo original: 144 productos, 62 categorías, 96 ventas, 1 orden de servicio, 124 historial_costos, 241 movimientos_stock; preservados 29 sedes_courier y usuario bot `tienda_web`; ventas/OS históricas asignadas a `Tienda Copacabana`; índice único `productos_codigo_barras_key` agregado)*
   - Limpiar únicamente datos de prueba en tablas del taller (preservando `tienda_web`, `locales` y todo `ecommerce_schema`).
   - Importar solo los datos del backup en orden de dependencias.
   - Asignar `local_id = Tienda Copacabana` a todo el histórico de `ventas` y `ordenes_servicio`.
