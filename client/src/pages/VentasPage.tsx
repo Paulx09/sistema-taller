@@ -673,7 +673,7 @@ export function VentasPage() {
           {/* Columna izquierda: Catálogo */}
           <section className="flex flex-col flex-1 border-r border-border bg-muted/20 overflow-hidden">
             {/* Header búsqueda */}
-            <div className="p-5 pb-3 bg-background border-b border-border shadow-sm z-10 flex-shrink-0">
+            <div className="px-4 py-3 bg-background border-b border-border shadow-sm z-10 flex-shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -724,8 +724,8 @@ export function VentasPage() {
               </div> */}
             </div>
 
-            {/* Grid de productos */}
-            <div className="flex-1 overflow-y-auto p-5">
+            {/* Lista inline de productos */}
+            <div className="flex-1 overflow-y-auto p-3">
               {errorProductos && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
@@ -742,7 +742,7 @@ export function VentasPage() {
                   <p className="text-sm">No se encontraron productos</p>
                 </div>
               ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-border bg-background divide-y divide-border overflow-hidden shadow-sm">
                   {productos.map((p) => {
                     const stock = stockLabel(p);
                     const enCarrito = carrito.find((i) => i.producto.id === p.id);
@@ -751,51 +751,54 @@ export function VentasPage() {
                     return (
                       <button
                         key={p.id}
+                        type="button"
                         onClick={() => agregarAlCarrito(p)}
                         disabled={agotado}
                         className={cn(
-                          'group flex flex-col justify-between rounded-xl border p-4 text-left transition-all',
+                          'group w-full flex items-center justify-between gap-3 px-3.5 py-2 text-left transition-colors',
                           agotado
-                            ? 'opacity-50 cursor-not-allowed border-border bg-muted/30'
+                            ? 'opacity-50 cursor-not-allowed bg-muted/30'
                             : enCarrito
-                              ? 'border-primary ring-1 ring-primary bg-primary/5 shadow-sm hover:shadow-md'
-                              : 'border-border bg-background hover:border-primary hover:ring-1 hover:ring-primary shadow-sm hover:shadow-md'
+                              ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary'
+                              : 'hover:bg-muted/50'
                         )}
                       >
-                        <div>
-                          <div className="flex justify-between items-start mb-2">
-                            <span className={cn(
-                              'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
-                              stock.color
-                            )}>
-                              {stock.text}
-                            </span>
-                            {enCarrito && (
-                              <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                                ×{enCarrito.cantidad}
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="font-semibold text-sm line-clamp-2 mb-0.5 uppercase">{p.nombre}</h3>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm leading-tight uppercase truncate text-foreground">
+                            {p.nombre}
+                          </h3>
                           {p.descripcion ? (
-                            <p className="text-xs text-muted-foreground line-clamp-2">
+                            <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
                               {p.descripcion}
                             </p>
                           ) : (
-                            <p className="text-xs text-muted-foreground/60 italic">
+                            <p className="text-[11px] text-muted-foreground/60 italic truncate leading-tight mt-0.5">
                               {p.categoria?.nombre || '—'}
                             </p>
                           )}
                         </div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <span className="text-base font-bold">{fmt(p.precioVenta)}</span>
+                        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                          {enCarrito && (
+                            <span className="text-[11px] font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5 tabular-nums whitespace-nowrap">
+                              ×{enCarrito.cantidad}
+                            </span>
+                          )}
+                          <span className={cn(
+                            'inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset whitespace-nowrap',
+                            stock.color
+                          )}>
+                            {stock.text}
+                          </span>
+                          <span className="text-sm font-bold tabular-nums min-w-[76px] text-right whitespace-nowrap text-foreground">
+                            {fmt(p.precioVenta)}
+                          </span>
                           <div className={cn(
-                            'flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                            'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
                             agotado
                               ? 'bg-muted text-muted-foreground'
                               : 'bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-white'
                           )}>
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-3.5 w-3.5" />
                           </div>
                         </div>
                       </button>
@@ -1314,20 +1317,20 @@ export function VentasPage() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 mb-6 p-4 bg-muted/30 rounded-xl border border-border items-end">
+              <div className="lg:col-span-3 xl:col-span-2 min-w-0">
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha Desde</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        'w-full h-9 justify-start text-left font-normal text-sm',
+                        'w-full h-9 justify-start text-left font-normal text-sm min-w-0 overflow-hidden',
                         !fechaDesde && 'text-muted-foreground'
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {fechaDesde ? format(fechaDesde, 'PPP', { locale: es }) : 'Seleccionar fecha'}
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">{fechaDesde ? format(fechaDesde, 'dd/MM/yyyy', { locale: es }) : 'Seleccionar fecha'}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -1347,19 +1350,19 @@ export function VentasPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div>
+              <div className="lg:col-span-3 xl:col-span-2 min-w-0">
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha Hasta</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        'w-full h-9 justify-start text-left font-normal text-sm',
+                        'w-full h-9 justify-start text-left font-normal text-sm min-w-0 overflow-hidden',
                         !fechaHasta && 'text-muted-foreground'
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {fechaHasta ? format(fechaHasta, 'PPP', { locale: es }) : 'Seleccionar fecha'}
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">{fechaHasta ? format(fechaHasta, 'dd/MM/yyyy', { locale: es }) : 'Seleccionar fecha'}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -1379,7 +1382,7 @@ export function VentasPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div>
+              <div className="lg:col-span-3 xl:col-span-2 min-w-0">
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Local</label>
                 <Select
                   value={localFiltro}
@@ -1402,7 +1405,7 @@ export function VentasPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3 min-w-0">
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Buscar Cliente / Código</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1414,7 +1417,7 @@ export function VentasPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="sm:col-span-2 lg:col-span-12 xl:col-span-3 flex flex-wrap items-center justify-end gap-2 min-w-0">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -1424,14 +1427,14 @@ export function VentasPage() {
                     setBusquedaCliente('');
                     setPaginaActual(1);
                   }}
-                  className="h-9 text-sm"
+                  className="h-9 px-3 text-sm shrink-0"
                 >
                   <X className="h-4 w-4 mr-1" />
                   Limpiar
                 </Button>
                 <Button
                   onClick={cargarHistorialCompleto}
-                  className="h-9 text-sm"
+                  className="h-9 px-3 text-sm shrink-0"
                 >
                   <Search className="h-4 w-4 mr-1" />
                   Buscar
