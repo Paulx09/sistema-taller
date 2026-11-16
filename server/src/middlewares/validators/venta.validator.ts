@@ -13,6 +13,9 @@ const detalleVentaSchema = z.object({
 });
 
 const crearVentaSchema = z.object({
+  localId: z
+    .string({ message: 'Debes seleccionar un local válido' })
+    .uuid('Debes seleccionar un local válido'),
   clienteId: z.string().uuid().optional().nullable(),
   clienteNombre: z.string().max(100).trim().optional().nullable(),
   metodoPago: z

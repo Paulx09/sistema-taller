@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { Prisma } from '@prisma/client';
+import localService, { buildLocalWhereFilter, LOCAL_SELECT } from './local.service';
 
 interface DetalleVentaInput {
   productoId: string;
@@ -9,6 +10,7 @@ interface DetalleVentaInput {
 }
 
 interface CrearVentaData {
+  localId?: string;
   clienteId?: string | null;
   clienteNombre?: string | null;
   metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
@@ -19,6 +21,7 @@ interface CrearVentaData {
 interface FiltrosVenta {
   desde?: Date;
   hasta?: Date;
+  localId?: string;
   skip?: number;
   take?: number;
 }
@@ -42,10 +45,11 @@ class VentaService {
 
   // GET /api/ventas — lista paginada con filtros
   async listar(filtros: FiltrosVenta = {}) {
-    const { desde, hasta, skip = 0, take = 50 } = filtros;
+    const { desde, hasta, localId, skip = 0, take = 50 } = filtros;
 
     const where: Prisma.VentaWhereInput = {
       deletedAt: null,
+      ...buildLocalWhereFilter(localId),
       ...(desde || hasta
         ? {
             fecha: {
@@ -63,6 +67,9 @@ class VentaService {
         take,
         orderBy: { fecha: 'desc' },
         include: {
+          local: {
+            select: LOCAL_SELECT,
+          },
           cliente: {
             select: { id: true, nombre: true, dniRuc: true, telefono: true },
           },
@@ -111,6 +118,9 @@ class VentaService {
     const venta = await prisma.venta.findFirst({
       where: { id, deletedAt: null },
       include: {
+        local: {
+          select: LOCAL_SELECT,
+        },
         cliente: {
           select: { id: true, nombre: true, dniRuc: true, telefono: true },
         },
@@ -148,6 +158,7 @@ class VentaService {
   // POST /api/ventas — crear venta con transacción ACID
   async crear(data: CrearVentaData) {
     const { clienteNombre, metodoPago, detalles, usuarioId } = data;
+    const local = await localService.validarLocalActivo(data.localId);
 
     // 1. Verificar stock de TODOS los productos antes de iniciar la transacción
     for (const detalle of detalles) {
@@ -282,6 +293,7 @@ class VentaService {
           codigoCorrelativo: correlativo,
           anioCorrelativo: anio,
           usuarioId,
+          localId: local.id,
           clienteId: data.clienteId || null,
           clienteNombre: finalClienteNombre,
           metodoPago,
@@ -290,6 +302,9 @@ class VentaService {
           estado: 'COMPLETADA',
         },
         include: {
+          local: {
+            select: LOCAL_SELECT,
+          },
           cliente: {
             select: { id: true, nombre: true, dniRuc: true, telefono: true },
           },

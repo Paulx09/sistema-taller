@@ -37,7 +37,7 @@
   - Asignar `local_id = Tienda Copacabana` a todo el histórico de `ventas` y `ordenes_servicio`.
 
 ### Bloque B — Multi-Local (Copacabana / Cielo Plaza) y Rendimiento Mensual
-- [ ] **B1. Backend Multi-Local (`server/`)**
+- [x] **B1. Backend Multi-Local (`server/`)** *(Completado en TASK-03: modelo `Local`, `GET /api/locales`, `localId` requerido al crear en `ventas` y `ordenes-servicio`, filtro `localId` incluyendo `WEB`, `resumenMensual` y `rendimientoPorLocal` en `GET /api/dashboard/metricas`; `prisma generate` y `npm run build` OK)*
   - Actualizar `schema.prisma` (`Local`, relaciones en `Venta` y `OrdenServicio`).
   - Crear endpoint `GET /api/locales`.
   - Exigir `localId` al crear ventas y órdenes desde el taller, filtrar por `localId` (y `WEB` para `localId IS NULL`) e incluir `local` en respuestas.

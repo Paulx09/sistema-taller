@@ -12,6 +12,9 @@ const equipoOrdenInputSchema = z.object({
 
 // Crear orden
 const crearOrdenSchema = z.object({
+  localId: z
+    .string({ message: 'Debes seleccionar un local válido' })
+    .uuid('Debes seleccionar un local válido'),
   clienteId: z.string().uuid('clienteId debe ser un UUID válido'),
   usuarioTecnicoId: z.string().uuid('usuarioTecnicoId debe ser un UUID válido').optional().nullable(),
   pagoACuenta: z.number().min(0, 'El pago a cuenta no puede ser negativo').optional(),

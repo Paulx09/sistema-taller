@@ -6,13 +6,14 @@ class OrdenServicioController {
   // GET /api/ordenes-servicio
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { estado, clienteId, usuarioTecnicoId, desde, hasta, page, limit } = req.query;
+      const { estado, localId, clienteId, usuarioTecnicoId, desde, hasta, page, limit } = req.query;
 
       const take = Number(limit) || 50;
       const skip = page ? (Number(page) - 1) * take : 0;
 
       const { ordenes, total } = await ordenServicioService.listar({
         estado: estado as EstadoOrden | undefined,
+        localId: typeof localId === 'string' && localId.trim() ? localId.trim() : undefined,
         clienteId: clienteId as string | undefined,
         usuarioTecnicoId: usuarioTecnicoId as string | undefined,
         desde: desde ? new Date(desde as string) : undefined,
@@ -28,7 +29,10 @@ class OrdenServicioController {
         page: Number(page) || 1,
         totalPages: Math.ceil(total / take),
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
       next(error);
     }
   }
@@ -50,10 +54,11 @@ class OrdenServicioController {
   // POST /api/ordenes-servicio
   async crear(req: Request, res: Response, next: NextFunction) {
     try {
-      const { clienteId, usuarioTecnicoId, pagoACuenta, equipos } = req.body;
+      const { localId, clienteId, usuarioTecnicoId, pagoACuenta, equipos } = req.body;
       const usuarioRegistroId = req.userId!;
 
       const orden = await ordenServicioService.crear({
+        localId,
         clienteId,
         usuarioRegistroId,
         usuarioTecnicoId: usuarioTecnicoId ?? null,
@@ -67,6 +72,9 @@ class OrdenServicioController {
         mensaje: 'Orden de servicio creada exitosamente',
       });
     } catch (error: any) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
       const notFoundErrors = ['Cliente no encontrado', 'Equipo no encontrado', 'Técnico no encontrado', 'no pertenece al cliente'];
       if (notFoundErrors.some((msg) => error.message.includes(msg))) {
         return res.status(404).json({ success: false, error: error.message });

@@ -5,7 +5,7 @@ class VentaController {
   // GET /api/ventas
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { desde, hasta, page, limit } = req.query;
+      const { desde, hasta, localId, page, limit } = req.query;
 
       const skip = page ? (Number(page) - 1) * (Number(limit) || 50) : 0;
       const take = Number(limit) || 50;
@@ -27,6 +27,7 @@ class VentaController {
       const filtros = {
         desde: fechaDesde,
         hasta: fechaHasta,
+        localId: typeof localId === 'string' && localId.trim() ? localId.trim() : undefined,
         skip,
         take,
       };
@@ -40,7 +41,13 @@ class VentaController {
         page: Number(page) || 1,
         totalPages: Math.ceil(total / take),
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          success: false,
+          error: error.message,
+        });
+      }
       next(error);
     }
   }
@@ -84,10 +91,11 @@ class VentaController {
   // POST /api/ventas
   async crear(req: Request, res: Response, next: NextFunction) {
     try {
-      const { clienteId, clienteNombre, metodoPago, detalles } = req.body;
+      const { localId, clienteId, clienteNombre, metodoPago, detalles } = req.body;
 
       // req.userId viene del middleware requireAuth
       const venta = await ventaService.crear({
+        localId,
         clienteId,
         clienteNombre,
         metodoPago,
@@ -101,8 +109,9 @@ class VentaController {
         mensaje: `Venta #${venta.codigoCorrelativo} registrada correctamente`,
       });
     } catch (error: any) {
-      // Errores de negocio (stock insuficiente, producto no encontrado)
+      // Errores de negocio (local inválido, stock insuficiente, producto no encontrado)
       if (
+        error.statusCode === 400 ||
         error.message?.includes('Stock insuficiente') ||
         error.message?.includes('no encontrado')
       ) {

@@ -32,9 +32,9 @@
 - [x] **TASK-02** `[route: inline]` — Restauración segura del backup real (`backup_taller_2026-10-30_17-29`) sin modificar el archivo original y backfill de histórico a **Tienda Copacabana**.
   - *Acceptance:* Datos reales restaurados, bot `tienda_web` preservado, ventas/OS históricas asignadas a `Tienda Copacabana`.
   - *Checks:* `productos=144`, `categorias=62`, `ventas=96` (`ventas_con_local=96`), `ordenes_servicio=1` (`os_con_local=1`), `usuarios=2` (`admin` + `tienda_web`), `sedes_courier=29`, `productos_codigo_barras_key` creado.
-- [ ] **TASK-03** `[route: delegated]` — Backend Multi-Local y Métricas Mensuales (`schema.prisma`, `/api/locales`, `/api/ventas`, `/api/ordenes-servicio`, `/api/dashboard/metricas` con filtro `localId` y `mes`/`anio` + comparativa por tienda, y ajuste `database-bootstrap.ts`).
+- [x] **TASK-03** `[route: delegated]` — Backend Multi-Local y Métricas Mensuales (`schema.prisma`, `/api/locales`, `/api/ventas`, `/api/ordenes-servicio`, `/api/dashboard/metricas` con filtro `localId` y `mes`/`anio` + comparativa por tienda).
   - *Acceptance:* `prisma generate` y `npm run build` en `server/` pasan; API crea y filtra por local y calcula rendimiento mensual por local.
-  - *Checks:* `cd server && npx prisma generate && npm run build`.
+  - *Checks:* `cd server && npx prisma generate && npm run build` (exit 0).
 - [ ] **TASK-04** `[route: delegated]` — Backend Gestión de Usuarios ADMIN (`GET/POST /api/usuarios`, `PATCH /api/usuarios/:id/password`, `PATCH /api/usuarios/:id`, `requireAdmin`, `bcrypt`, filtro `rol != 'SISTEMA'` en `/api/auth/usuarios`).
   - *Acceptance:* Solo ADMIN puede crear/editar/cambiar contraseñas; contraseñas siempre con `bcrypt`; `tienda_web` excluido de listados de taller.
   - *Checks:* `cd server && npm run build` y pruebas de endpoints.
@@ -50,4 +50,7 @@
 - **TASK-01** completada — Commit `a2fd1ac` (`docs: add Supabase recovery and multi-local plan`).
   - Migración `sistema_taller_complete_schema_and_locales` aplicada en Supabase (`ehzuznryngknijwcgjwq`).
   - `server/.env` actualizado (`%40` en `DATABASE_URL` y `AUTO_DB_BOOTSTRAP=false`).
-- Próximo paso: Ejecutar TASK-02 (restauración segura desde `backup_taller_2026-10-30_17-29.sql`).
+- **TASK-02** completada — Commit `57e4172` (`docs: record TASK-02 backup restoration and Copacabana backfill`).
+  - Backup real restaurado en Supabase sin modificar el original (`144` productos, `62` categorías, `96` ventas, `1` orden de servicio, `124` historial_costos, `241` movimientos_stock; `29` sedes_courier y `tienda_web` preservados).
+  - Índice único `productos_codigo_barras_key` aplicado en Supabase (`add_productos_codigo_barras_unique`).
+- Próximo paso: Delegar TASK-03 (Backend Multi-Local y Métricas Mensuales) a worker `self`.

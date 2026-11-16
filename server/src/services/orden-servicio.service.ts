@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { Prisma, EstadoOrden, EstadoEquipoOrden } from '@prisma/client';
+import localService, { buildLocalWhereFilter, LOCAL_SELECT } from './local.service';
 
 // Interfaces
 
@@ -12,6 +13,7 @@ interface EquipoOrdenInput {
 }
 
 interface CrearOrdenData {
+  localId?: string;
   clienteId: string;
   usuarioRegistroId: string;
   usuarioTecnicoId?: string | null;
@@ -39,6 +41,7 @@ interface AgregarItemData {
 
 interface FiltrosOrden {
   estado?: EstadoOrden;
+  localId?: string;
   clienteId?: string;
   usuarioTecnicoId?: string;
   desde?: Date;
@@ -156,10 +159,11 @@ class OrdenServicioService {
   // GET /api/ordenes-servicio
 
   async listar(filtros: FiltrosOrden = {}) {
-    const { estado, clienteId, usuarioTecnicoId, desde, hasta, skip = 0, take = 50 } = filtros;
+    const { estado, localId, clienteId, usuarioTecnicoId, desde, hasta, skip = 0, take = 50 } = filtros;
 
     const where: Prisma.OrdenServicioWhereInput = {
       deletedAt: null,
+      ...buildLocalWhereFilter(localId),
       ...(estado ? { estado } : {}),
       ...(clienteId ? { clienteId } : {}),
       ...(usuarioTecnicoId ? { usuarioTecnicoId } : {}),
@@ -181,6 +185,7 @@ class OrdenServicioService {
           fechaEmision: true,
           total: true,
           pagoACuenta: true,
+          local: { select: LOCAL_SELECT },
           cliente: { select: { id: true, nombre: true, telefono: true } },
           equipos: {
             select: {
@@ -214,6 +219,7 @@ class OrdenServicioService {
     const orden = await prisma.ordenServicio.findFirst({
       where: { id, deletedAt: null },
       include: {
+        local: { select: LOCAL_SELECT },
         cliente: { select: { id: true, nombre: true, telefono: true, dniRuc: true } },
         usuarioRegistro: { select: { id: true, username: true, nombreCompleto: true } },
         usuarioTecnico: { select: { id: true, username: true, nombreCompleto: true } },
@@ -256,6 +262,8 @@ class OrdenServicioService {
   // POST /api/ordenes-servicio
 
   async crear(data: CrearOrdenData) {
+    const local = await localService.validarLocalActivo(data.localId);
+
     if (!data.equipos || data.equipos.length === 0) {
       throw new Error('La orden debe tener al menos un equipo');
     }
@@ -286,6 +294,7 @@ class OrdenServicioService {
         data: {
           codigoCorrelativo: correlativo,
           anioCorrelativo: anio,
+          localId: local.id,
           clienteId: data.clienteId,
           usuarioRegistroId: data.usuarioRegistroId,
           usuarioTecnicoId: data.usuarioTecnicoId ?? null,

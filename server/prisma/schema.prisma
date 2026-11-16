@@ -131,6 +131,20 @@ model Producto {
   @@map("productos")
 }
 
+model Local {
+  id        String          @id @default(uuid())
+  codigo    String          @unique @db.VarChar(30)
+  nombre    String          @unique @db.VarChar(100)
+  direccion String?         @db.VarChar(255)
+  activo    Boolean         @default(true)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  ventas    Venta[]
+  ordenes   OrdenServicio[]
+
+  @@map("locales")
+}
+
 model Venta {
   id                  String         @id @default(uuid())
   codigoCorrelativo   Int            @map("codigo_correlativo")
@@ -140,6 +154,8 @@ model Venta {
   usuario             Usuario        @relation(fields: [usuarioId], references: [id])
   clienteId           String?        @map("cliente_id")   // FASE 3: Cliente registrado (opcional)
   cliente             Cliente?       @relation(fields: [clienteId], references: [id])
+  localId             String?        @map("local_id")
+  local               Local?         @relation(fields: [localId], references: [id])
   clienteNombre       String?        @map("cliente_nombre") @db.VarChar(100)
   metodoPago          String?        @map("metodo_pago") @db.VarChar(20)
   total               Decimal        @db.Decimal(10, 2)
@@ -152,6 +168,7 @@ model Venta {
   series              ProductoSerie[] // FASE 3: Series vendidas en esta venta
 
   @@unique([anioCorrelativo, codigoCorrelativo])
+  @@index([localId])
   @@map("ventas")
 }
 
@@ -355,6 +372,8 @@ model OrdenServicio {
   anioCorrelativo   Int               @map("anio_correlativo")
   clienteId         String            @map("cliente_id")
   cliente           Cliente           @relation(fields: [clienteId], references: [id])
+  localId           String?           @map("local_id")
+  local             Local?            @relation(fields: [localId], references: [id])
   usuarioRegistroId String            @map("usuario_registro_id")
   usuarioRegistro   Usuario           @relation("OrdenRegistro", fields: [usuarioRegistroId], references: [id])
   usuarioTecnicoId  String?           @map("usuario_tecnico_id")
@@ -374,6 +393,7 @@ model OrdenServicio {
   movimientos       MovimientoStock[]
 
   @@unique([anioCorrelativo, codigoCorrelativo])
+  @@index([localId])
   @@map("ordenes_servicio")
 }
 
