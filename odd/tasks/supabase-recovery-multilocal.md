@@ -56,4 +56,7 @@
 - **TASK-05** completada — Commit `e67f2b7` (`feat(client): add multi-local selector, monthly store metrics, and error/layout fixes`).
   - `LocalProvider`, selector en `MainLayout.tsx`, `Dashboard.tsx` mensual + comparativa por tienda, `VentasPage`/`OrdenesServicioPage`/`PDFs` multi-local, manejo visible de errores y fix layout sidebar.
   - `npm --prefix client run build` exit 0.
-- Próximo paso: Delegar TASK-06 (Frontend Gestión de Usuarios + verificación E2E).
+- **TASK-06** completada — Commit `004f2c0` (`feat: add admin users UI and fix Supabase pooler connection handling`).
+  - `UsuariosPage.tsx` (`/usuarios` solo `ADMIN`), `serie.service.ts` usando singleton `prisma`, `backup.service.ts` usando puerto `5432` para `pg_dump`, y `server/.env` en Transaction Pooler (`6543?pgbouncer=true&connection_limit=5`).
+  - Verificación final: `npm --prefix server run build` (exit 0), `npm --prefix client run build` (exit 0), ESLint dirigido (exit 0), `verify_prisma.js` sobre `6543` (`locales=2, ventas=96`), y recorrido `/browser` completo.
+- Estado: Todas las tareas completadas (6/6). Próximo paso del usuario: reiniciar `npm run dev` en `server/` para cargar `6543?pgbouncer=true` y crear las otras 2 cuentas `ADMIN` desde `/usuarios`.
