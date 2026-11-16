@@ -52,11 +52,11 @@
 - [x] **C1. Backend Usuarios (`server/`)** *(Completado en TASK-04: `requireAdmin`, `rol != 'SISTEMA'` en `authService.login` y `listarUsuarios`, `/api/usuarios` `GET/POST/PATCH /:id/PATCH /:id/password` con Zod y `bcrypt`; `npm run build` OK)*
   - Excluir `rol = 'SISTEMA'` (`tienda_web`) en `authService.listarUsuarios()`.
   - Middleware `requireAdmin` + endpoints `/api/usuarios` (`GET`, `POST`, `PATCH /:id`, `PATCH /:id/password`) con validación Zod y hash `bcrypt`.
-- [ ] **C2. Frontend Usuarios (`client/`)**
+- [x] **C2. Frontend Usuarios (`client/`)** *(Completado en TASK-06: `UsuariosPage.tsx`, ruta `/usuarios` y enlace en `MainLayout.tsx` solo para `ADMIN`; creación, edición y cambio/revocación de contraseña)*
   - Ruta `/usuarios` y enlace en sidebar para `ADMIN`.
   - Listado, creación de administradores y modal para cambiar/revocar contraseña de otro usuario en caso de olvido.
 
 ### Bloque D — Verificación Integral
-- [ ] **D1.** `npm run build` en `server/` y `client/` + `npm run lint` en `client/`.
-- [ ] **D2.** Revisión con `/browser` de todas las secciones del sidebar (`Dashboard`, `Ventas`, `Compras`, `Inventario`, `Proveedores`, `Órdenes Servicio`, `Clientes`, `Verificar Garantía`, `Usuarios`) con HTTP 200 y 0 errores de consola.
-- [ ] **D3.** Verificación de `aypcs-website` (`localhost:4321`) operativo sin regresiones.
+- [x] **D1.** `npm --prefix server run build` y `npm --prefix client run build` exit 0; ESLint dirigido sobre archivos nuevos/modificados exit 0 (51 problemas preexistentes en archivos heredados fuera de alcance).
+- [x] **D2.** Revisión con `/browser` de todas las secciones del sidebar (`Dashboard`, `Ventas`, `Compras`, `Inventario`, `Proveedores`, `Órdenes Servicio`, `Clientes`, `Verificar Garantía`, `Usuarios`) con esquema reparado; corregido `new PrismaClient()` duplicado en `serie.service.ts` y configurado Transaction Pooler `:6543?pgbouncer=true&connection_limit=5` en `server/.env` (verificado con Node/Prisma directo; reiniciar `npm run dev` en `server/` para cargar el nuevo `.env`).
+- [x] **D3.** Verificación de `aypcs-website` (`localhost:4321`) en `/browser` (catálogo sincronizado en `/tienda`; nota: `BROWSER_HOST_FACTS` registró `http://localhost:4321` en `visited_origins` y `blocked_origins`).

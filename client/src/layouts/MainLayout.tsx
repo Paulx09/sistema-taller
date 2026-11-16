@@ -15,16 +15,6 @@ import {
 import { BackupPanel } from '@/components/BackupPanel';
 import { DatabaseBackup, ChevronUp, PanelLeft, Store } from 'lucide-react';
 
-function getRolFromToken(): string | null {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    return JSON.parse(atob(token.split('.')[1])).rol ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -36,7 +26,7 @@ export function MainLayout() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const esAdmin = getRolFromToken() === 'ADMIN';
+  const esAdmin = authService.getRolFromToken() === 'ADMIN';
   const { locales, localActivoId, setLocalActivoId, loadingLocales } = useLocal();
 
   useEffect(() => {
@@ -107,6 +97,7 @@ export function MainLayout() {
       if (location.pathname.startsWith('/compras')) return 'Compras e Inventario';
       if (location.pathname.startsWith('/verificar-garantia')) return 'Verificar Garantía';
       if (location.pathname.startsWith('/clientes')) return 'Gestión de Clientes';
+      if (location.pathname.startsWith('/usuarios')) return 'Gestión de Usuarios';
       if (location.pathname.match(/^\/ordenes-servicio\/[^/]+$/)) return 'Detalle de Orden';
       if (location.pathname.startsWith('/ordenes-servicio')) return 'Órdenes de Servicio';
       return 'Sistema Taller';
@@ -292,6 +283,28 @@ export function MainLayout() {
             <span className="material-symbols-outlined text-[20px] shrink-0">verified</span>
             <span className={cn("truncate", !isExpanded && "lg:hidden")}>Verificar Garantía</span>
           </NavLink>
+
+          {/* Administración — solo ADMIN */}
+          {esAdmin && (
+            <>
+              <p className={cn("px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60", !isExpanded && "lg:hidden")}>
+                Administración
+              </p>
+              {!isExpanded && <div className="hidden lg:block my-2 border-t border-border/60 mx-1" />}
+              <NavLink
+                to="/usuarios"
+                className={navLinkClass}
+                title={!isExpanded ? "Usuarios" : undefined}
+                onClick={() => {
+                  if (isCollapsed && isHovered) setIsHovered(false);
+                  setSidebarOpen(false);
+                }}
+              >
+                <span className="material-symbols-outlined text-[20px] shrink-0">manage_accounts</span>
+                <span className={cn("truncate", !isExpanded && "lg:hidden")}>Usuarios</span>
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="border-t border-border mt-auto">

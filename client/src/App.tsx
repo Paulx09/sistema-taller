@@ -11,6 +11,7 @@ import { VerificarGarantiaPage } from '@/pages/VerificarGarantiaPage';
 import { ClientesPage } from '@/pages/ClientesPage';
 import { OrdenesServicioPage } from '@/pages/OrdenesServicioPage';
 import { OrdenServicioDetalle } from '@/pages/OrdenServicioDetalle';
+import { UsuariosPage } from '@/pages/UsuariosPage';
 import { OrdenServicioPDF } from '@/pages/OrdenServicioPDF';
 import { VentaPDF } from '@/pages/VentaPDF';
 import { LoginPage } from '@/pages/LoginPage';
@@ -49,6 +50,7 @@ function App() {
             <Route path="clientes" element={<ClientesPage />} />
             <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
             <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
           </Route>
 
           {/* PDF — standalone, sin layout */}

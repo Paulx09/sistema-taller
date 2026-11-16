@@ -20,6 +20,29 @@ export interface Usuario {
   createdAt: string;
 }
 
+export type RolGestionable = 'ADMIN' | 'VENDEDOR';
+
+export interface UsuarioAdmin {
+  id: string;
+  username: string;
+  nombreCompleto: string;
+  rol: RolGestionable | string;
+  createdAt: string;
+}
+
+export interface CrearUsuarioAdminDto {
+  username: string;
+  nombreCompleto: string;
+  password: string;
+  rol?: RolGestionable;
+}
+
+export interface ActualizarUsuarioAdminDto {
+  username?: string;
+  nombreCompleto?: string;
+  rol?: RolGestionable;
+}
+
 export interface Categoria {
   id: string;
   nombre: string;

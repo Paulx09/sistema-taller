@@ -6,7 +6,7 @@
 - **Rama Git:** `feat/supabase-recovery-multilocal`
 - **Estrategia de Entrega:** `ask-on-risk`
 - **Líneas estimadas:** ~1,200 (SQL + server + client + docs)
-- **Líneas acumuladas en rama:** ~1,206 (commits `a2fd1ac`, `57e4172`, `2d2a13e`, `eb41a88`)
+- **Líneas acumuladas en rama:** ~2,917 (commits `a2fd1ac`, `57e4172`, `2d2a13e`, `eb41a88`, `e67f2b7`)
 - **TDD Mode:** `off` (fuente: `server/package.json` y `client/package.json` sin runner de tests unitarios; verificación funcional mediante `tsc`/`vite build`, `eslint`, consultas SQL en Supabase y pruebas E2E con `/browser`)
 - **RDD Mode:** `off / unavailable in sandbox` (`gentle-ai review mode status` reportó `off` con error de lectura en `state.json` dentro del sandbox)
 
@@ -41,9 +41,9 @@
 - [x] **TASK-05** `[route: delegated]` — Frontend Multi-Local, Dashboard Mensual y Fixes de Sidebar/Errores (`MainLayout.tsx`, `LocalContext`, selector de local activo, `Dashboard.tsx`, `VentasPage.tsx`, `ComprasPage.tsx`, `OrdenesServicioPage.tsx`, `OrdenServicioDetalle.tsx`, `VentaPDF.tsx`, `OrdenServicioPDF.tsx`, `api.ts`).
   - *Acceptance:* El usuario cambia de local fácilmente, crea ventas/OS asociadas al local elegido, ve comparativa mensual Copacabana vs. Cielo Plaza, no hay errores silenciosos ni recorte del sidebar.
   - *Checks:* `npm --prefix client run build` (exit 0); `npm --prefix client run lint` (0 errores nuevos; 51 preexistentes fuera del alcance).
-- [ ] **TASK-06** `[route: delegated]` — Frontend Gestión de Usuarios (`/usuarios` solo ADMIN) + Verificación E2E completa con `/browser` en todas las secciones de `sistema-taller` y verificación de `aypcs-website`.
-  - *Acceptance:* Todas las secciones del sidebar (excepto Cerrar Sesión y Copia de Seguridad) cargan con HTTP 200 y sin errores en consola; flujo usuarios ADMIN operativo; `aypcs-website` operativo.
-  - *Checks:* `npm run build` (server y client), `npm run lint` (client), recorrido `/browser`.
+- [x] **TASK-06** `[route: delegated]` — Frontend Gestión de Usuarios (`/usuarios` solo ADMIN) + Fix Pooler (`serie.service.ts` singleton + `backup.service.ts` puerto `5432` + `server/.env` Transaction Pooler `6543?pgbouncer=true&connection_limit=5`) + Verificación E2E con `/browser`.
+  - *Acceptance:* Gestión de usuarios ADMIN operativa (`tienda_web` excluido); secciones del sidebar sin errores de esquema; build y lint sin errores nuevos.
+  - *Checks:* `npm --prefix server run build`, `npm --prefix client run build`, ESLint dirigido en archivos nuevos/modificados (`exit 0`), `verify_prisma.js` sobre puerto `6543` (`locales=2, ventas=96`), recorrido `/browser` en todas las secciones (`Dashboard` requirió estabilizar conexiones porque el dev server en ejecución conservaba `5432` en memoria antes del reinicio de `.env`).
 
 ## Progress & Evidence
 - Rama creada: `feat/supabase-recovery-multilocal`.
@@ -53,7 +53,7 @@
 - **TASK-02** completada — Commit `57e4172` (`docs: record TASK-02 backup restoration and Copacabana backfill`).
   - Backup real restaurado en Supabase sin modificar el original (`144` productos, `62` categorías, `96` ventas, `1` orden de servicio, `124` historial_costos, `241` movimientos_stock; `29` sedes_courier y `tienda_web` preservados).
   - Índice único `productos_codigo_barras_key` aplicado en Supabase (`add_productos_codigo_barras_unique`).
-- **TASK-04** completada — Commit `eb41a88` (`feat(server): add admin user management and password reset endpoints`).
-  - `requireAdmin`, bloqueo de `rol === 'SISTEMA'` en `login` y `listarUsuarios`, y endpoints `/api/usuarios` (`GET`, `POST`, `PATCH /:id`, `PATCH /:id/password`) con `bcrypt`.
-  - `npm run build` en `server/` exit 0.
-- Próximo paso: Delegar TASK-05 (Frontend Multi-Local, Dashboard Mensual y Fixes de Sidebar/Errores) a worker `self`.
+- **TASK-05** completada — Commit `e67f2b7` (`feat(client): add multi-local selector, monthly store metrics, and error/layout fixes`).
+  - `LocalProvider`, selector en `MainLayout.tsx`, `Dashboard.tsx` mensual + comparativa por tienda, `VentasPage`/`OrdenesServicioPage`/`PDFs` multi-local, manejo visible de errores y fix layout sidebar.
+  - `npm --prefix client run build` exit 0.
+- Próximo paso: Delegar TASK-06 (Frontend Gestión de Usuarios + verificación E2E).

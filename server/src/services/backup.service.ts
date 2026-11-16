@@ -51,7 +51,7 @@ export interface BackupResult {
 }
 
 export async function runBackup(): Promise<BackupResult> {
-  const databaseUrl = process.env['DATABASE_URL'];
+  const databaseUrl = process.env['DIRECT_URL'] || process.env['DATABASE_URL'];
   if (!databaseUrl) {
     return { success: false, error: 'DATABASE_URL no está definida' };
   }
@@ -71,10 +71,13 @@ export async function runBackup(): Promise<BackupResult> {
   const filename   = `backup_taller_${timestamp}.sql`;
   const outputFile = path.join(backupDir, filename);
 
-  // Parsear conexión
+  // Parsear conexión (pg_dump requiere modo sesión en puerto 5432, no transaction pooler 6543)
   let dbConn: ReturnType<typeof parseDbUrl>;
   try {
     dbConn = parseDbUrl(databaseUrl);
+    if (dbConn.host.includes('pooler.supabase.com') && dbConn.port === '6543') {
+      dbConn.port = '5432';
+    }
   } catch {
     return { success: false, error: 'DATABASE_URL con formato inválido' };
   }

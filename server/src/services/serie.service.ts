@@ -1,6 +1,5 @@
-import { PrismaClient, EstadoSerie } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { EstadoSerie } from '@prisma/client';
+import prisma from '../config/database';
 
 function normalizarSeries(numerosSerie: string[]): string[] {
   return numerosSerie
