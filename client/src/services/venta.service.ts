@@ -5,10 +5,14 @@ import type { ApiResponse, Venta, CrearVentaDto } from '@/types';
 export const listarVentas = async (params?: {
   desde?: string;
   hasta?: string;
+  localId?: string;
   page?: number;
   limit?: number;
 }) => {
-  const response = await api.get<ApiResponse<Venta[]>>('/ventas', { params });
+  const cleanParams = Object.fromEntries(
+    Object.entries(params || {}).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  );
+  const response = await api.get<ApiResponse<Venta[]>>('/ventas', { params: cleanParams });
   return response.data;
 };
 

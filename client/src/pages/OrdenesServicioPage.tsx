@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +56,9 @@ import {
   EyeOff,
   X,
   Pencil,
+  Store,
 } from 'lucide-react';
+import { useLocal } from '@/hooks/useLocal';
 import { useOrdenesServicio } from '@/hooks/useOrdenesServicio';
 import { useTiposEquipo } from '@/hooks/useTiposEquipo';
 import { useMarcas } from '@/hooks/useMarcas';
@@ -113,6 +115,7 @@ const formatFecha = (iso: string) =>
 // Componente
 export function OrdenesServicioPage() {
   const navigate = useNavigate();
+  const { locales, localActivoId } = useLocal();
   const {
     ordenes,
     total,
@@ -143,6 +146,7 @@ export function OrdenesServicioPage() {
 
   // Estado Sheet "Nueva Orden"
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [localOrdenId, setLocalOrdenId] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [usuarioTecnicoId, setUsuarioTecnicoId] = useState<string | null>(null);
   const [pagoACuenta, setPagoACuenta] = useState<number>(0);
@@ -187,11 +191,24 @@ export function OrdenesServicioPage() {
       ]);
       setClientes(cs);
       setUsuarios(us);
-    } catch { /* silencioso */ }
-    finally { setLoadingClientes(false); }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'No se pudieron cargar clientes y técnicos.';
+      setFormError(msg);
+    } finally {
+      setLoadingClientes(false);
+    }
   }, []);
 
+  useEffect(() => {
+    if (sheetOpen && !localOrdenId && localActivoId) {
+      setLocalOrdenId(localActivoId);
+    }
+  }, [sheetOpen, localOrdenId, localActivoId]);
+
   const handleAbrirSheet = () => {
+    setLocalOrdenId(localActivoId);
     setClienteId('');
     setUsuarioTecnicoId(null);
     setPagoACuenta(0);
@@ -213,8 +230,14 @@ export function OrdenesServicioPage() {
     try {
       const data = await equipoClienteService.getByCliente(id);
       setEquipos(data);
-    } catch { /* silencioso */ }
-    finally { setLoadingEquipos(false); }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'No se pudieron cargar los equipos del cliente.';
+      setFormError(msg);
+    } finally {
+      setLoadingEquipos(false);
+    }
   }, []);
 
   // Abrir dialog "Agregar Equipo"
@@ -366,6 +389,10 @@ export function OrdenesServicioPage() {
   // Submit principal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!localOrdenId) {
+      setFormError('Debe seleccionar un local de recepción.');
+      return;
+    }
     if (!clienteId) {
       setFormError('Debe seleccionar un cliente.');
       return;
@@ -378,6 +405,7 @@ export function OrdenesServicioPage() {
     setFormError(null);
     try {
       const payload: CrearOrdenDto = {
+        localId: localOrdenId,
         clienteId,
         usuarioTecnicoId: usuarioTecnicoId || null,
         pagoACuenta: pagoACuenta || 0,
@@ -465,6 +493,26 @@ export function OrdenesServicioPage() {
                 {e.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filtros.localId || '__all__'}
+          onValueChange={(v) =>
+            aplicarFiltros({ localId: v === '__all__' ? '' : v })
+          }
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Todos los locales" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos los locales</SelectItem>
+            {locales.map((local) => (
+              <SelectItem key={local.id} value={local.id}>
+                {local.nombre}
+              </SelectItem>
+            ))}
+            <SelectItem value="WEB">Tienda Web</SelectItem>
           </SelectContent>
         </Select>
 
@@ -562,6 +610,7 @@ export function OrdenesServicioPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-32">Codigo</TableHead>
+                    <TableHead>Local</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Equipos</TableHead>
                     <TableHead className="w-36">Estado</TableHead>
@@ -585,6 +634,12 @@ export function OrdenesServicioPage() {
                           <span className="font-mono text-xs font-semibold text-primary">
                             {orden.codigoFormateado}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs font-medium gap-1 whitespace-nowrap">
+                            <Store className="h-3 w-3" />
+                            {orden.local?.nombre ?? 'Tienda Web'}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
@@ -715,6 +770,26 @@ export function OrdenesServicioPage() {
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-5 mt-6">
+            {/* Seleccionar local */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <Store className="h-3.5 w-3.5 text-primary" />
+                Local de recepción <span className="text-destructive">*</span>
+              </label>
+              <Select value={localOrdenId || undefined} onValueChange={setLocalOrdenId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar local" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.map((local) => (
+                    <SelectItem key={local.id} value={local.id}>
+                      {local.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Seleccionar cliente */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">

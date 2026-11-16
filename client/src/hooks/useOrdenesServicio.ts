@@ -4,6 +4,7 @@ import type { OrdenServicioResumen, EstadoOrden, CrearOrdenDto } from '@/types';
 
 export interface FiltrosOrdenes {
   estado: EstadoOrden | '';
+  localId: string;
   desde: string;
   hasta: string;
   busqueda: string;
@@ -13,6 +14,7 @@ export interface FiltrosOrdenes {
 
 const FILTROS_INICIALES: FiltrosOrdenes = {
   estado: '',
+  localId: '',
   desde: '',
   hasta: '',
   busqueda: '',
@@ -33,6 +35,7 @@ export function useOrdenesServicio() {
     try {
       const params: GetOrdenesParams = {
         ...(filtros.estado ? { estado: filtros.estado } : {}),
+        ...(filtros.localId ? { localId: filtros.localId } : {}),
         ...(filtros.desde ? { desde: filtros.desde } : {}),
         ...(filtros.hasta ? { hasta: filtros.hasta } : {}),
         ...(filtros.busqueda ? { busqueda: filtros.busqueda } : {}),

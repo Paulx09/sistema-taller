@@ -16,6 +16,7 @@ import { VentaPDF } from '@/pages/VentaPDF';
 import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ThemeProvider } from "@/components/theme-provider"
+import { LocalProvider } from '@/contexts/LocalContext';
 import './App.css';
 
 function App() {
@@ -31,7 +32,9 @@ function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <MainLayout />
+                <LocalProvider>
+                  <MainLayout />
+                </LocalProvider>
               </ProtectedRoute>
             }
           >

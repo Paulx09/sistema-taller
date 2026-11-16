@@ -1,5 +1,44 @@
 import api from './api';
 
+export interface DashboardMetricsParams {
+  localId?: string;
+  mes?: number;
+  anio?: number;
+}
+
+export interface ResumenMensualDashboard {
+  mes: number;
+  anio: number;
+  totalVentas: number;
+  totalOrdenesEntregadas: number;
+  ingresosVentas: number;
+  ingresosOrdenes: number;
+  ingresosTotales: number;
+  gananciaVentas: number;
+  gananciaOrdenes: number;
+  gananciaTotal: number;
+  margenNetoPct: number;
+  ticketPromedio: number;
+  variacionIngresosPct: number | null;
+  variacionGananciaPct: number | null;
+}
+
+export interface RendimientoLocalDashboard {
+  localId: string;
+  codigo: string;
+  nombre: string;
+  cantidadVentas: number;
+  ingresosVentas: number;
+  gananciaVentas: number;
+  cantidadOrdenesEntregadas: number;
+  ingresosOrdenes: number;
+  gananciaOrdenes: number;
+  ingresosTotales: number;
+  gananciaTotal: number;
+  margenPct: number;
+  ticketPromedio: number;
+}
+
 export interface DashboardMetrics {
   ventasHoy: number;
   ventasAyer: number;
@@ -12,6 +51,8 @@ export interface DashboardMetrics {
   productosSinMovimiento: number;
   ordenesActivas: number;
   ordenesDetalle: { recibidas: number; enReparacion: number; listas: number };
+  resumenMensual: ResumenMensualDashboard;
+  rendimientoPorLocal: RendimientoLocalDashboard[];
 }
 
 export interface ProductoBajoStock {
@@ -36,48 +77,33 @@ export interface ProductoSinMovimiento {
   diasSinMovimiento: number;
 }
 
-
 export const dashboardService = {
-  getMetrics: async (): Promise<DashboardMetrics> => {
-    try {
-      const response = await api.get('/dashboard/metricas');
-      return response.data.data;
-    } catch (error) {
-      console.error('Error fetching dashboard metrics:', error);
-      // Fallback en caso de error
-      return {
-        ventasHoy: 0,
-        ventasAyer: 0,
-        gananciaHoy: 0,
-        gananciaAyer: 0,
-        variacionVentasPct: 0,
-        variacionGananciaPct: 0,
-        margenNetoHoyPct: 0,
-        productosStockBajo: 0,
-        productosSinMovimiento: 0,
-        ordenesActivas: 0,
-        ordenesDetalle: { recibidas: 0, enReparacion: 0, listas: 0 },
-      };
+  getMetrics: async (params?: DashboardMetricsParams): Promise<DashboardMetrics> => {
+    const queryParams: Record<string, string | number> = {};
+    if (params?.localId && params.localId !== 'all') {
+      queryParams.localId = params.localId;
     }
+    if (params?.mes !== undefined) {
+      queryParams.mes = params.mes;
+    }
+    if (params?.anio !== undefined) {
+      queryParams.anio = params.anio;
+    }
+
+    const response = await api.get<{ success: boolean; data: DashboardMetrics }>(
+      '/dashboard/metricas',
+      { params: queryParams }
+    );
+    return response.data.data;
   },
 
   getProductosBajoStock: async (): Promise<ProductoBajoStock[]> => {
-    try {
-      const response = await api.get('/productos/bajo-stock');
-      return Array.isArray(response.data.data) ? response.data.data : [];
-    } catch (error) {
-      console.error('Error fetching low stock products:', error);
-      return [];
-    }
+    const response = await api.get('/productos/bajo-stock');
+    return Array.isArray(response.data.data) ? response.data.data : [];
   },
 
   getProductosSinMovimiento: async (dias: number = 90): Promise<ProductoSinMovimiento[]> => {
-    try {
-      const response = await api.get(`/productos/sin-movimiento?dias=${dias}`);
-      return Array.isArray(response.data.data) ? response.data.data : [];
-    } catch (error) {
-      console.error('Error fetching stagnant products:', error);
-      return [];
-    }
+    const response = await api.get(`/productos/sin-movimiento?dias=${dias}`);
+    return Array.isArray(response.data.data) ? response.data.data : [];
   },
 };

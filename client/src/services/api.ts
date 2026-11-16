@@ -23,14 +23,26 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+function formatResponseData(data: unknown): string {
+  if (data === null || data === undefined) return 'Sin detalle';
+  if (typeof data === 'string') return data;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return String(data);
+  }
+}
+
 // Interceptor para responses (manejo centralizado de errores)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
       // El servidor respondió con un código de error
-      console.error('Error del servidor:', error.response.data);
-      
+      console.error(
+        `Error del servidor (${error.response.status}): ${formatResponseData(error.response.data)}`
+      );
+
       // Manejar token expirado o inválido
       if (error.response.status === 401) {
         localStorage.removeItem('token');
@@ -38,12 +50,12 @@ api.interceptors.response.use(
       }
     } else if (error.request) {
       // La petición fue hecha pero no hubo respuesta
-      console.error('Error de red:', error.request);
+      console.error(`Error de red: ${error.message || 'Sin respuesta del servidor'}`);
     } else {
       // Algo pasó al configurar la petición
-      console.error('Error:', error.message);
+      console.error(`Error: ${error.message || 'Error desconocido'}`);
     }
-    
+
     return Promise.reject(error);
   }
 );

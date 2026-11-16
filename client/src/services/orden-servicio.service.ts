@@ -16,6 +16,7 @@ import type {
 
 export interface GetOrdenesParams {
   estado?: EstadoOrden | '';
+  localId?: string;
   clienteId?: string;
   usuarioTecnicoId?: string;
   desde?: string;

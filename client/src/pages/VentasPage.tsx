@@ -17,7 +17,11 @@ import {
   AlertTriangle,
   FileDown,
   MessageCircle,
+  Store,
+  AlertCircle,
 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useLocal } from '@/hooks/useLocal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,14 +131,17 @@ const generarEnlaceWhatsApp = (venta: any, telefonoDestino: string) => {
 // Componente principal
 export function VentasPage() {
   const { toast, toasts, dismiss } = useToast();
+  const { locales, localActivoId } = useLocal();
   const [vista, setVista] = useState<Vista>('pos');
 
   // POS state
+  const [localVentaId, setLocalVentaId] = useState<string>('');
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<{ id: string; nombre: string }[]>([]);
   const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [errorProductos, setErrorProductos] = useState<string | null>(null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [clienteId, setClienteId] = useState<string>('');
   const [clienteNombre, setClienteNombre] = useState('');
@@ -163,6 +170,7 @@ export function VentasPage() {
   // Historial state
   const [ventasHoy, setVentasHoy] = useState<Venta[]>([]);
   const [cargandoVentas, setCargandoVentas] = useState(false);
+  const [errorVentasHoy, setErrorVentasHoy] = useState<string | null>(null);
   const [expandida, setExpandida] = useState<string | null>(null);
 
   // PDF descarga
@@ -174,36 +182,72 @@ export function VentasPage() {
   const [paginaActual, setPaginaActual] = useState(1);
   const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
+  const [localFiltro, setLocalFiltro] = useState<string>('all');
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState<string | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Sincronizar local de venta con el local activo del header
+  useEffect(() => {
+    if (localActivoId) {
+      setLocalVentaId(localActivoId);
+    }
+  }, [localActivoId]);
+
   // Cargar categorías y clientes
   useEffect(() => {
-    api.get('/categorias?limit=100').then((r) => {
-      setCategorias(r.data.data || []);
-    });
-    clienteService.getAll({ limit: 100 }).then((r) => {
-      setClientes(r.clientes || []);
-    });
-  }, []);
+    api
+      .get('/categorias?limit=100')
+      .then((r) => {
+        setCategorias(r.data.data || []);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+          (err as { message?: string })?.message ||
+          'No se pudieron cargar las categorías';
+        toast({ title: 'Error al cargar categorías', description: msg, variant: 'destructive' });
+      });
+
+    clienteService
+      .getAll({ limit: 100 })
+      .then((r) => {
+        setClientes(r.clientes || []);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+          (err as { message?: string })?.message ||
+          'No se pudieron cargar los clientes';
+        toast({ title: 'Error al cargar clientes', description: msg, variant: 'destructive' });
+      });
+  }, [toast]);
 
   // Cargar productos con debounce
   const cargarProductos = useCallback(async (q: string, catId: string) => {
     setCargandoProductos(true);
+    setErrorProductos(null);
     try {
       const params: Record<string, string> = { limit: '60' };
       if (q) params.busqueda = q;
       if (catId) params.categoriaId = catId;
       const r = await api.get('/productos', { params });
       // Filtrar productos sin precio de venta definido (precios pendientes)
-      const productosFiltrados = (r.data.data || []).filter((p: any) => Number(p.precioVenta) > 0);
+      const productosFiltrados = (r.data.data || []).filter((p: Producto) => Number(p.precioVenta) > 0);
       setProductos(productosFiltrados);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'No se pudieron cargar los productos';
+      setErrorProductos(msg);
+      toast({ title: 'Error al cargar productos', description: msg, variant: 'destructive' });
     } finally {
       setCargandoProductos(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => cargarProductos(busqueda, categoriaFiltro), 300);
@@ -213,13 +257,21 @@ export function VentasPage() {
   // Cargar ventas del día
   const cargarVentasHoy = useCallback(async () => {
     setCargandoVentas(true);
+    setErrorVentasHoy(null);
     try {
       const r = await listarVentasHoy();
       setVentasHoy(r.data as Venta[]);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'No se pudieron cargar las ventas de hoy';
+      setErrorVentasHoy(msg);
+      toast({ title: 'Error al cargar ventas de hoy', description: msg, variant: 'destructive' });
     } finally {
       setCargandoVentas(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     cargarVentasHoy();
@@ -228,29 +280,38 @@ export function VentasPage() {
   // Cargar historial completo
   const cargarHistorialCompleto = useCallback(async () => {
     setCargandoHistorial(true);
+    setErrorHistorial(null);
     try {
-      const params: any = { page: paginaActual, limit: 20 };
+      const params: Record<string, string | number> = { page: paginaActual, limit: 20 };
       if (fechaDesde) params.desde = format(fechaDesde, 'yyyy-MM-dd');
       if (fechaHasta) params.hasta = format(fechaHasta, 'yyyy-MM-dd');
-      
+      if (localFiltro && localFiltro !== 'all') params.localId = localFiltro;
+
       const response = await listarVentas(params);
       let ventas = response.data as Venta[];
-      
+
       // Filtrar por cliente en el frontend (si el backend no lo soporta)
       if (busquedaCliente.trim()) {
         const search = busquedaCliente.toLowerCase();
-        ventas = ventas.filter(v => 
+        ventas = ventas.filter(v =>
           v.clienteNombre?.toLowerCase().includes(search) ||
           v.codigoFormateado?.toLowerCase().includes(search)
         );
       }
-      
+
       setVentasHistorial(ventas);
-      setTotalVentas((response as any).total || ventas.length);
+      setTotalVentas(response.total || ventas.length);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'No se pudo cargar el historial de ventas';
+      setErrorHistorial(msg);
+      toast({ title: 'Error al cargar historial', description: msg, variant: 'destructive' });
     } finally {
       setCargandoHistorial(false);
     }
-  }, [paginaActual, fechaDesde, fechaHasta, busquedaCliente]);
+  }, [paginaActual, fechaDesde, fechaHasta, localFiltro, busquedaCliente, toast]);
 
   useEffect(() => {
     if (vista === 'historial-completo') {
@@ -476,9 +537,19 @@ export function VentasPage() {
       return;
     }
 
+    if (!localVentaId) {
+      toast({
+        title: 'Local requerido',
+        description: 'Selecciona el local donde se realiza la venta.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setProcesando(true);
     try {
       const resultado = await crearVenta({
+        localId: localVentaId,
         clienteId: clienteId || undefined,
         clienteNombre: clienteNombre.trim() || undefined,
         metodoPago,
@@ -505,6 +576,9 @@ export function VentasPage() {
       setClienteNombre('');
       setClienteSeleccionado(null);
       setMetodoPago('EFECTIVO');
+      if (localActivoId) {
+        setLocalVentaId(localActivoId);
+      }
       cargarVentasHoy();
       // Recargar productos para actualizar stock
       cargarProductos(busqueda, categoriaFiltro);
@@ -652,6 +726,12 @@ export function VentasPage() {
 
             {/* Grid de productos */}
             <div className="flex-1 overflow-y-auto p-5">
+              {errorProductos && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errorProductos}</AlertDescription>
+                </Alert>
+              )}
               {cargandoProductos ? (
                 <div className="flex items-center justify-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -751,6 +831,24 @@ export function VentasPage() {
 
             {/* 1. CAMPOS (Parte Superior) */}
             <div className="p-3 border-b border-border bg-muted/10 space-y-2.5 flex-shrink-0">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Local de Venta
+                </label>
+                <Select value={localVentaId || undefined} onValueChange={setLocalVentaId}>
+                  <SelectTrigger className="w-full bg-background text-sm h-8">
+                    <SelectValue placeholder="Seleccionar local" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locales.map((local) => (
+                      <SelectItem key={local.id} value={local.id}>
+                        {local.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Cliente
@@ -1064,6 +1162,13 @@ export function VentasPage() {
               </div>
             )}
 
+            {errorVentasHoy && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{errorVentasHoy}</AlertDescription>
+              </Alert>
+            )}
+
             {cargandoVentas ? (
               <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -1100,9 +1205,15 @@ export function VentasPage() {
                             #{venta.codigoCorrelativo}
                           </div>
                           <div>
-                            <p className="font-semibold text-sm">
-                              {venta.clienteNombre || 'Cliente sin nombre'}
-                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-sm">
+                                {venta.clienteNombre || 'Cliente sin nombre'}
+                              </p>
+                              <Badge variant="outline" className="text-[11px] font-medium gap-1">
+                                <Store className="h-3 w-3" />
+                                {venta.local?.nombre ?? 'Tienda Web'}
+                              </Badge>
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               {new Date(venta.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                               {' · '}
@@ -1203,7 +1314,7 @@ export function VentasPage() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 p-4 bg-muted/30 rounded-xl border border-border">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha Desde</label>
                 <Popover>
@@ -1269,6 +1380,29 @@ export function VentasPage() {
                 </Popover>
               </div>
               <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Local</label>
+                <Select
+                  value={localFiltro}
+                  onValueChange={(v) => {
+                    setLocalFiltro(v);
+                    setPaginaActual(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full h-9 bg-background text-sm">
+                    <SelectValue placeholder="Todos los locales" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los locales</SelectItem>
+                    {locales.map((local) => (
+                      <SelectItem key={local.id} value={local.id}>
+                        {local.nombre}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="WEB">Tienda Web</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Buscar Cliente / Código</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1286,6 +1420,7 @@ export function VentasPage() {
                   onClick={() => {
                     setFechaDesde(undefined);
                     setFechaHasta(undefined);
+                    setLocalFiltro('all');
                     setBusquedaCliente('');
                     setPaginaActual(1);
                   }}
@@ -1303,6 +1438,13 @@ export function VentasPage() {
                 </Button>
               </div>
             </div>
+
+            {errorHistorial && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{errorHistorial}</AlertDescription>
+              </Alert>
+            )}
 
             {/* Lista de ventas */}
             {cargandoHistorial ? (
@@ -1338,9 +1480,15 @@ export function VentasPage() {
                               #{venta.codigoCorrelativo}
                             </div>
                             <div>
-                              <p className="font-semibold text-sm">
-                                {venta.clienteNombre || 'Cliente sin nombre'}
-                              </p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-sm">
+                                  {venta.clienteNombre || 'Cliente sin nombre'}
+                                </p>
+                                <Badge variant="outline" className="text-[11px] font-medium gap-1">
+                                  <Store className="h-3 w-3" />
+                                  {venta.local?.nombre ?? 'Tienda Web'}
+                                </Badge>
+                              </div>
                               <p className="text-xs text-muted-foreground">
                                 {new Date(venta.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 {' · '}

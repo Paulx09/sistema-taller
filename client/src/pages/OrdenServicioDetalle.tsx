@@ -22,7 +22,9 @@ import {
   EyeOff,
   Link2Off,
   KeyRound,
+  Store,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -870,7 +872,13 @@ export function OrdenServicioDetalle() {
             <WrenchIcon className="h-4 w-4 text-muted-foreground" />
             <span className="font-bold text-sm">{orden.codigoFormateado}</span>
           </div>
-          <EstadoBadge estado={orden.estado} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <EstadoBadge estado={orden.estado} />
+            <Badge variant="outline" className="text-[11px] font-medium gap-1">
+              <Store className="h-3 w-3" />
+              {orden.local?.nombre ?? 'Tienda Web'}
+            </Badge>
+          </div>
           <p className="text-xs text-muted-foreground mt-1.5">
             {new Date(orden.fechaEmision).toLocaleDateString('es-PE', {
               day: '2-digit',
@@ -1071,12 +1079,16 @@ export function OrdenServicioDetalle() {
         {/* Header */}
         <div className="bg-background border-b px-6 py-3 flex items-center justify-between gap-4 shrink-0">
           <div>
-            <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
+            <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5 flex-wrap">
               <Link to="/ordenes-servicio" className="hover:text-foreground transition-colors">
                 Órdenes
               </Link>
               <ChevronRight className="h-3 w-3" />
               <span className="text-foreground font-medium">{orden.codigoFormateado}</span>
+              <Badge variant="outline" className="text-[11px] font-medium gap-1 ml-1">
+                <Store className="h-3 w-3" />
+                {orden.local?.nombre ?? 'Tienda Web'}
+              </Badge>
             </nav>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl font-bold leading-tight">

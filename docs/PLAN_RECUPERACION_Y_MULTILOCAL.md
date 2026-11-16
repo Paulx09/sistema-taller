@@ -42,7 +42,7 @@
   - Crear endpoint `GET /api/locales`.
   - Exigir `localId` al crear ventas y órdenes desde el taller, filtrar por `localId` (y `WEB` para `localId IS NULL`) e incluir `local` en respuestas.
   - Actualizar `dashboard.service.ts` para métricas **mensuales** (`mes`, `anio`, rango personalizado, filtro `localId`) y comparativa **Copacabana vs. Cielo Plaza** (+ Tienda Web).
-- [ ] **B2. Frontend Multi-Local + Fixes UI/Errores (`client/`)**
+- [x] **B2. Frontend Multi-Local + Fixes UI/Errores (`client/`)** *(Completado en TASK-05: `LocalProvider`, selector en `MainLayout.tsx`, Dashboard mensual con comparativa por tienda, `VentasPage`/`OrdenesServicioPage`/`PDFs` multi-local, `.catch()` visibles y fix CSS `min-w-0`/drawer)*
   - Selector de local activo en `MainLayout.tsx` (persistido en `localStorage`) y corrección del recorte visual izquierdo del sidebar.
   - Integrar selector y badges de local en `VentasPage`, `OrdenesServicioPage`, `OrdenServicioDetalle`, `VentaPDF` y `OrdenServicioPDF`.
   - Rediseñar `Dashboard.tsx` con selector mensual (Mes/Año) y tarjetas/tabla comparativa Copacabana vs. Cielo Plaza.

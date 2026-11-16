@@ -400,6 +400,7 @@ export function GlobalPDFDoc({ orden }: { orden: OrdenServicio }) {
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.headerDocType}>ORDEN DE SERVICIO</Text>
             <Text style={s.headerCode}>{orden.codigoFormateado}</Text>
+            <Text style={s.headerMeta}>Local: {orden.local?.nombre ?? 'Tienda Web'}</Text>
             <Text style={s.headerMeta}>Fecha: {formatDate(orden.fechaEmision)}</Text>
             {orden.usuarioTecnico && (
               <Text style={s.headerMeta}>Tec: {orden.usuarioTecnico.nombreCompleto}</Text>
@@ -547,6 +548,7 @@ export function EquipoPDFDoc({
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.headerDocType}>TICKET DE EQUIPO</Text>
             <Text style={s.headerCode}>{orden.codigoFormateado}</Text>
+            <Text style={s.headerMeta}>Local: {orden.local?.nombre ?? 'Tienda Web'}</Text>
             <Text style={s.headerMeta}>Fecha: {formatDate(orden.fechaEmision)}</Text>
             {orden.usuarioTecnico && (
               <Text style={s.headerMeta}>Tec: {orden.usuarioTecnico.nombreCompleto}</Text>

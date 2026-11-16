@@ -2,6 +2,16 @@
 
 export type TipoItem = 'PRODUCTO' | 'SERVICIO';
 
+export interface Local {
+  id: string;
+  codigo: string;
+  nombre: string;
+  direccion?: string | null;
+  activo: boolean;
+}
+
+export type LocalResumen = Pick<Local, 'id' | 'codigo' | 'nombre'>;
+
 export interface Usuario {
   id: string;
   username: string;
@@ -103,6 +113,8 @@ export interface Venta {
   codigoFormateado: string;
   fecha: string;
   usuarioId: string;
+  localId?: string | null;
+  local?: LocalResumen | null;
   clienteId?: string | null;
   clienteNombre: string | null;
   metodoPago: string | null;
@@ -273,6 +285,7 @@ export interface CrearDetalleVentaDto {
 }
 
 export interface CrearVentaDto {
+  localId: string;
   clienteId?: string | null;
   clienteNombre?: string | null;
   metodoPago: 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
@@ -529,6 +542,8 @@ export interface OrdenServicio {
   id: string;
   codigoCorrelativo: number;
   codigoFormateado: string;
+  localId?: string | null;
+  local?: LocalResumen | null;
   clienteId: string;
   usuarioRegistroId: string;
   usuarioTecnicoId: string | null;
@@ -552,6 +567,8 @@ export interface OrdenServicioResumen {
   id: string;
   codigoCorrelativo: number;
   codigoFormateado: string;
+  localId?: string | null;
+  local?: LocalResumen | null;
   estado: EstadoOrden;
   fechaEmision: string;
   total: string;
@@ -649,6 +666,7 @@ export interface EquipoOrdenInputDto {
 }
 
 export interface CrearOrdenDto {
+  localId: string;
   clienteId: string;
   usuarioTecnicoId?: string | null;
   pagoACuenta?: number;

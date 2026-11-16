@@ -84,6 +84,9 @@ export function ComprasPage() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [detalles, setDetalles] = useState<ItemCompra[]>([]);
   const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
+  const [errorProductos, setErrorProductos] = useState<string | null>(null);
+  const [errorCompras, setErrorCompras] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sugerenciasPrecio, setSugerenciasPrecio] = useState<SugerenciaPrecio[]>([]);
@@ -144,23 +147,41 @@ export function ComprasPage() {
 
   // Cargar proveedores
   useEffect(() => {
-    listarProveedores({ limit: 100 }).then((r) => {
-      setProveedores(r.data || []);
-    });
-  }, []);
+    setErrorProveedores(null);
+    listarProveedores({ limit: 100 })
+      .then((r) => {
+        setProveedores(r.data || []);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+          (err as { message?: string })?.message ||
+          'No se pudieron cargar los proveedores';
+        setErrorProveedores(msg);
+        toast({ title: 'Error al cargar proveedores', description: msg, variant: 'destructive' });
+      });
+  }, [toast]);
 
   // Cargar productos con debounce (SOLO PRODUCTOS FÍSICOS - NO SERVICIOS)
   const cargarProductos = useCallback(async (q: string) => {
     setCargandoProductos(true);
+    setErrorProductos(null);
     try {
       const params: Record<string, string> = { limit: '60', esServicio: 'false' };
       if (q) params.busqueda = q;
       const r = await api.get('/productos', { params });
       setProductos(r.data.data || []);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'No se pudieron cargar los productos';
+      setErrorProductos(msg);
+      toast({ title: 'Error al cargar productos', description: msg, variant: 'destructive' });
     } finally {
       setCargandoProductos(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => cargarProductos(busquedaProducto), 300);
@@ -170,8 +191,9 @@ export function ComprasPage() {
   // Cargar historial de compras
   const cargarCompras = useCallback(async () => {
     setCargandoCompras(true);
+    setErrorCompras(null);
     try {
-      const params: any = { page: paginaActual, limit: 20 };
+      const params: Record<string, string | number> = { page: paginaActual, limit: 20 };
       if (proveedorFiltro) params.proveedorId = proveedorFiltro;
       if (fechaDesde) params.desde = format(fechaDesde, 'yyyy-MM-dd');
       if (fechaHasta) params.hasta = format(fechaHasta, 'yyyy-MM-dd');
@@ -179,10 +201,17 @@ export function ComprasPage() {
       const response = await listarCompras(params);
       setCompras(response.data || []);
       setTotalCompras(response.total || 0);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'No se pudo cargar el historial de compras';
+      setErrorCompras(msg);
+      toast({ title: 'Error al cargar compras', description: msg, variant: 'destructive' });
     } finally {
       setCargandoCompras(false);
     }
-  }, [paginaActual, proveedorFiltro, fechaDesde, fechaHasta]);
+  }, [paginaActual, proveedorFiltro, fechaDesde, fechaHasta, toast]);
 
   useEffect(() => {
     if (vista === 'historial') {
@@ -509,9 +538,16 @@ export function ComprasPage() {
 
       {/* Vista: Nueva Compra */}
       {vista === 'nueva' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-w-0">
           {/* Panel izquierdo: Búsqueda y productos */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="lg:col-span-2 flex flex-col gap-4 min-w-0">
+            {(errorProveedores || errorProductos) && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {[errorProveedores, errorProductos].filter(Boolean).join(' · ')}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -575,7 +611,7 @@ export function ComprasPage() {
           </div>
 
           {/* Panel derecho: Detalles de compra */}
-          <div className="flex flex-col gap-4 border rounded-lg bg-card p-4">
+          <div className="flex flex-col gap-4 border rounded-lg bg-card p-4 min-w-0">
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">Proveedor *</label>
@@ -828,6 +864,11 @@ export function ComprasPage() {
           </div>
 
           {/* Tabla de compras */}
+          {errorCompras && (
+            <Alert variant="destructive">
+              <AlertDescription>{errorCompras}</AlertDescription>
+            </Alert>
+          )}
           <div className="flex-1 border rounded-lg bg-card overflow-auto">
             {cargandoCompras ? (
               <div className="flex items-center justify-center h-60">

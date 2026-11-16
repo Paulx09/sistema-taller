@@ -6,7 +6,7 @@
 - **Rama Git:** `feat/supabase-recovery-multilocal`
 - **Estrategia de Entrega:** `ask-on-risk`
 - **Líneas estimadas:** ~1,200 (SQL + server + client + docs)
-- **Líneas acumuladas en rama:** ~787 (commits `a2fd1ac`, `57e4172`, `2d2a13e`)
+- **Líneas acumuladas en rama:** ~1,206 (commits `a2fd1ac`, `57e4172`, `2d2a13e`, `eb41a88`)
 - **TDD Mode:** `off` (fuente: `server/package.json` y `client/package.json` sin runner de tests unitarios; verificación funcional mediante `tsc`/`vite build`, `eslint`, consultas SQL en Supabase y pruebas E2E con `/browser`)
 - **RDD Mode:** `off / unavailable in sandbox` (`gentle-ai review mode status` reportó `off` con error de lectura en `state.json` dentro del sandbox)
 
@@ -38,9 +38,9 @@
 - [x] **TASK-04** `[route: delegated]` — Backend Gestión de Usuarios ADMIN (`GET/POST /api/usuarios`, `PATCH /api/usuarios/:id/password`, `PATCH /api/usuarios/:id`, `requireAdmin`, `bcrypt`, filtro `rol != 'SISTEMA'` en `/api/auth/usuarios` y `login`).
   - *Acceptance:* Solo ADMIN puede crear/editar/cambiar contraseñas; contraseñas siempre con `bcrypt`; `tienda_web` excluido de listados de taller.
   - *Checks:* `cd server && npm run build` (exit 0).
-- [ ] **TASK-05** `[route: delegated]` — Frontend Multi-Local, Dashboard Mensual y Fixes de Sidebar/Errores (`MainLayout.tsx`, selector de local activo, `Dashboard.tsx`, `VentasPage.tsx`, `ComprasPage.tsx`, `OrdenesServicioPage.tsx`, `OrdenServicioDetalle.tsx`, `VentaPDF.tsx`, `OrdenServicioPDF.tsx`, `api.ts`).
+- [x] **TASK-05** `[route: delegated]` — Frontend Multi-Local, Dashboard Mensual y Fixes de Sidebar/Errores (`MainLayout.tsx`, `LocalContext`, selector de local activo, `Dashboard.tsx`, `VentasPage.tsx`, `ComprasPage.tsx`, `OrdenesServicioPage.tsx`, `OrdenServicioDetalle.tsx`, `VentaPDF.tsx`, `OrdenServicioPDF.tsx`, `api.ts`).
   - *Acceptance:* El usuario cambia de local fácilmente, crea ventas/OS asociadas al local elegido, ve comparativa mensual Copacabana vs. Cielo Plaza, no hay errores silenciosos ni recorte del sidebar.
-  - *Checks:* `cd client && npm run build && npm run lint`.
+  - *Checks:* `npm --prefix client run build` (exit 0); `npm --prefix client run lint` (0 errores nuevos; 51 preexistentes fuera del alcance).
 - [ ] **TASK-06** `[route: delegated]` — Frontend Gestión de Usuarios (`/usuarios` solo ADMIN) + Verificación E2E completa con `/browser` en todas las secciones de `sistema-taller` y verificación de `aypcs-website`.
   - *Acceptance:* Todas las secciones del sidebar (excepto Cerrar Sesión y Copia de Seguridad) cargan con HTTP 200 y sin errores en consola; flujo usuarios ADMIN operativo; `aypcs-website` operativo.
   - *Checks:* `npm run build` (server y client), `npm run lint` (client), recorrido `/browser`.
@@ -53,7 +53,7 @@
 - **TASK-02** completada — Commit `57e4172` (`docs: record TASK-02 backup restoration and Copacabana backfill`).
   - Backup real restaurado en Supabase sin modificar el original (`144` productos, `62` categorías, `96` ventas, `1` orden de servicio, `124` historial_costos, `241` movimientos_stock; `29` sedes_courier y `tienda_web` preservados).
   - Índice único `productos_codigo_barras_key` aplicado en Supabase (`add_productos_codigo_barras_unique`).
-- **TASK-03** completada — Commit `2d2a13e` (`feat(server): add multi-local support and monthly store performance metrics`).
-  - `schema.prisma`, `/api/locales`, `/api/ventas` y `/api/ordenes-servicio` con `localId`, `/api/dashboard/metricas` con `resumenMensual` y `rendimientoPorLocal`.
-  - `npx prisma generate` y `npm run build` en `server/` exit 0.
-- Próximo paso: Delegar TASK-04 (Backend Gestión de Usuarios ADMIN) a worker `self`.
+- **TASK-04** completada — Commit `eb41a88` (`feat(server): add admin user management and password reset endpoints`).
+  - `requireAdmin`, bloqueo de `rol === 'SISTEMA'` en `login` y `listarUsuarios`, y endpoints `/api/usuarios` (`GET`, `POST`, `PATCH /:id`, `PATCH /:id/password`) con `bcrypt`.
+  - `npm run build` en `server/` exit 0.
+- Próximo paso: Delegar TASK-05 (Frontend Multi-Local, Dashboard Mensual y Fixes de Sidebar/Errores) a worker `self`.

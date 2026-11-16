@@ -314,6 +314,7 @@ export function VentaPDFDoc({ venta }: Readonly<{ venta: Venta }>) {
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.headerDocType}>NOTA DE VENTA</Text>
             <Text style={s.headerCode}>{codigo}</Text>
+            <Text style={s.headerMeta}>Local: {venta.local?.nombre ?? 'Tienda Web'}</Text>
             <Text style={s.headerMeta}>Fecha: {formatDate(venta.fecha)}</Text>
             {venta.usuario && (
               <Text style={s.headerMeta}>Cajero: {venta.usuario.nombreCompleto}</Text>

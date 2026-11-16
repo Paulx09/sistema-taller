@@ -1,11 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { ModeToggle } from '@/components/mode-toggle';
 import { authService } from '@/services/auth.service';
+import { useLocal } from '@/hooks/useLocal';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { BackupPanel } from '@/components/BackupPanel';
-import { DatabaseBackup, ChevronUp, PanelLeft } from 'lucide-react';
+import { DatabaseBackup, ChevronUp, PanelLeft, Store } from 'lucide-react';
 
 function getRolFromToken(): string | null {
   const token = localStorage.getItem('token');
@@ -29,6 +37,18 @@ export function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const esAdmin = getRolFromToken() === 'ADMIN';
+  const { locales, localActivoId, setLocalActivoId, loadingLocales } = useLocal();
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
 
   // El menú se muestra extendido visualmente si NO está colapsado O si el usuario está haciendo hover
   const isExpanded = !isCollapsed || isHovered;
@@ -78,7 +98,7 @@ export function MainLayout() {
     );
 
   const getPageTitle = () => {
-      if (location.pathname === '/') return 'Resumen Diario';
+      if (location.pathname === '/') return 'Resumen del Negocio';
       if (location.pathname.startsWith('/productos')) return 'Gestión de Inventario';
       if (location.pathname.startsWith('/categorias')) return 'Gestión de Categorías';
       if (location.pathname.startsWith('/ventas')) return 'Punto de Venta';
@@ -93,22 +113,26 @@ export function MainLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-muted/40 overflow-hidden font-sans text-slate-900 dark:text-slate-50 relative">
+    <div className="flex h-dvh bg-muted/40 overflow-hidden font-sans text-slate-900 dark:text-slate-50 relative">
       {/* Placeholder en desktop cuando está colapsado para fijar el margen sin saltos de contenido */}
-      {isCollapsed && <div className="hidden lg:block w-16 flex-shrink-0" />}
+      {isCollapsed && <div className="hidden lg:block w-16 flex-shrink-0" aria-hidden="true" />}
 
       {/* Sidebar */}
       <aside 
+        aria-label="Menú principal"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
           "bg-background border-r border-border flex flex-col flex-shrink-0 h-full transition-all duration-300 z-50",
+          "fixed inset-y-0 left-0",
           isCollapsed
             ? isHovered
-              ? "w-64 lg:absolute lg:top-0 lg:left-0 lg:bottom-0 lg:shadow-2xl"
-              : "w-64 lg:w-16 absolute lg:absolute top-0 left-0 bottom-0"
-            : "w-64 absolute lg:static top-0 left-0 bottom-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+              ? "w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:shadow-2xl"
+              : "w-64 lg:w-16 lg:fixed lg:inset-y-0 lg:left-0"
+            : "w-64 lg:static",
+          sidebarOpen
+            ? "translate-x-0 pointer-events-auto"
+            : "-translate-x-full pointer-events-none lg:translate-x-0 lg:pointer-events-auto"
         )}
       >
         {/* Header del sidebar */}
@@ -348,33 +372,67 @@ export function MainLayout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="h-14 bg-background border-b border-border flex items-center justify-between px-6 flex-shrink-0 z-10 sticky top-0">
-          <div className="flex items-center gap-3">
+      <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
+        <header className="h-14 bg-background border-b border-border flex items-center justify-between gap-3 px-4 sm:px-6 flex-shrink-0 z-10 sticky top-0">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Botón menú móvil */}
             <button 
-                className="text-muted-foreground hover:text-foreground lg:hidden p-1 rounded-md"
+                type="button"
+                aria-label="Abrir menú"
+                aria-expanded={sidebarOpen}
+                className="text-muted-foreground hover:text-foreground lg:hidden p-1 rounded-md shrink-0"
                 onClick={() => setSidebarOpen(true)}
             >
               <span className="material-symbols-outlined">menu</span>
             </button>
-            <div className="hidden sm:flex items-center text-sm text-muted-foreground">
-              <span className="hover:text-primary cursor-pointer transition-colors flex items-center gap-1" onClick={() => navigate(-1)}>
+            <div className="hidden sm:flex items-center text-sm text-muted-foreground min-w-0">
+              <span className="hover:text-primary cursor-pointer transition-colors flex items-center gap-1 shrink-0" onClick={() => navigate(-1)}>
                 Atrás
               </span>
-              <span className="material-symbols-outlined text-[16px] mx-2 text-slate-400">chevron_right</span>
-              <span className="text-foreground font-medium">{getPageTitle()}</span>
+              <span className="material-symbols-outlined text-[16px] mx-2 text-slate-400 shrink-0">chevron_right</span>
+              <span className="text-foreground font-medium truncate">{getPageTitle()}</span>
             </div>
           </div>
 
-          <ModeToggle />
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Store className="h-3.5 w-3.5 text-primary" />
+                Local activo:
+              </span>
+              <Select
+                value={localActivoId || undefined}
+                onValueChange={setLocalActivoId}
+                disabled={loadingLocales || locales.length === 0}
+              >
+                <SelectTrigger
+                  aria-label="Seleccionar local activo"
+                  className="h-8 w-[165px] sm:w-[195px] text-xs bg-muted/40 border-border"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Store className="h-3.5 w-3.5 text-primary shrink-0 md:hidden" />
+                    <SelectValue placeholder={loadingLocales ? 'Cargando...' : 'Sin locales'} />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.map((local) => (
+                    <SelectItem key={local.id} value={local.id} className="text-xs">
+                      {local.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <ModeToggle />
+          </div>
         </header>
 
         <div className={cn(
-          "flex-1",
+          "flex-1 min-w-0 min-h-0",
           location.pathname.startsWith('/ventas')
             ? "overflow-hidden"
-            : "overflow-y-auto p-6 md:p-8 custom-scrollbar"
+            : "overflow-y-auto overflow-x-auto p-4 sm:p-6 md:p-8 custom-scrollbar"
         )}>
            <Outlet />
         </div>
