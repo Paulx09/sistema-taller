@@ -11,7 +11,10 @@ const prisma: PrismaClient = (() => {
   }
 
   globalThis.__cachedPrisma ??= new PrismaClient({
-    log: ['query', 'error', 'warn'],
+    log:
+      process.env.PRISMA_LOG_QUERIES === 'true'
+        ? ['query', 'error', 'warn']
+        : ['error', 'warn'],
   });
 
   return globalThis.__cachedPrisma;

@@ -13,6 +13,27 @@ declare global {
   }
 }
 
+interface AuthCacheEntry {
+  usuario: {
+    id: string;
+    username: string;
+    rol: string;
+  };
+  expiresAt: number;
+}
+
+const AUTH_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX_SIZE = 1000;
+const authUserCache = new Map<string, AuthCacheEntry>();
+
+export function invalidateAuthUserCache(userId?: string): void {
+  if (userId) {
+    authUserCache.delete(userId);
+    return;
+  }
+  authUserCache.clear();
+}
+
 export const requireAuth = async (
   req: Request,
   res: Response,
@@ -35,18 +56,34 @@ export const requireAuth = async (
     // Verificar y decodificar token
     const decoded = authService.verifyToken(token);
 
-    // Verificar que el usuario exista físicamente en la base de datos
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, username: true, rol: true },
-    });
+    const now = Date.now();
+    const cached = authUserCache.get(decoded.userId);
+    let usuario = cached && cached.expiresAt > now ? cached.usuario : null;
 
     if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: 'Sesión obsoleta o usuario no encontrado. Por favor inicia sesión nuevamente.',
+      // Verificar que el usuario exista físicamente en la base de datos
+      usuario = await prisma.usuario.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, username: true, rol: true },
       });
-      return;
+
+      if (!usuario) {
+        authUserCache.delete(decoded.userId);
+        res.status(401).json({
+          success: false,
+          error: 'Sesión obsoleta o usuario no encontrado. Por favor inicia sesión nuevamente.',
+        });
+        return;
+      }
+
+      if (authUserCache.size >= AUTH_CACHE_MAX_SIZE) {
+        authUserCache.clear();
+      }
+
+      authUserCache.set(decoded.userId, {
+        usuario,
+        expiresAt: now + AUTH_CACHE_TTL_MS,
+      });
     }
 
     // Adjuntar información del usuario verificado al request

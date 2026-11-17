@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'node:path';
 import fs from 'node:fs';
 import { env } from './config/env';
@@ -25,6 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Middlewares globales
 app.use(cors());
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import prisma from '../config/database';
+import { invalidateAuthUserCache } from '../middlewares/auth.middleware';
 
 export type RolGestionable = 'ADMIN' | 'VENDEDOR';
 
@@ -122,11 +123,15 @@ class UsuarioService {
       updateData.rol = data.rol;
     }
 
-    return prisma.usuario.update({
+    const actualizado = await prisma.usuario.update({
       where: { id },
       data: updateData,
       select: USUARIO_PUBLIC_SELECT,
     });
+
+    invalidateAuthUserCache(id);
+
+    return actualizado;
   }
 
   async cambiarPassword(id: string, newPassword: string) {
@@ -139,6 +144,8 @@ class UsuarioService {
       data: { passwordHash },
       select: { id: true },
     });
+
+    invalidateAuthUserCache(id);
   }
 }
 
