@@ -1,96 +1,107 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { ubicacionService } from '../services/ubicacion.service';
+import { queryKeys } from '../lib/queryClient';
 import { getErrorMessage } from '../lib/utils';
 import type { Ubicacion, CrearUbicacionDto, ActualizarUbicacionDto } from '../types';
 
-interface UseUbicacionesParams {
+export interface UseUbicacionesParams {
   skip?: number;
   take?: number;
+  enabled?: boolean;
 }
 
 export const useUbicaciones = (params?: UseUbicacionesParams) => {
-  const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { skip, take } = params || {};
+  const { skip, take, enabled = true } = params || {};
 
-  const fetchUbicaciones = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { ubicaciones: data, total: totalCount } = await ubicacionService.getAll({ skip, take });
-      setUbicaciones(data);
-      setTotal(totalCount);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar ubicaciones'));
-      console.error('Error fetching ubicaciones:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [skip, take]);
+  const query = useQuery({
+    queryKey: queryKeys.ubicaciones({ skip, take }),
+    queryFn: () => ubicacionService.getAll({ skip, take }),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: CrearUbicacionDto) => ubicacionService.create(data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ubicaciones() });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ActualizarUbicacionDto }) =>
+      ubicacionService.update(id, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ubicaciones() });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => ubicacionService.delete(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ubicaciones() });
+    },
+  });
+
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await query.refetch();
+  }, [query]);
 
   const createUbicacion = async (data: CrearUbicacionDto): Promise<Ubicacion> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const nuevaUbicacion = await ubicacionService.create(data);
-      setUbicaciones((prev) => [...prev, nuevaUbicacion]);
-      return nuevaUbicacion;
+      return await createMutation.mutateAsync(data);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al crear ubicación');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const updateUbicacion = async (id: string, data: ActualizarUbicacionDto): Promise<Ubicacion> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const ubicacionActualizada = await ubicacionService.update(id, data);
-      setUbicaciones((prev) =>
-        prev.map((u) => (u.id === id ? ubicacionActualizada : u))
-      );
-      return ubicacionActualizada;
+      return await updateMutation.mutateAsync({ id, data });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al actualizar ubicación');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteUbicacion = async (id: string): Promise<void> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      await ubicacionService.delete(id);
-      setUbicaciones((prev) => prev.filter((u) => u.id !== id));
+      await deleteMutation.mutateAsync(id);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al eliminar ubicación');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchUbicaciones();
-  }, [fetchUbicaciones]);
+  const isMutating =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar ubicaciones')
+    : null;
 
   return {
-    ubicaciones,
-    total,
-    loading,
-    error,
-    refetch: fetchUbicaciones,
+    ubicaciones: query.data?.ubicaciones ?? [],
+    total: query.data?.total ?? 0,
+    loading: query.isFetching || isMutating,
+    error: mutationError ?? queryError,
+    refetch,
     createUbicacion,
     updateUbicacion,
     deleteUbicacion,

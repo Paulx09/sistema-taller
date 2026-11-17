@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { MainLayout } from '@/layouts/MainLayout';
 import { Dashboard } from '@/pages/Dashboard';
 import { UbicacionesPage } from '@/pages/UbicacionesPage';
@@ -22,60 +24,62 @@ import './App.css';
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-      <BrowserRouter>
-        <Routes>
-          {/* Ruta pública de login */}
-          <Route path="/login" element={<LoginPage />} />
-          
-          {/* Rutas protegidas */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <LocalProvider>
-                  <MainLayout />
-                </LocalProvider>
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="ubicaciones" element={<UbicacionesPage />} />
-            <Route path="categorias" element={<CategoriasPage />} />
-            <Route path="productos" element={<ProductosPage />} />
-            <Route path="ventas" element={<VentasPage />} />
-            <Route path="proveedores" element={<ProveedoresPage />} />
-            <Route path="compras" element={<ComprasPage />} />
-            <Route path="verificar-garantia" element={<VerificarGarantiaPage />} />
-            <Route path="clientes" element={<ClientesPage />} />
-            <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
-            <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
-            <Route path="usuarios" element={<UsuariosPage />} />
-          </Route>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <BrowserRouter>
+          <Routes>
+            {/* Ruta pública de login */}
+            <Route path="/login" element={<LoginPage />} />
+            
+            {/* Rutas protegidas */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <LocalProvider>
+                    <MainLayout />
+                  </LocalProvider>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="ubicaciones" element={<UbicacionesPage />} />
+              <Route path="categorias" element={<CategoriasPage />} />
+              <Route path="productos" element={<ProductosPage />} />
+              <Route path="ventas" element={<VentasPage />} />
+              <Route path="proveedores" element={<ProveedoresPage />} />
+              <Route path="compras" element={<ComprasPage />} />
+              <Route path="verificar-garantia" element={<VerificarGarantiaPage />} />
+              <Route path="clientes" element={<ClientesPage />} />
+              <Route path="ordenes-servicio" element={<OrdenesServicioPage />} />
+              <Route path="ordenes-servicio/:id" element={<OrdenServicioDetalle />} />
+              <Route path="usuarios" element={<UsuariosPage />} />
+            </Route>
 
-          {/* PDF — standalone, sin layout */}
-          <Route
-            path="ventas/:id/pdf"
-            element={
-              <ProtectedRoute>
-                <VentaPDF />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="ordenes-servicio/:id/pdf"
-            element={
-              <ProtectedRoute>
-                <OrdenServicioPDF />
-              </ProtectedRoute>
-            }
-          />
+            {/* PDF — standalone, sin layout */}
+            <Route
+              path="ventas/:id/pdf"
+              element={
+                <ProtectedRoute>
+                  <VentaPDF />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="ordenes-servicio/:id/pdf"
+              element={
+                <ProtectedRoute>
+                  <OrdenServicioPDF />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Ruta por defecto - redirige al dashboard */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </ThemeProvider>
+            {/* Ruta por defecto - redirige al dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

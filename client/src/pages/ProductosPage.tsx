@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProductos } from '@/hooks/useProductos';
 import { useCategorias } from '@/hooks/useCategorias';
+import { queryKeys } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -44,23 +46,36 @@ import type { Producto, TipoItem } from '@/types';
 import { cn } from '@/lib/utils';
 
 export function ProductosPage() {
+  const queryClient = useQueryClient();
   const [busqueda, setBusqueda] = useState('');
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'all' | TipoItem>('all');
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
 
+  useEffect(() => {
+    if (busqueda === '') return;
+    const timer = setTimeout(() => setDebouncedBusqueda(busqueda), 300);
+    return () => clearTimeout(timer);
+  }, [busqueda]);
+
   // Calcular skip para la paginación
   const skip = (currentPage - 1) * itemsPerPage;
 
-  const { productos, total, loading, error, createProducto, updateProducto, deleteProducto, refetch } =
+  const { productos, total, loading, error, createProducto, updateProducto, deleteProducto } =
     useProductos({
-      busqueda: busqueda || undefined,
+      busqueda: debouncedBusqueda || undefined,
       tipo: tipoFilter === 'all' ? undefined : tipoFilter,
       categoriaId: categoriaFilter === 'all' ? undefined : categoriaFilter,
       skip,
       take: itemsPerPage,
     });
+
+  const handleProductoMutationSync = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.productos() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+  };
 
   // Categorías completas y filtradas según el tipo seleccionado
   const { categorias, refetch: refetchCategorias } = useCategorias();
@@ -81,6 +96,9 @@ export function ProductosPage() {
 
   const handleBusquedaChange = (value: string) => {
     setBusqueda(value);
+    if (value === '') {
+      setDebouncedBusqueda('');
+    }
     setCurrentPage(1);
   };
 
@@ -132,13 +150,18 @@ export function ProductosPage() {
       await deleteProducto(id, force);
       setDeleteConfirmId(null);
       setDeleteWarningDialog({ isOpen: false, productoId: null, mensaje: '' });
-      refetch();
-    } catch (err: any) {
-      if (err.requiresConfirmation || err.response?.data?.requiereConfirmacion) {
+    } catch (err: unknown) {
+      const apiErr = err as {
+        requiresConfirmation?: boolean;
+        response?: { data?: { requiereConfirmacion?: boolean; mensaje?: string } };
+      };
+      if (apiErr.requiresConfirmation || apiErr.response?.data?.requiereConfirmacion) {
         setDeleteWarningDialog({
           isOpen: true,
           productoId: id,
-          mensaje: err.response?.data?.mensaje || 'Este ítem tiene ventas asociadas. ¿Deseas archivarlo de todas formas?',
+          mensaje:
+            apiErr.response?.data?.mensaje ||
+            'Este ítem tiene ventas asociadas. ¿Deseas archivarlo de todas formas?',
         });
         setDeleteConfirmId(null);
       } else {
@@ -433,13 +456,12 @@ export function ProductosPage() {
 
           <div className="mt-4">
             {viewingProducto ? (
-              <ProductoDetalle producto={viewingProducto} onRefresh={refetch} />
+              <ProductoDetalle producto={viewingProducto} onRefresh={handleProductoMutationSync} />
             ) : (
               <ProductoForm
                 producto={editingProducto}
                 onSuccess={() => {
                   handleCloseSheet();
-                  refetch();
                   refetchCategorias();
                 }}
                 onCreate={createProducto}

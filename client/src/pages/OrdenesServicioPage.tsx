@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -60,17 +61,18 @@ import {
 } from 'lucide-react';
 import { useLocal } from '@/hooks/useLocal';
 import { useOrdenesServicio } from '@/hooks/useOrdenesServicio';
+import { useClientes } from '@/hooks/useClientes';
 import { useTiposEquipo } from '@/hooks/useTiposEquipo';
 import { useMarcas } from '@/hooks/useMarcas';
+import { queryKeys } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/utils';
 import { TipoEquipoCombobox } from '@/components/forms/TipoEquipoCombobox';
 import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
 import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
 import { usuarioService } from '@/services/usuario.service';
 import type {
-  Cliente,
   EquipoCliente,
-  Usuario,
   EstadoOrden,
   CrearOrdenDto,
   CrearEquipoDto,
@@ -129,8 +131,32 @@ export function OrdenesServicioPage() {
     deleteOrden,
   } = useOrdenesServicio();
 
-  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo();
-  const { marcas, refetch: refetchMarcas } = useMarcas();
+  const queryClient = useQueryClient();
+
+  // Estado Sheet "Nueva Orden" y Dialog "Agregar Equipo" (antes de hooks lazy-loaded)
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [agregarEquipoDialogOpen, setAgregarEquipoDialogOpen] = useState(false);
+
+  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo({
+    enabled: sheetOpen || agregarEquipoDialogOpen,
+  });
+  const { marcas, refetch: refetchMarcas } = useMarcas({
+    enabled: sheetOpen || agregarEquipoDialogOpen,
+  });
+  const {
+    clientes,
+    loading: loadingClientes,
+    error: clientesError,
+  } = useClientes({ limit: 500, enabled: sheetOpen });
+  const {
+    data: usuarios = [],
+    error: usuariosQueryError,
+  } = useQuery({
+    queryKey: ['usuarios'],
+    queryFn: usuarioService.getAll,
+    enabled: sheetOpen,
+    staleTime: 5 * 60_000,
+  });
 
   // Filtros
   const [busquedaLocal, setBusquedaLocal] = useState('');
@@ -145,7 +171,6 @@ export function OrdenesServicioPage() {
   };
 
   // Estado Sheet "Nueva Orden"
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [localOrdenId, setLocalOrdenId] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [usuarioTecnicoId, setUsuarioTecnicoId] = useState<string | null>(null);
@@ -154,10 +179,7 @@ export function OrdenesServicioPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteSearch, setClienteSearch] = useState('');
-  const [loadingClientes, setLoadingClientes] = useState(false);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // Estado Dialog "Nuevo Cliente"
   const [nuevoClienteDialogOpen, setNuevoClienteDialogOpen] = useState(false);
@@ -166,7 +188,6 @@ export function OrdenesServicioPage() {
   const [errorNuevoCliente, setErrorNuevoCliente] = useState<string | null>(null);
 
   // Estado Dialog "Agregar Equipo a la Orden"
-  const [agregarEquipoDialogOpen, setAgregarEquipoDialogOpen] = useState(false);
   const [equipos, setEquipos] = useState<EquipoCliente[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
   const [equipoEntrada, setEquipoEntrada] = useState({ ...EQUIPO_ENTRADA_VACIO });
@@ -181,25 +202,11 @@ export function OrdenesServicioPage() {
   const [errorNuevoEquipo, setErrorNuevoEquipo] = useState<string | null>(null);
   const [verContrasenaEquipo, setVerContrasenaEquipo] = useState(false);
 
-  // Carga inicial del formulario
-  const cargarDatosFormulario = useCallback(async () => {
-    setLoadingClientes(true);
-    try {
-      const [{ clientes: cs }, us] = await Promise.all([
-        clienteService.getAll({ limit: 500 }),
-        usuarioService.getAll(),
-      ]);
-      setClientes(cs);
-      setUsuarios(us);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'No se pudieron cargar clientes y técnicos.';
-      setFormError(msg);
-    } finally {
-      setLoadingClientes(false);
-    }
-  }, []);
+  const formLoadError =
+    clientesError ||
+    (usuariosQueryError
+      ? getErrorMessage(usuariosQueryError, 'No se pudieron cargar clientes y técnicos.')
+      : null);
 
   useEffect(() => {
     if (sheetOpen && !localOrdenId && localActivoId) {
@@ -217,7 +224,6 @@ export function OrdenesServicioPage() {
     setEquipos([]);
     setFormError(null);
     setSheetOpen(true);
-    cargarDatosFormulario();
   };
 
   // Cambio de cliente
@@ -375,7 +381,7 @@ export function OrdenesServicioPage() {
         nombre: formNuevoCliente.nombre.trim(),
         telefono: formNuevoCliente.telefono.trim() || null,
       });
-      setClientes((prev) => [nuevoCliente, ...prev]);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
       await handleClienteChange(nuevoCliente.id);
       setNuevoClienteDialogOpen(false);
       setFormNuevoCliente({ nombre: '', telefono: '' });
@@ -811,7 +817,7 @@ export function OrdenesServicioPage() {
                   Nuevo cliente
                 </Button>
               </label>
-              {loadingClientes ? (
+              {loadingClientes && clientes.length === 0 ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando clientes...
@@ -976,9 +982,9 @@ export function OrdenesServicioPage() {
               </Select>
             </div>
 
-            {formError && (
+            {(formError || formLoadError) && (
               <Alert variant="destructive">
-                <AlertDescription>{formError}</AlertDescription>
+                <AlertDescription>{formError || formLoadError}</AlertDescription>
               </Alert>
             )}
 

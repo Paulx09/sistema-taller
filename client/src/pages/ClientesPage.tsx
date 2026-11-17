@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -42,8 +43,10 @@ import { clienteService } from '@/services/cliente.service';
 import { equipoClienteService } from '@/services/equipo-cliente.service';
 import { TipoEquipoCombobox } from '@/components/forms/TipoEquipoCombobox';
 import { MarcaCombobox } from '@/components/forms/MarcaCombobox';
+import { useClientes } from '@/hooks/useClientes';
 import { useTiposEquipo } from '@/hooks/useTiposEquipo';
 import { useMarcas } from '@/hooks/useMarcas';
+import { queryKeys } from '@/lib/queryClient';
 import type { Cliente, EquipoCliente, CrearClienteDto, CrearEquipoDto } from '@/types';
 
 // ─── Formulario vacío de cliente ────────────────────────────────────────────
@@ -65,15 +68,12 @@ const equipoVacio: CrearEquipoDto = {
 };
 
 export function ClientesPage() {
-  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo();
-  const { marcas, refetch: refetchMarcas } = useMarcas();
+  const queryClient = useQueryClient();
 
   // ── Estado principal ───────────────────────────────────────────────────────
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [total, setTotal] = useState(0);
   const [busqueda, setBusqueda] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -85,6 +85,36 @@ export function ClientesPage() {
 
   // ── Dialog equipos ─────────────────────────────────────────────────────────
   const [equiposDialogOpen, setEquiposDialogOpen] = useState(false);
+
+  const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo({
+    enabled: equiposDialogOpen,
+  });
+  const { marcas, refetch: refetchMarcas } = useMarcas({
+    enabled: equiposDialogOpen,
+  });
+
+  useEffect(() => {
+    if (!busqueda) {
+      setDebouncedBusqueda('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedBusqueda(busqueda);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [busqueda]);
+
+  const {
+    clientes,
+    total,
+    loading,
+    error: clientesError,
+  } = useClientes({
+    busqueda: debouncedBusqueda || undefined,
+    limit: 100,
+  });
+
+  const error = localError ?? clientesError;
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [equipos, setEquipos] = useState<EquipoCliente[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
@@ -96,33 +126,11 @@ export function ClientesPage() {
   const [loadingContrasena, setLoadingContrasena] = useState<string | null>(null);
   const [errorEquipos, setErrorEquipos] = useState<string | null>(null);
 
-  // ── Carga de clientes ──────────────────────────────────────────────────────
-  const cargarClientes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { clientes: data, total: t } = await clienteService.getAll({
-        busqueda: busqueda || undefined,
-        limit: 100,
-      });
-      setClientes(data);
-      setTotal(t);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al cargar clientes');
-    } finally {
-      setLoading(false);
-    }
-  }, [busqueda]);
-
-  useEffect(() => {
-    cargarClientes();
-  }, [cargarClientes]);
-
   // ── CRUD clientes ──────────────────────────────────────────────────────────
   const handleNuevo = () => {
     setEditingCliente(null);
     setFormCliente(clienteVacio);
-    setError(null);
+    setLocalError(null);
     setFormErrors({});
     setSheetOpen(true);
   };
@@ -135,7 +143,7 @@ export function ClientesPage() {
       telefono: cliente.telefono || '',
       direccion: cliente.direccion || '',
     });
-    setError(null);
+    setLocalError(null);
     setFormErrors({});
     setSheetOpen(true);
   };
@@ -151,7 +159,7 @@ export function ClientesPage() {
     }
     setFormErrors({});
     setSubmitting(true);
-    setError(null);
+    setLocalError(null);
     try {
       const payload: CrearClienteDto = {
         nombre: formCliente.nombre.trim(),
@@ -165,9 +173,9 @@ export function ClientesPage() {
         await clienteService.create(payload);
       }
       setSheetOpen(false);
-      cargarClientes();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al guardar el cliente');
+      setLocalError(err.response?.data?.error || 'Error al guardar el cliente');
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +184,7 @@ export function ClientesPage() {
   const handleEliminar = async (id: string) => {
     const cliente = clientes.find((c) => c.id === id);
     if (cliente && (cliente._count?.ordenes ?? 0) > 0) {
-      setError('No se puede eliminar un cliente con órdenes registradas.');
+      setLocalError('No se puede eliminar un cliente con órdenes registradas.');
       setDeleteConfirmId(null);
       return;
     }
@@ -184,9 +192,9 @@ export function ClientesPage() {
     try {
       await clienteService.delete(id);
       setDeleteConfirmId(null);
-      cargarClientes();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al eliminar cliente');
+      setLocalError(err.response?.data?.error || 'Error al eliminar cliente');
     } finally {
       setSubmitting(false);
     }
@@ -249,7 +257,7 @@ export function ClientesPage() {
       setTipoRequiereClave(false);
       setEditingEquipo(null);
       await cargarEquipos(clienteSeleccionado.id);
-      cargarClientes();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
     } catch (err: any) {
       setErrorEquipos(err.response?.data?.error || 'Error al guardar el equipo');
     } finally {
@@ -282,7 +290,7 @@ export function ClientesPage() {
       await equipoClienteService.delete(id);
       setDeleteEquipoId(null);
       await cargarEquipos(clienteSeleccionado.id);
-      cargarClientes();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
     } catch (err: any) {
       setErrorEquipos(err.response?.data?.error || 'Error al eliminar equipo');
     } finally {

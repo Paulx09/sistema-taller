@@ -1,9 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { productoService } from '../services/producto.service';
+import { queryKeys } from '../lib/queryClient';
 import { getErrorMessage } from '../lib/utils';
-import type { Producto, CrearProductoDto, ActualizarProductoDto, AjustarStockDto, TipoItem } from '../types';
+import type {
+  Producto,
+  CrearProductoDto,
+  ActualizarProductoDto,
+  AjustarStockDto,
+  TipoItem,
+} from '../types';
 
-interface UseProductosParams {
+export interface UseProductosParams {
   busqueda?: string;
   categoriaId?: string;
   marcaId?: string;
@@ -11,24 +24,50 @@ interface UseProductosParams {
   esServicio?: boolean;
   bajoStock?: boolean;
   preciosPendientes?: boolean;
+  resumen?: boolean;
+  incluirUltimoCosto?: boolean;
   skip?: number;
   take?: number;
+  enabled?: boolean;
 }
 
 export const useProductos = (params?: UseProductosParams) => {
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [fetchingById, setFetchingById] = useState(false);
 
   // Descomponer params en valores primitivos para evitar re-renders innecesarios
-  const { busqueda, categoriaId, marcaId, tipo, esServicio, bajoStock, preciosPendientes, skip, take } = params || {};
+  const {
+    busqueda,
+    categoriaId,
+    marcaId,
+    tipo,
+    esServicio,
+    bajoStock,
+    preciosPendientes,
+    resumen,
+    incluirUltimoCosto,
+    skip,
+    take,
+    enabled = true,
+  } = params || {};
 
-  const fetchProductos = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { productos: data, total: totalCount } = await productoService.getAll({
+  const query = useQuery({
+    queryKey: queryKeys.productos({
+      busqueda,
+      tipo,
+      categoriaId,
+      marcaId,
+      esServicio,
+      bajoStock,
+      preciosPendientes,
+      resumen,
+      incluirUltimoCosto,
+      skip,
+      take,
+    }),
+    queryFn: () =>
+      productoService.getAll({
         busqueda,
         categoriaId,
         marcaId,
@@ -36,112 +75,129 @@ export const useProductos = (params?: UseProductosParams) => {
         esServicio,
         bajoStock,
         preciosPendientes,
+        resumen,
+        incluirUltimoCosto,
         skip,
         take,
-      });
-      setProductos(data);
-      setTotal(totalCount);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar productos'));
-      console.error('Error fetching productos:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [busqueda, categoriaId, marcaId, tipo, esServicio, bajoStock, preciosPendientes, skip, take]);
+      }),
+    enabled,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const invalidateProductosYDashboard = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.productos() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+    ]);
+  }, [queryClient]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: CrearProductoDto | FormData) => productoService.create(data),
+    onSuccess: invalidateProductosYDashboard,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ActualizarProductoDto | FormData }) =>
+      productoService.update(id, data),
+    onSuccess: invalidateProductosYDashboard,
+  });
+
+  const ajustarStockMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: AjustarStockDto }) =>
+      productoService.ajustarStock(id, data),
+    onSuccess: invalidateProductosYDashboard,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ id, force }: { id: string; force: boolean }) =>
+      productoService.delete(id, force),
+    onSuccess: invalidateProductosYDashboard,
+  });
+
+  const { refetch: queryRefetch } = query;
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await queryRefetch();
+  }, [queryRefetch]);
 
   const getProductoById = async (id: string): Promise<Producto> => {
-    setLoading(true);
-    setError(null);
+    setFetchingById(true);
+    setMutationError(null);
     try {
       return await productoService.getById(id);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al cargar producto');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
     } finally {
-      setLoading(false);
+      setFetchingById(false);
     }
   };
 
   const createProducto = async (data: CrearProductoDto | FormData): Promise<Producto> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const nuevoProducto = await productoService.create(data);
-      setProductos((prev) => [...prev, nuevoProducto]);
-      setTotal((prev) => prev + 1);
-      return nuevoProducto;
+      return await createMutation.mutateAsync(data);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al crear producto');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  const updateProducto = async (id: string, data: ActualizarProductoDto | FormData): Promise<Producto> => {
-    setLoading(true);
-    setError(null);
+  const updateProducto = async (
+    id: string,
+    data: ActualizarProductoDto | FormData
+  ): Promise<Producto> => {
+    setMutationError(null);
     try {
-      const productoActualizado = await productoService.update(id, data);
-      setProductos((prev) =>
-        prev.map((p) => (p.id === id ? productoActualizado : p))
-      );
-      return productoActualizado;
+      return await updateMutation.mutateAsync({ id, data });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al actualizar producto');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const ajustarStock = async (id: string, data: AjustarStockDto): Promise<Producto> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const productoActualizado = await productoService.ajustarStock(id, data);
-      setProductos((prev) =>
-        prev.map((p) => (p.id === id ? productoActualizado : p))
-      );
-      return productoActualizado;
+      return await ajustarStockMutation.mutateAsync({ id, data });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al ajustar stock');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteProducto = async (id: string, force: boolean = false): Promise<void> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      await productoService.delete(id, force);
-      setProductos((prev) => prev.filter((p) => p.id !== id));
-      setTotal((prev) => prev - 1);
+      await deleteMutation.mutateAsync({ id, force });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al eliminar producto');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchProductos();
-  }, [fetchProductos]);
+  const isMutating =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    ajustarStockMutation.isPending ||
+    deleteMutation.isPending ||
+    fetchingById;
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar productos')
+    : null;
 
   return {
-    productos,
-    total,
-    loading,
-    error,
-    refetch: fetchProductos,
+    productos: query.data?.productos ?? [],
+    total: query.data?.total ?? 0,
+    loading: Boolean(enabled && query.isFetching) || isMutating,
+    error: mutationError ?? queryError,
+    refetch,
     getProductoById,
     createProducto,
     updateProducto,

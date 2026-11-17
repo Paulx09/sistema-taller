@@ -102,8 +102,11 @@ export const dashboardService = {
     return Array.isArray(response.data.data) ? response.data.data : [];
   },
 
-  getProductosSinMovimiento: async (dias: number = 90): Promise<ProductoSinMovimiento[]> => {
-    const response = await api.get(`/productos/sin-movimiento?dias=${dias}`);
+  getProductosSinMovimiento: async (
+    dias: number = 90,
+    limit: number = 10
+  ): Promise<ProductoSinMovimiento[]> => {
+    const response = await api.get(`/productos/sin-movimiento?dias=${dias}&limit=${limit}`);
     return Array.isArray(response.data.data) ? response.data.data : [];
   },
 };

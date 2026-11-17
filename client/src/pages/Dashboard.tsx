@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useLocal } from '@/hooks/useLocal';
+import { queryKeys } from '@/lib/queryClient';
 import { AlertCircle, Globe, Loader2, RefreshCw, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -41,11 +43,13 @@ const formatCurrency = (value: number) =>
   })}`;
 
 export function Dashboard() {
+  const queryClient = useQueryClient();
   const {
     metrics,
     bajoStock,
     sinMovimiento,
     loading,
+    loadingSinMovimiento,
     error,
     diasSinMovimiento,
     setDiasSinMovimiento,
@@ -84,6 +88,7 @@ export function Dashboard() {
     setDialogOpen(false);
     setProductoSeleccionado(null);
     refetch();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.productos() });
   };
 
   const getTrendIcon = (variation: number | null) => {
@@ -676,11 +681,17 @@ export function Dashboard() {
         {/* Lista Productos Estancados */}
         <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col h-full overflow-hidden min-w-0">
           <div className="px-4 sm:px-6 py-4 border-b border-border bg-card shrink-0">
-            <div className="flex justify-between items-start mb-3 min-w-0">
+            <div className="flex justify-between items-center mb-3 min-w-0 gap-2">
               <h3 className="font-semibold text-foreground text-lg flex items-center gap-2 min-w-0">
                 <span className="material-symbols-outlined text-warning shrink-0">history</span>
                 <span className="truncate">Productos Estancados</span>
               </h3>
+              {loadingSinMovimiento && (
+                <Loader2
+                  aria-label="Actualizando productos estancados"
+                  className="h-4 w-4 animate-spin text-muted-foreground shrink-0"
+                />
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">

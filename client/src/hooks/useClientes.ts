@@ -1,84 +1,116 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { clienteService } from '../services/cliente.service';
+import { queryKeys } from '../lib/queryClient';
 import { getErrorMessage } from '../lib/utils';
 import type { Cliente, CrearClienteDto, ActualizarClienteDto } from '../types';
 
-interface UseClientesParams {
+export interface UseClientesParams {
   busqueda?: string;
+  page?: number;
   limit?: number;
+  enabled?: boolean;
 }
 
 export const useClientes = (params?: UseClientesParams) => {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const { busqueda, limit } = params || {};
+  const { busqueda, page, limit, enabled = true } = params || {};
+  const effectiveBusqueda = busqueda || undefined;
+  const effectiveLimit = limit || 100;
 
-  const fetchClientes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { clientes: data, total: totalCount } = await clienteService.getAll({
-        busqueda: busqueda || undefined,
-        limit: limit || 100,
-      });
-      setClientes(data);
-      setTotal(totalCount);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar clientes'));
-    } finally {
-      setLoading(false);
-    }
-  }, [busqueda, limit]);
+  const query = useQuery({
+    queryKey: queryKeys.clientes({ busqueda: effectiveBusqueda, page, limit: effectiveLimit }),
+    queryFn: () =>
+      clienteService.getAll({
+        busqueda: effectiveBusqueda,
+        page,
+        limit: effectiveLimit,
+      }),
+    enabled,
+    staleTime: 2 * 60_000,
+    placeholderData: keepPreviousData,
+  });
 
-  useEffect(() => {
-    fetchClientes();
-  }, [fetchClientes]);
+  const createMutation = useMutation({
+    mutationFn: (data: CrearClienteDto) => clienteService.create(data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ActualizarClienteDto }) =>
+      clienteService.update(id, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => clienteService.delete(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
+    },
+  });
+
+  const { refetch: queryRefetch } = query;
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await queryRefetch();
+  }, [queryRefetch]);
 
   const createCliente = async (data: CrearClienteDto): Promise<Cliente> => {
+    setMutationError(null);
     try {
-      const nuevo = await clienteService.create(data);
-      await fetchClientes();
-      return nuevo;
+      return await createMutation.mutateAsync(data);
     } catch (err) {
       const msg = getErrorMessage(err, 'Error al crear cliente');
-      setError(msg);
+      setMutationError(msg);
       throw err;
     }
   };
 
   const updateCliente = async (id: string, data: ActualizarClienteDto): Promise<Cliente> => {
+    setMutationError(null);
     try {
-      const actualizado = await clienteService.update(id, data);
-      setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, ...actualizado } : c)));
-      return actualizado;
+      return await updateMutation.mutateAsync({ id, data });
     } catch (err) {
       const msg = getErrorMessage(err, 'Error al actualizar cliente');
-      setError(msg);
+      setMutationError(msg);
       throw err;
     }
   };
 
   const deleteCliente = async (id: string): Promise<void> => {
+    setMutationError(null);
     try {
-      await clienteService.delete(id);
-      setClientes((prev) => prev.filter((c) => c.id !== id));
-      setTotal((prev) => prev - 1);
+      await deleteMutation.mutateAsync(id);
     } catch (err) {
       const msg = getErrorMessage(err, 'Error al eliminar cliente');
-      setError(msg);
+      setMutationError(msg);
       throw err;
     }
   };
 
+  const isMutating =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar clientes')
+    : null;
+
   return {
-    clientes,
-    total,
-    loading,
-    error,
-    refetch: fetchClientes,
+    clientes: query.data?.clientes ?? [],
+    total: query.data?.total ?? 0,
+    loading: Boolean(enabled && query.isFetching) || isMutating,
+    error: mutationError ?? queryError,
+    refetch,
     createCliente,
     updateCliente,
     deleteCliente,

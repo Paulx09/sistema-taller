@@ -1,102 +1,109 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { tipoEquipoService } from '../services/tipo-equipo.service';
+import { queryKeys } from '../lib/queryClient';
 import { getErrorMessage } from '../lib/utils';
 import type { TipoEquipo, CrearTipoEquipoDto, ActualizarTipoEquipoDto } from '../types';
 
-interface UseTiposEquipoParams {
+export interface UseTiposEquipoParams {
   busqueda?: string;
   activo?: boolean;
   skip?: number;
   take?: number;
+  enabled?: boolean;
 }
 
 export const useTiposEquipo = (params?: UseTiposEquipoParams) => {
-  const [tiposEquipo, setTiposEquipo] = useState<TipoEquipo[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const { busqueda, activo, skip, take } = params || {};
+  const { busqueda, activo, skip, take, enabled = true } = params || {};
 
-  const fetchTiposEquipo = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { tiposEquipo: data, total: totalCount } = await tipoEquipoService.getAll({
-        busqueda,
-        activo,
-        skip,
-        take,
-      });
-      setTiposEquipo(data);
-      setTotal(totalCount);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar tipos de equipo'));
-      console.error('Error fetching tiposEquipo:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [busqueda, activo, skip, take]);
+  const query = useQuery({
+    queryKey: queryKeys.tiposEquipo({ busqueda, activo, skip, take }),
+    queryFn: () => tipoEquipoService.getAll({ busqueda, activo, skip, take }),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: CrearTipoEquipoDto) => tipoEquipoService.create(data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tiposEquipo() });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ActualizarTipoEquipoDto }) =>
+      tipoEquipoService.update(id, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tiposEquipo() });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => tipoEquipoService.delete(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tiposEquipo() });
+    },
+  });
+
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await query.refetch();
+  }, [query]);
 
   const createTipoEquipo = async (data: CrearTipoEquipoDto): Promise<TipoEquipo> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const nuevo = await tipoEquipoService.create(data);
-      setTiposEquipo((prev) => [...prev, nuevo]);
-      return nuevo;
+      return await createMutation.mutateAsync(data);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al crear tipo de equipo');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const updateTipoEquipo = async (id: string, data: ActualizarTipoEquipoDto): Promise<TipoEquipo> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const actualizado = await tipoEquipoService.update(id, data);
-      setTiposEquipo((prev) =>
-        prev.map((t) => (t.id === id ? actualizado : t))
-      );
-      return actualizado;
+      return await updateMutation.mutateAsync({ id, data });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al actualizar tipo de equipo');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteTipoEquipo = async (id: string): Promise<void> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      await tipoEquipoService.delete(id);
-      setTiposEquipo((prev) => prev.filter((t) => t.id !== id));
+      await deleteMutation.mutateAsync(id);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al eliminar tipo de equipo');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchTiposEquipo();
-  }, [fetchTiposEquipo]);
+  const isMutating =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar tipos de equipo')
+    : null;
 
   return {
-    tiposEquipo,
-    total,
-    loading,
-    error,
-    refetch: fetchTiposEquipo,
+    tiposEquipo: query.data?.tiposEquipo ?? [],
+    total: query.data?.total ?? 0,
+    loading: query.isFetching || isMutating,
+    error: mutationError ?? queryError,
+    refetch,
     createTipoEquipo,
     updateTipoEquipo,
     deleteTipoEquipo,

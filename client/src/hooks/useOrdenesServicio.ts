@@ -1,6 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { ordenServicioService, type GetOrdenesParams } from '@/services/orden-servicio.service';
-import type { OrdenServicioResumen, EstadoOrden, CrearOrdenDto } from '@/types';
+import { queryKeys } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/utils';
+import type { EstadoOrden, CrearOrdenDto } from '@/types';
 
 export interface FiltrosOrdenes {
   estado: EstadoOrden | '';
@@ -23,16 +31,13 @@ const FILTROS_INICIALES: FiltrosOrdenes = {
 };
 
 export function useOrdenesServicio() {
-  const [ordenes, setOrdenes] = useState<OrdenServicioResumen[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [filtros, setFiltros] = useState<FiltrosOrdenes>(FILTROS_INICIALES);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const query = useQuery({
+    queryKey: queryKeys.ordenesServicio({ ...filtros }),
+    queryFn: () => {
       const params: GetOrdenesParams = {
         ...(filtros.estado ? { estado: filtros.estado } : {}),
         ...(filtros.localId ? { localId: filtros.localId } : {}),
@@ -42,19 +47,28 @@ export function useOrdenesServicio() {
         page: filtros.page,
         limit: filtros.limit,
       };
-      const { ordenes: data, total: t } = await ordenServicioService.getAll(params);
-      setOrdenes(data);
-      setTotal(t);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al cargar órdenes de servicio');
-    } finally {
-      setLoading(false);
-    }
-  }, [filtros]);
+      return ordenServicioService.getAll(params);
+    },
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
 
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  const invalidateOrdenesYDashboard = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.ordenesServicio() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+    ]);
+  }, [queryClient]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: CrearOrdenDto) => ordenServicioService.create(data),
+    onSuccess: invalidateOrdenesYDashboard,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => ordenServicioService.delete(id),
+    onSuccess: invalidateOrdenesYDashboard,
+  });
 
   const aplicarFiltros = useCallback((nuevosFiltros: Partial<FiltrosOrdenes>) => {
     setFiltros((prev) => ({ ...prev, ...nuevosFiltros, page: 1 }));
@@ -68,33 +82,54 @@ export function useOrdenesServicio() {
     setFiltros((prev) => ({ ...prev, page }));
   }, []);
 
+  const { refetch: queryRefetch } = query;
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await queryRefetch();
+  }, [queryRefetch]);
+
+  const { mutateAsync: createMutateAsync } = createMutation;
   const createOrden = useCallback(
     async (data: CrearOrdenDto) => {
-      const orden = await ordenServicioService.create(data);
-      await cargar();
-      return orden;
+      setMutationError(null);
+      try {
+        return await createMutateAsync(data);
+      } catch (err) {
+        setMutationError(getErrorMessage(err, 'Error al crear orden de servicio'));
+        throw err;
+      }
     },
-    [cargar]
+    [createMutateAsync]
   );
 
+  const { mutateAsync: deleteMutateAsync } = deleteMutation;
   const deleteOrden = useCallback(
     async (id: string) => {
-      await ordenServicioService.delete(id);
-      await cargar();
+      setMutationError(null);
+      try {
+        await deleteMutateAsync(id);
+      } catch (err) {
+        setMutationError(getErrorMessage(err, 'Error al eliminar orden de servicio'));
+        throw err;
+      }
     },
-    [cargar]
+    [deleteMutateAsync]
   );
 
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar órdenes de servicio')
+    : null;
+
   return {
-    ordenes,
-    total,
-    loading,
-    error,
+    ordenes: query.data?.ordenes ?? [],
+    total: query.data?.total ?? 0,
+    loading: query.isFetching || createMutation.isPending || deleteMutation.isPending,
+    error: mutationError ?? queryError,
     filtros,
     aplicarFiltros,
     limpiarFiltros,
     cambiarPagina,
-    refetch: cargar,
+    refetch,
     createOrden,
     deleteOrden,
   };

@@ -6,6 +6,7 @@ export const listarVentas = async (params?: {
   desde?: string;
   hasta?: string;
   localId?: string;
+  busqueda?: string;
   page?: number;
   limit?: number;
 }) => {

@@ -42,19 +42,23 @@ const transformProducto = (producto: ProductoRaw): Producto => ({
   historialCostos: producto.historialCostos, // Mantener historialCostos (costo ya viene como string desde Prisma)
 });
 
+export interface GetProductosParams {
+  busqueda?: string;
+  tipo?: 'PRODUCTO' | 'SERVICIO';
+  categoriaId?: string;
+  marcaId?: string;
+  esServicio?: boolean;
+  bajoStock?: boolean;
+  preciosPendientes?: boolean;
+  resumen?: boolean;
+  incluirUltimoCosto?: boolean;
+  skip?: number;
+  take?: number;
+}
+
 export const productoService = {
   // GET /api/productos
-  async getAll(params?: {
-    busqueda?: string;
-    tipo?: 'PRODUCTO' | 'SERVICIO';
-    categoriaId?: string;
-    marcaId?: string;
-    esServicio?: boolean;
-    bajoStock?: boolean;
-    preciosPendientes?: boolean;
-    skip?: number;
-    take?: number;
-  }): Promise<{ productos: Producto[]; total: number }> {
+  async getAll(params?: GetProductosParams): Promise<{ productos: Producto[]; total: number }> {
     const response = await api.get<ApiResponse<ProductoRaw[]> & { total: number }>('/productos', {
       params,
     });

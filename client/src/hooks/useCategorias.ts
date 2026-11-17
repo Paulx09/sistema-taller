@@ -1,104 +1,110 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { categoriaService } from '../services/categoria.service';
+import { queryKeys } from '../lib/queryClient';
 import { getErrorMessage } from '../lib/utils';
 import type { Categoria, TipoItem, CrearCategoriaDto, ActualizarCategoriaDto } from '../types';
 
-interface UseCategoriasParams {
+export interface UseCategoriasParams {
   tipo?: TipoItem;
   skip?: number;
   take?: number;
   limit?: number;
   todas?: boolean;
+  enabled?: boolean;
 }
 
 export const useCategorias = (params?: UseCategoriasParams) => {
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const { tipo, skip, take, limit, todas } = params || {};
+  const { tipo, skip, take, limit, todas, enabled = true } = params || {};
 
-  const fetchCategorias = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { categorias: data, total: totalCount } = await categoriaService.getAll({
-        tipo,
-        skip,
-        take,
-        limit,
-        todas,
-      });
-      setCategorias(data);
-      setTotal(totalCount);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar categorías'));
-      console.error('Error fetching categorias:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [tipo, skip, take, limit, todas]);
+  const query = useQuery({
+    queryKey: queryKeys.categorias({ tipo, skip, take, limit, todas }),
+    queryFn: () => categoriaService.getAll({ tipo, skip, take, limit, todas }),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: CrearCategoriaDto) => categoriaService.create(data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.categorias() });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ActualizarCategoriaDto }) =>
+      categoriaService.update(id, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.categorias() });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => categoriaService.delete(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.categorias() });
+    },
+  });
+
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await query.refetch();
+  }, [query]);
 
   const createCategoria = async (data: CrearCategoriaDto): Promise<Categoria> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const nuevaCategoria = await categoriaService.create(data);
-      setCategorias((prev) => [...prev, nuevaCategoria]);
-      return nuevaCategoria;
+      return await createMutation.mutateAsync(data);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al crear categoría');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const updateCategoria = async (id: string, data: ActualizarCategoriaDto): Promise<Categoria> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const categoriaActualizada = await categoriaService.update(id, data);
-      setCategorias((prev) =>
-        prev.map((c) => (c.id === id ? categoriaActualizada : c))
-      );
-      return categoriaActualizada;
+      return await updateMutation.mutateAsync({ id, data });
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al actualizar categoría');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteCategoria = async (id: string): Promise<void> => {
-    setLoading(true);
-    setError(null);
+    setMutationError(null);
     try {
-      await categoriaService.delete(id);
-      setCategorias((prev) => prev.filter((c) => c.id !== id));
+      await deleteMutation.mutateAsync(id);
     } catch (err) {
       const errorMsg = getErrorMessage(err, 'Error al eliminar categoría');
-      setError(errorMsg);
+      setMutationError(errorMsg);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCategorias();
-  }, [fetchCategorias]);
+  const isMutating =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const queryError = query.error
+    ? getErrorMessage(query.error, 'Error al cargar categorías')
+    : null;
 
   return {
-    categorias,
-    total,
-    loading,
-    error,
-    refetch: fetchCategorias,
+    categorias: query.data?.categorias ?? [],
+    total: query.data?.total ?? 0,
+    loading: query.isFetching || isMutating,
+    error: mutationError ?? queryError,
+    refetch,
     createCategoria,
     updateCategoria,
     deleteCategoria,

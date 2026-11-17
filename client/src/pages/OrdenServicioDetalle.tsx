@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight,
   Laptop,
@@ -81,6 +82,7 @@ import type {
   CrearEquipoDto,
 } from '@/types';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryClient';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -173,6 +175,20 @@ const EQUIPO_ENTRADA_VACIO = {
 export function OrdenServicioDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const invalidateOrdenCaches = useCallback(
+    (options?: { dashboard?: boolean; productos?: boolean }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ordenesServicio() });
+      if (options?.dashboard) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+      }
+      if (options?.productos) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.productos() });
+      }
+    },
+    [queryClient]
+  );
 
   const { tiposEquipo, refetch: refetchTiposEquipo } = useTiposEquipo();
   const { marcas, refetch: refetchMarcas } = useMarcas();
@@ -354,6 +370,7 @@ export function OrdenServicioDetalle() {
       );
       setOrden(updated);
       setEditandoEquipo(false);
+      invalidateOrdenCaches();
     } catch {
       //
     } finally {
@@ -389,6 +406,10 @@ export function OrdenServicioDetalle() {
         { estado: nuevoEstado }
       );
       setOrden(updated);
+      invalidateOrdenCaches({
+        dashboard: true,
+        productos: nuevoEstado === 'CANCELADA',
+      });
     } catch {
       //
     } finally {
@@ -404,6 +425,7 @@ export function OrdenServicioDetalle() {
         usuarioTecnicoId: val === 'none' ? null : val,
       });
       setOrden(updated);
+      invalidateOrdenCaches();
     } catch {
       //
     } finally {
@@ -426,6 +448,7 @@ export function OrdenServicioDetalle() {
       });
       setOrden(updated);
       setEditandoPago(false);
+      invalidateOrdenCaches({ dashboard: true });
     } catch {
       //
     } finally {
@@ -462,6 +485,7 @@ export function OrdenServicioDetalle() {
     try {
       const updated = await ordenServicioService.cambiarEstado(id, 'ENTREGADA');
       setOrden(updated);
+      invalidateOrdenCaches({ dashboard: true });
     } catch {
       //
     } finally {
@@ -492,6 +516,7 @@ export function OrdenServicioDetalle() {
     try {
       const updated = await ordenServicioService.quitarItem(id, itemId);
       setOrden(updated);
+      invalidateOrdenCaches({ dashboard: true, productos: true });
     } catch {
       //
     }
@@ -528,6 +553,7 @@ export function OrdenServicioDetalle() {
       setOrden(updated);
       setEditandoCantidad(null);
       setCantidadError(null);
+      invalidateOrdenCaches({ dashboard: true, productos: true });
     } catch (err) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -596,6 +622,7 @@ export function OrdenServicioDetalle() {
       );
       setOrden(updated);
       setItemDialogOpen(false);
+      invalidateOrdenCaches({ dashboard: true, productos: true });
     } catch {
       setItemError('No se pudo agregar el ítem.');
     } finally {
@@ -669,6 +696,7 @@ export function OrdenServicioDetalle() {
       setFichaDialogOpen(false);
       setEquipoParaEditar(null);
       await cargarOrden();
+      invalidateOrdenCaches();
     } catch (err: any) {
       setFichaError(err?.response?.data?.error || 'Error al actualizar el equipo');
     } finally {
@@ -696,6 +724,7 @@ export function OrdenServicioDetalle() {
           null;
         setEquipoActivoId(siguienteId);
       }
+      invalidateOrdenCaches({ dashboard: true, productos: true });
     } catch (err: any) {
       setDesvincularError(err?.response?.data?.error || 'No se pudo desvincular el equipo.');
     } finally {
@@ -794,6 +823,7 @@ export function OrdenServicioDetalle() {
         setFormNuevoEquipo({ ...EQUIPO_NUEVO_VACIO });
         setTipoRequiereClave(false);
         setErrorNuevoEquipo(null);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
       }
     } catch (err: any) {
       setErrorNuevoEquipo(err?.response?.data?.error || 'No se pudo guardar el equipo.');
@@ -829,6 +859,7 @@ export function OrdenServicioDetalle() {
       )?.id;
       if (nuevoId) setEquipoActivoId(nuevoId);
       setAgregarEquipoDialogOpen(false);
+      invalidateOrdenCaches({ dashboard: true });
     } catch {
       setEntradaEquipoError('No se pudo agregar el equipo.');
     } finally {

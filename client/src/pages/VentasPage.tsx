@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart,
   Trash2,
@@ -22,6 +23,9 @@ import {
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLocal } from '@/hooks/useLocal';
+import { useProductos } from '@/hooks/useProductos';
+import { useClientes } from '@/hooks/useClientes';
+import { queryKeys } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,13 +40,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { ClienteCombobox } from '@/components/forms/ClienteCombobox';
-import { clienteService } from '@/services/cliente.service';
 import { crearVenta, listarVentasHoy, listarVentas, obtenerVenta } from '@/services/venta.service';
 import { pdf } from '@react-pdf/renderer';
 import { VentaPDFDoc } from '@/pages/VentaPDF';
-import api from '@/services/api';
 import type { Producto, Venta, DetalleVenta, Cliente } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
@@ -130,6 +132,7 @@ const generarEnlaceWhatsApp = (venta: any, telefonoDestino: string) => {
 
 // Componente principal
 export function VentasPage() {
+  const queryClient = useQueryClient();
   const { toast, toasts, dismiss } = useToast();
   const { locales, localActivoId } = useLocal();
   const [vista, setVista] = useState<Vista>('pos');
@@ -137,21 +140,15 @@ export function VentasPage() {
   // POS state
   const [localVentaId, setLocalVentaId] = useState<string>('');
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaFiltro, setCategoriaFiltro] = useState('');
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [categorias, setCategorias] = useState<{ id: string; nombre: string }[]>([]);
-  const [cargandoProductos, setCargandoProductos] = useState(false);
-  const [errorProductos, setErrorProductos] = useState<string | null>(null);
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('');
+  const [categoriaFiltro] = useState('');
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [clienteId, setClienteId] = useState<string>('');
   const [clienteNombre, setClienteNombre] = useState('');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
   const [procesando, setProcesando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<Venta | null>(null);
-  void setCategoriaFiltro;
-  void categorias;
   void ultimaVenta;
 
   // Estados para modal WhatsApp
@@ -168,24 +165,18 @@ export function VentasPage() {
   } | null>(null);
 
   // Historial state
-  const [ventasHoy, setVentasHoy] = useState<Venta[]>([]);
-  const [cargandoVentas, setCargandoVentas] = useState(false);
-  const [errorVentasHoy, setErrorVentasHoy] = useState<string | null>(null);
   const [expandida, setExpandida] = useState<string | null>(null);
 
   // PDF descarga
   const [descargandoPDFId, setDescargandoPDFId] = useState<string | null>(null);
 
   // Historial completo state
-  const [ventasHistorial, setVentasHistorial] = useState<Venta[]>([]);
-  const [totalVentas, setTotalVentas] = useState(0);
   const [paginaActual, setPaginaActual] = useState(1);
   const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
   const [localFiltro, setLocalFiltro] = useState<string>('all');
   const [busquedaCliente, setBusquedaCliente] = useState('');
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
-  const [errorHistorial, setErrorHistorial] = useState<string | null>(null);
+  const [debouncedBusquedaCliente, setDebouncedBusquedaCliente] = useState('');
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -196,128 +187,112 @@ export function VentasPage() {
     }
   }, [localActivoId]);
 
-  // Cargar categorías y clientes
+  // Debounce búsqueda POS (0ms si está vacía para carga inicial inmediata)
   useEffect(() => {
-    api
-      .get('/categorias?limit=100')
-      .then((r) => {
-        setCategorias(r.data.data || []);
-      })
-      .catch((err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-          (err as { message?: string })?.message ||
-          'No se pudieron cargar las categorías';
-        toast({ title: 'Error al cargar categorías', description: msg, variant: 'destructive' });
-      });
-
-    clienteService
-      .getAll({ limit: 100 })
-      .then((r) => {
-        setClientes(r.clientes || []);
-      })
-      .catch((err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-          (err as { message?: string })?.message ||
-          'No se pudieron cargar los clientes';
-        toast({ title: 'Error al cargar clientes', description: msg, variant: 'destructive' });
-      });
-  }, [toast]);
-
-  // Cargar productos con debounce
-  const cargarProductos = useCallback(async (q: string, catId: string) => {
-    setCargandoProductos(true);
-    setErrorProductos(null);
-    try {
-      const params: Record<string, string> = { limit: '60' };
-      if (q) params.busqueda = q;
-      if (catId) params.categoriaId = catId;
-      const r = await api.get('/productos', { params });
-      // Filtrar productos sin precio de venta definido (precios pendientes)
-      const productosFiltrados = (r.data.data || []).filter((p: Producto) => Number(p.precioVenta) > 0);
-      setProductos(productosFiltrados);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-        (err as { message?: string })?.message ||
-        'No se pudieron cargar los productos';
-      setErrorProductos(msg);
-      toast({ title: 'Error al cargar productos', description: msg, variant: 'destructive' });
-    } finally {
-      setCargandoProductos(false);
+    if (busqueda === '') {
+      setDebouncedBusqueda('');
+      return;
     }
-  }, [toast]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => cargarProductos(busqueda, categoriaFiltro), 300);
+    const timer = setTimeout(() => setDebouncedBusqueda(busqueda), 300);
     return () => clearTimeout(timer);
-  }, [busqueda, categoriaFiltro, cargarProductos]);
+  }, [busqueda]);
 
-  // Cargar ventas del día
-  const cargarVentasHoy = useCallback(async () => {
-    setCargandoVentas(true);
-    setErrorVentasHoy(null);
-    try {
+  // Debounce búsqueda historial completo (0ms si está vacía)
+  useEffect(() => {
+    if (busquedaCliente === '') {
+      setDebouncedBusquedaCliente('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedBusquedaCliente(busquedaCliente), 300);
+    return () => clearTimeout(timer);
+  }, [busquedaCliente]);
+
+  // Cargar clientes con React Query
+  const { clientes, error: errorClientes } = useClientes({ limit: 100 });
+
+  useEffect(() => {
+    if (errorClientes) {
+      toast({ title: 'Error al cargar clientes', description: errorClientes, variant: 'destructive' });
+    }
+  }, [errorClientes, toast]);
+
+  // Cargar productos con React Query (resumen ligero para POS)
+  const {
+    productos: productosRaw,
+    loading: cargandoProductos,
+    error: errorProductos,
+  } = useProductos({
+    take: 60,
+    resumen: true,
+    busqueda: debouncedBusqueda || undefined,
+    categoriaId: categoriaFiltro || undefined,
+  });
+
+  // Filtrar productos sin precio de venta definido (precios pendientes)
+  const productos = useMemo(
+    () => productosRaw.filter((p) => Number(p.precioVenta) > 0),
+    [productosRaw]
+  );
+
+  // Cargar ventas del día con React Query
+  const ventasHoyQuery = useQuery({
+    queryKey: queryKeys.ventas.hoy,
+    queryFn: async () => {
       const r = await listarVentasHoy();
-      setVentasHoy(r.data as Venta[]);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-        (err as { message?: string })?.message ||
-        'No se pudieron cargar las ventas de hoy';
-      setErrorVentasHoy(msg);
-      toast({ title: 'Error al cargar ventas de hoy', description: msg, variant: 'destructive' });
-    } finally {
-      setCargandoVentas(false);
-    }
-  }, [toast]);
+      return (r.data as Venta[]) || [];
+    },
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    cargarVentasHoy();
-  }, [cargarVentasHoy]);
+  const ventasHoy = ventasHoyQuery.data ?? [];
+  const cargandoVentas = ventasHoyQuery.isFetching;
+  const errorVentasHoy = ventasHoyQuery.error
+    ? getErrorMessage(ventasHoyQuery.error, 'No se pudieron cargar las ventas de hoy')
+    : null;
+  const { refetch: refetchVentasHoy } = ventasHoyQuery;
 
-  // Cargar historial completo
-  const cargarHistorialCompleto = useCallback(async () => {
-    setCargandoHistorial(true);
-    setErrorHistorial(null);
-    try {
-      const params: Record<string, string | number> = { page: paginaActual, limit: 20 };
-      if (fechaDesde) params.desde = format(fechaDesde, 'yyyy-MM-dd');
-      if (fechaHasta) params.hasta = format(fechaHasta, 'yyyy-MM-dd');
-      if (localFiltro && localFiltro !== 'all') params.localId = localFiltro;
+  // Cargar historial completo con React Query y búsqueda en backend
+  const desdeStr = fechaDesde ? format(fechaDesde, 'yyyy-MM-dd') : undefined;
+  const hastaStr = fechaHasta ? format(fechaHasta, 'yyyy-MM-dd') : undefined;
+  const localIdParam = localFiltro && localFiltro !== 'all' ? localFiltro : undefined;
+  const busquedaHistorialParam = debouncedBusquedaCliente.trim() || undefined;
 
-      const response = await listarVentas(params);
-      let ventas = response.data as Venta[];
+  const historialQuery = useQuery({
+    queryKey: queryKeys.ventas.historial({
+      page: paginaActual,
+      limit: 20,
+      desde: desdeStr,
+      hasta: hastaStr,
+      localId: localFiltro,
+      busqueda: busquedaHistorialParam,
+    }),
+    queryFn: async () => {
+      const response = await listarVentas({
+        page: paginaActual,
+        limit: 20,
+        desde: desdeStr,
+        hasta: hastaStr,
+        localId: localIdParam,
+        busqueda: busquedaHistorialParam,
+      });
+      const ventas = (response.data as Venta[]) || [];
+      return {
+        ventas,
+        total: response.total || ventas.length,
+      };
+    },
+    enabled: vista === 'historial-completo',
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
 
-      // Filtrar por cliente en el frontend (si el backend no lo soporta)
-      if (busquedaCliente.trim()) {
-        const search = busquedaCliente.toLowerCase();
-        ventas = ventas.filter(v =>
-          v.clienteNombre?.toLowerCase().includes(search) ||
-          v.codigoFormateado?.toLowerCase().includes(search)
-        );
-      }
-
-      setVentasHistorial(ventas);
-      setTotalVentas(response.total || ventas.length);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-        (err as { message?: string })?.message ||
-        'No se pudo cargar el historial de ventas';
-      setErrorHistorial(msg);
-      toast({ title: 'Error al cargar historial', description: msg, variant: 'destructive' });
-    } finally {
-      setCargandoHistorial(false);
-    }
-  }, [paginaActual, fechaDesde, fechaHasta, localFiltro, busquedaCliente, toast]);
-
-  useEffect(() => {
-    if (vista === 'historial-completo') {
-      cargarHistorialCompleto();
-    }
-  }, [vista, cargarHistorialCompleto]);
+  const ventasHistorial = historialQuery.data?.ventas ?? [];
+  const totalVentas = historialQuery.data?.total ?? 0;
+  const cargandoHistorial = historialQuery.isFetching;
+  const errorHistorial = historialQuery.error
+    ? getErrorMessage(historialQuery.error, 'No se pudo cargar el historial de ventas')
+    : null;
+  const { refetch: refetchHistorial } = historialQuery;
 
   // Ref que espeja el carrito — permite leer el estado actual sincrónicamente
   const carritoRef = useRef<ItemCarrito[]>([]);
@@ -567,10 +542,10 @@ export function VentasPage() {
 
       toast({
         title: '¡Venta registrada!',
-        description: (resultado as any).mensaje || 'La venta se completó correctamente.',
+        description: (resultado as { mensaje?: string }).mensaje || 'La venta se completó correctamente.',
       });
 
-      // Limpiar carrito y refrescar ventas del día
+      // Limpiar carrito e invalidar cachés relacionadas
       setCarrito([]);
       setClienteId('');
       setClienteNombre('');
@@ -579,11 +554,13 @@ export function VentasPage() {
       if (localActivoId) {
         setLocalVentaId(localActivoId);
       }
-      cargarVentasHoy();
-      // Recargar productos para actualizar stock
-      cargarProductos(busqueda, categoriaFiltro);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Error al procesar la venta';
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.ventas.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.productos() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      ]);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error al procesar la venta');
       toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setProcesando(false);
@@ -637,7 +614,7 @@ export function VentasPage() {
           Nueva Venta
         </button>
         <button
-          onClick={() => { setVista('historial'); cargarVentasHoy(); }}
+          onClick={() => setVista('historial')}
           className={cn(
             'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
             vista === 'historial'
@@ -732,7 +709,7 @@ export function VentasPage() {
                   <AlertDescription>{errorProductos}</AlertDescription>
                 </Alert>
               )}
-              {cargandoProductos ? (
+              {cargandoProductos && productos.length === 0 ? (
                 <div className="flex items-center justify-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -865,8 +842,8 @@ export function VentasPage() {
                     setClienteSeleccionado(cli ?? null);
                   }}
                   clientes={clientes}
-                  onClienteCreado={(nuevo) => {
-                    setClientes((prev) => [nuevo, ...prev]);
+                  onClienteCreado={() => {
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.clientes() });
                   }}
                 />
               </div>
@@ -1137,7 +1114,7 @@ export function VentasPage() {
                   {new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
               </div>
-              <Button variant="outline" onClick={cargarVentasHoy} size="sm" className="gap-2">
+              <Button variant="outline" onClick={() => void refetchVentasHoy()} size="sm" className="gap-2">
                 <Loader2 className={cn('h-4 w-4', cargandoVentas && 'animate-spin')} />
                 Actualizar
               </Button>
@@ -1172,7 +1149,7 @@ export function VentasPage() {
               </Alert>
             )}
 
-            {cargandoVentas ? (
+            {cargandoVentas && ventasHoy.length === 0 ? (
               <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
@@ -1425,6 +1402,7 @@ export function VentasPage() {
                     setFechaHasta(undefined);
                     setLocalFiltro('all');
                     setBusquedaCliente('');
+                    setDebouncedBusquedaCliente('');
                     setPaginaActual(1);
                   }}
                   className="h-9 px-3 text-sm shrink-0"
@@ -1433,7 +1411,14 @@ export function VentasPage() {
                   Limpiar
                 </Button>
                 <Button
-                  onClick={cargarHistorialCompleto}
+                  onClick={() => {
+                    if (busquedaCliente !== debouncedBusquedaCliente) {
+                      setDebouncedBusquedaCliente(busquedaCliente);
+                      setPaginaActual(1);
+                    } else {
+                      void refetchHistorial();
+                    }
+                  }}
                   className="h-9 px-3 text-sm shrink-0"
                 >
                   <Search className="h-4 w-4 mr-1" />
@@ -1450,7 +1435,7 @@ export function VentasPage() {
             )}
 
             {/* Lista de ventas */}
-            {cargandoHistorial ? (
+            {cargandoHistorial && ventasHistorial.length === 0 ? (
               <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>

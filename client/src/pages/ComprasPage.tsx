@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, Trash2, Search, Loader2, Plus, Receipt, History, Calendar as CalendarIcon, Building2, FileText, ChevronDown, ChevronUp, PackagePlus, QrCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,8 +41,10 @@ import { ProveedorCombobox } from '@/components/forms/ProveedorCombobox';
 import { useMarcas } from '@/hooks/useMarcas';
 import { useCategorias } from '@/hooks/useCategorias';
 import { useUbicaciones } from '@/hooks/useUbicaciones';
-import api from '@/services/api';
-import type { Producto, Proveedor, Compra, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
+import { useProductos } from '@/hooks/useProductos';
+import { queryKeys } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/utils';
+import type { Producto, CrearDetalleCompraDto, SugerenciaPrecio } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SeriesEscanerModal } from '@/components/SeriesEscanerModal';
@@ -73,44 +76,37 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(n);
 
 export function ComprasPage() {
+  const queryClient = useQueryClient();
   const { toast, toasts, dismiss } = useToast();
   const [vista, setVista] = useState<Vista>('nueva');
 
   // Nueva compra state
   const [proveedorId, setProveedorId] = useState('');
   const [numeroFactura, setNumeroFactura] = useState('');
-  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
   const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [debouncedBusquedaProducto, setDebouncedBusquedaProducto] = useState('');
   const [detalles, setDetalles] = useState<ItemCompra[]>([]);
-  const [cargandoProductos, setCargandoProductos] = useState(false);
-  const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
-  const [errorProductos, setErrorProductos] = useState<string | null>(null);
-  const [errorCompras, setErrorCompras] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sugerenciasPrecio, setSugerenciasPrecio] = useState<SugerenciaPrecio[]>([]);
   const [modalSugerenciasOpen, setModalSugerenciasOpen] = useState(false);
 
   // Historial state
-  const [compras, setCompras] = useState<Compra[]>([]);
-  const [totalCompras, setTotalCompras] = useState(0);
   const [paginaActual, setPaginaActual] = useState(1);
   const [proveedorFiltro, setProveedorFiltro] = useState('');
   const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
-  const [cargandoCompras, setCargandoCompras] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
 
   // Confirmación de anulación
   const [confirmAnularId, setConfirmAnularId] = useState<string | null>(null);
   const [confirmAnularNumero, setConfirmAnularNumero] = useState<string>('');
 
-  // Modal crear producto rápido
-  const { marcas, refetch: refetchMarcas } = useMarcas();
-  const { categorias, refetch: refetchCategorias } = useCategorias();
-  const { ubicaciones, refetch: refetchUbicaciones } = useUbicaciones();
+  // Modal crear producto rápido (catálogos lazy: solo cargan al abrir el modal)
   const [crearProductoDialogOpen, setCrearProductoDialogOpen] = useState(false);
+  const { marcas, refetch: refetchMarcas } = useMarcas({ enabled: crearProductoDialogOpen });
+  const { categorias, refetch: refetchCategorias } = useCategorias({ enabled: crearProductoDialogOpen });
+  const { ubicaciones, refetch: refetchUbicaciones } = useUbicaciones({ enabled: crearProductoDialogOpen });
   const [ubicacionSinClasificar, setUbicacionSinClasificar] = useState<string>('');
   const [creandoProducto, setCreandoProducto] = useState(false);
   const [erroresProducto, setErroresProducto] = useState<{ categoriaId?: string; ubicacionId?: string }>({});
@@ -134,90 +130,84 @@ export function ComprasPage() {
 
   // Buscar ubicación "SIN CLASIFICAR" como default cuando carguen las ubicaciones
   useEffect(() => {
-    if (ubicaciones.length > 0 && !nuevoProducto.ubicacionId) {
+    if (ubicaciones.length > 0) {
       const sinClasificar = ubicaciones.find(
         (u) => u.nombre.toUpperCase() === 'SIN CLASIFICAR'
       );
       if (sinClasificar) {
         setUbicacionSinClasificar(sinClasificar.id);
-        setNuevoProducto((prev) => ({ ...prev, ubicacionId: sinClasificar.id }));
+        setNuevoProducto((prev) =>
+          prev.ubicacionId ? prev : { ...prev, ubicacionId: sinClasificar.id }
+        );
       }
     }
   }, [ubicaciones]);
 
-  // Cargar proveedores
+  // Debounce búsqueda de productos (0ms si está vacía para carga inicial inmediata)
   useEffect(() => {
-    setErrorProveedores(null);
-    listarProveedores({ limit: 100 })
-      .then((r) => {
-        setProveedores(r.data || []);
-      })
-      .catch((err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-          (err as { message?: string })?.message ||
-          'No se pudieron cargar los proveedores';
-        setErrorProveedores(msg);
-        toast({ title: 'Error al cargar proveedores', description: msg, variant: 'destructive' });
-      });
-  }, [toast]);
-
-  // Cargar productos con debounce (SOLO PRODUCTOS FÍSICOS - NO SERVICIOS)
-  const cargarProductos = useCallback(async (q: string) => {
-    setCargandoProductos(true);
-    setErrorProductos(null);
-    try {
-      const params: Record<string, string> = { limit: '60', esServicio: 'false' };
-      if (q) params.busqueda = q;
-      const r = await api.get('/productos', { params });
-      setProductos(r.data.data || []);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-        (err as { message?: string })?.message ||
-        'No se pudieron cargar los productos';
-      setErrorProductos(msg);
-      toast({ title: 'Error al cargar productos', description: msg, variant: 'destructive' });
-    } finally {
-      setCargandoProductos(false);
+    if (busquedaProducto === '') {
+      setDebouncedBusquedaProducto('');
+      return;
     }
-  }, [toast]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => cargarProductos(busquedaProducto), 300);
+    const timer = setTimeout(() => setDebouncedBusquedaProducto(busquedaProducto), 300);
     return () => clearTimeout(timer);
-  }, [busquedaProducto, cargarProductos]);
+  }, [busquedaProducto]);
 
-  // Cargar historial de compras
-  const cargarCompras = useCallback(async () => {
-    setCargandoCompras(true);
-    setErrorCompras(null);
-    try {
-      const params: Record<string, string | number> = { page: paginaActual, limit: 20 };
-      if (proveedorFiltro) params.proveedorId = proveedorFiltro;
-      if (fechaDesde) params.desde = format(fechaDesde, 'yyyy-MM-dd');
-      if (fechaHasta) params.hasta = format(fechaHasta, 'yyyy-MM-dd');
+  // Cargar proveedores con React Query
+  const proveedoresQuery = useQuery({
+    queryKey: queryKeys.proveedores({ limit: 100 }),
+    queryFn: () => listarProveedores({ limit: 100 }).then((r) => r.data || []),
+    staleTime: 2 * 60_000,
+  });
+  const proveedores = proveedoresQuery.data ?? [];
+  const errorProveedores = proveedoresQuery.error
+    ? getErrorMessage(proveedoresQuery.error, 'No se pudieron cargar los proveedores')
+    : null;
 
-      const response = await listarCompras(params);
-      setCompras(response.data || []);
-      setTotalCompras(response.total || 0);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
-        (err as { message?: string })?.message ||
-        'No se pudo cargar el historial de compras';
-      setErrorCompras(msg);
-      toast({ title: 'Error al cargar compras', description: msg, variant: 'destructive' });
-    } finally {
-      setCargandoCompras(false);
-    }
-  }, [paginaActual, proveedorFiltro, fechaDesde, fechaHasta, toast]);
+  // Cargar productos con React Query (SOLO PRODUCTOS FÍSICOS - NO SERVICIOS, resumen + último costo)
+  const {
+    productos,
+    loading: cargandoProductos,
+    error: errorProductos,
+  } = useProductos({
+    take: 60,
+    esServicio: false,
+    resumen: true,
+    incluirUltimoCosto: true,
+    busqueda: debouncedBusquedaProducto || undefined,
+  });
 
-  useEffect(() => {
-    if (vista === 'historial') {
-      cargarCompras();
-    }
-  }, [vista, cargarCompras]);
+  // Cargar historial de compras con React Query
+  const desdeStr = fechaDesde ? format(fechaDesde, 'yyyy-MM-dd') : undefined;
+  const hastaStr = fechaHasta ? format(fechaHasta, 'yyyy-MM-dd') : undefined;
+
+  const comprasQuery = useQuery({
+    queryKey: queryKeys.compras({
+      page: paginaActual,
+      limit: 20,
+      proveedorId: proveedorFiltro || undefined,
+      desde: desdeStr,
+      hasta: hastaStr,
+    }),
+    queryFn: () =>
+      listarCompras({
+        page: paginaActual,
+        limit: 20,
+        proveedorId: proveedorFiltro || undefined,
+        desde: desdeStr,
+        hasta: hastaStr,
+      }),
+    enabled: vista === 'historial',
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const compras = comprasQuery.data?.data ?? [];
+  const totalCompras = comprasQuery.data?.total ?? 0;
+  const cargandoCompras = comprasQuery.isFetching;
+  const errorCompras = comprasQuery.error
+    ? getErrorMessage(comprasQuery.error, 'No se pudo cargar el historial de compras')
+    : null;
 
   // Agregar producto a la compra
   const agregarProducto = (p: Producto) => {
@@ -370,12 +360,18 @@ export function ComprasPage() {
         description: `Factura ${numeroFactura} guardada exitosamente`,
       });
 
-      // Limpiar formulario
+      // Limpiar formulario e invalidar cachés relacionadas
       setProveedorId('');
       setNumeroFactura('');
       setDetalles([]);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al registrar la compra');
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.productos() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.compras() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      ]);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error al registrar la compra'));
     } finally {
       setProcesando(false);
     }
@@ -390,11 +386,15 @@ export function ComprasPage() {
         description: 'El número de factura está disponible para reingreso',
       });
       setConfirmAnularId(null);
-      cargarCompras();
-    } catch (err: any) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.productos() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.compras() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      ]);
+    } catch (err: unknown) {
       toast({
         title: 'Error al anular',
-        description: err.response?.data?.error || 'Error desconocido',
+        description: getErrorMessage(err, 'Error desconocido'),
         variant: 'destructive',
       });
     }
@@ -467,12 +467,16 @@ export function ComprasPage() {
       setErroresProducto({});
       setCrearProductoDialogOpen(false);
 
-      // Recargar lista de productos
-      cargarProductos(busquedaProducto);
-    } catch (err: any) {
+      // Invalidar cachés para actualizar productos, compras y dashboard
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.productos() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.compras() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      ]);
+    } catch (err: unknown) {
       toast({
         title: 'Error al crear producto',
-        description: err.response?.data?.error || 'Error desconocido',
+        description: getErrorMessage(err, 'Error desconocido'),
         variant: 'destructive',
       });
     } finally {
@@ -570,7 +574,7 @@ export function ComprasPage() {
 
             {/* Lista de productos */}
             <div className="flex-1 border rounded-lg bg-card overflow-auto p-4">
-              {cargandoProductos ? (
+              {cargandoProductos && productos.length === 0 ? (
                 <div className="flex items-center justify-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -619,7 +623,9 @@ export function ComprasPage() {
                   value={proveedorId}
                   onChange={setProveedorId}
                   proveedores={proveedores}
-                  onProveedorCreado={(prov) => setProveedores((prev) => [...prev, prov])}
+                  onProveedorCreado={() => {
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.proveedores() });
+                  }}
                 />
               </div>
 
@@ -793,7 +799,13 @@ export function ComprasPage() {
         <div className="flex flex-col gap-4 h-full">
           {/* Filtros */}
           <div className="flex flex-wrap gap-3">
-            <Select value={proveedorFiltro} onValueChange={setProveedorFiltro}>
+            <Select
+              value={proveedorFiltro}
+              onValueChange={(value) => {
+                setProveedorFiltro(value);
+                setPaginaActual(1);
+              }}
+            >
               <SelectTrigger className="w-64">
                 <SelectValue placeholder="Todos los proveedores" />
               </SelectTrigger>
@@ -817,7 +829,10 @@ export function ComprasPage() {
                 <Calendar
                   mode="single"
                   selected={fechaDesde}
-                  onSelect={setFechaDesde}
+                  onSelect={(date) => {
+                    setFechaDesde(date);
+                    setPaginaActual(1);
+                  }}
                   locale={es}
                   disabled={(date) => {
                     // No puede ser fecha futura
@@ -841,7 +856,10 @@ export function ComprasPage() {
                 <Calendar
                   mode="single"
                   selected={fechaHasta}
-                  onSelect={setFechaHasta}
+                  onSelect={(date) => {
+                    setFechaHasta(date);
+                    setPaginaActual(1);
+                  }}
                   locale={es}
                   disabled={(date) => {
                     // No puede ser fecha futura
@@ -854,7 +872,15 @@ export function ComprasPage() {
               </PopoverContent>
             </Popover>
 
-            <Button variant="outline" onClick={() => { setFechaDesde(undefined); setFechaHasta(undefined); setProveedorFiltro(''); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFechaDesde(undefined);
+                setFechaHasta(undefined);
+                setProveedorFiltro('');
+                setPaginaActual(1);
+              }}
+            >
               Limpiar Filtros
             </Button>
 
@@ -870,7 +896,7 @@ export function ComprasPage() {
             </Alert>
           )}
           <div className="flex-1 border rounded-lg bg-card overflow-auto">
-            {cargandoCompras ? (
+            {cargandoCompras && compras.length === 0 ? (
               <div className="flex items-center justify-center h-60">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
@@ -1289,12 +1315,13 @@ export function ComprasPage() {
             }));
             
             await productoService.actualizarPreciosMasivo(actualizaciones);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.productos() });
             
             toast({
               title: 'Precios actualizados',
               description: `${actualizaciones.length} producto(s) actualizado(s) exitosamente`,
             });
-          } catch (error) {
+          } catch {
             toast({
               title: 'Error al actualizar precios',
               description: 'Ocurrió un error al aplicar los cambios',
