@@ -63,6 +63,35 @@ interface FiltrosProducto {
   preciosPendientes?: boolean;
   skip?: number;
   take?: number;
+  resumen?: boolean;
+  incluirUltimoCosto?: boolean;
+}
+
+interface ProductoBajoStockRow {
+  id: string;
+  tipo: TipoItem;
+  nombre: string;
+  descripcion: string | null;
+  sku: string | null;
+  marca: string | null;
+  modelo: string | null;
+  stockActual: number;
+  stockMinimo: number;
+  esServicio: boolean;
+  precioCompra: number;
+  precioVenta: number;
+  categoriaNombre: string | null;
+  ubicacionNombre: string | null;
+}
+
+interface ProductoSinMovimientoRow {
+  id: string;
+  nombre: string;
+  tipo: TipoItem;
+  stockActual: number;
+  categoriaNombre: string | null;
+  ultimaVenta: Date | null;
+  diasSinMovimiento: number;
 }
 
 export class ProductoService {
@@ -98,7 +127,19 @@ export class ProductoService {
 
   // Listar productos con filtros y paginación
   async listar(filtros: FiltrosProducto = {}) {
-    const { busqueda, tipo, categoriaId, marcaId, esServicio, bajoStock, preciosPendientes, skip = 0, take = 50 } = filtros;
+    const {
+      busqueda,
+      tipo,
+      categoriaId,
+      marcaId,
+      esServicio,
+      bajoStock,
+      preciosPendientes,
+      skip = 0,
+      take = 50,
+      resumen = false,
+      incluirUltimoCosto = false,
+    } = filtros;
 
     const where: Prisma.ProductoWhereInput = {
       deletedAt: null,
@@ -130,34 +171,84 @@ export class ProductoService {
       }),
     };
 
-    const [productos, total] = await Promise.all([
-      prisma.producto.findMany({
-        where,
-        include: {
-          categoria: { select: { id: true, nombre: true, tipo: true } },
-          marcaRel: { select: { id: true, nombre: true } },
-          ubicacion: { select: { id: true, nombre: true } },
-          padre: { select: { id: true, nombre: true } },
-          historialCostos: {
-            orderBy: { fechaRegistro: 'desc' },
-            take: 1,
-            select: { costo: true, fechaRegistro: true },
+    const productosQuery = resumen
+      ? prisma.producto.findMany({
+          where,
+          select: {
+            id: true,
+            tipo: true,
+            nombre: true,
+            marca: true,
+            modelo: true,
+            sku: true,
+            codigoBarras: true,
+            descripcion: true,
+            categoriaId: true,
+            marcaId: true,
+            ubicacionId: true,
+            precioCompra: true,
+            precioVenta: true,
+            margenReferencia: true,
+            stockActual: true,
+            stockMinimo: true,
+            imagenUrl: true,
+            esServicio: true,
+            esSegundaMano: true,
+            preciosPendientes: true,
+            requiereSerie: true,
+            garantiaProveedorMeses: true,
+            garantiaClienteMeses: true,
+            padreId: true,
+            createdAt: true,
+            updatedAt: true,
+            categoria: { select: { id: true, nombre: true, tipo: true } },
+            ...(incluirUltimoCosto
+              ? {
+                  historialCostos: {
+                    orderBy: { fechaRegistro: 'desc' as const },
+                    take: 1,
+                    select: { costo: true, fechaRegistro: true },
+                  },
+                }
+              : {}),
           },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take,
-      }),
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take,
+        })
+      : prisma.producto.findMany({
+          where,
+          include: {
+            categoria: { select: { id: true, nombre: true, tipo: true } },
+            marcaRel: { select: { id: true, nombre: true } },
+            ubicacion: { select: { id: true, nombre: true } },
+            padre: { select: { id: true, nombre: true } },
+            historialCostos: {
+              orderBy: { fechaRegistro: 'desc' },
+              take: 1,
+              select: { costo: true, fechaRegistro: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take,
+        });
+
+    const [productos, total] = await Promise.all([
+      productosQuery,
       prisma.producto.count({ where }),
     ]);
 
     // Agregar ultimoCostoCompra a cada producto
-    const productosConUltimoCosto = productos.map((p) => ({
-      ...p,
-      ultimoCostoCompra: p.historialCostos[0]?.costo 
-        ? Number(p.historialCostos[0].costo) 
-        : Number(p.precioCompra),
-    }));
+    const productosConUltimoCosto = productos.map((p) => {
+      const historial = 'historialCostos' in p ? p.historialCostos : undefined;
+      return {
+        ...p,
+        ultimoCostoCompra: historial?.[0]?.costo
+          ? Number(historial[0].costo)
+          : Number(p.precioCompra),
+      };
+    });
 
     return { productos: productosConUltimoCosto, total };
   }
@@ -191,69 +282,103 @@ export class ProductoService {
     });
   }
 
-  // Productos con bajo stock
+  // Productos con bajo stock (1 consulta SQL con JOINs directos)
   async obtenerBajoStock() {
-    return await prisma.producto.findMany({
-      where: {
-        deletedAt: null,
-        tipo: 'PRODUCTO',
-        esServicio: false,
-        stockActual: { lte: prisma.producto.fields.stockMinimo },
-      },
-      include: {
-        categoria: { select: { nombre: true } },
-        ubicacion: { select: { nombre: true } },
-      },
-      orderBy: { stockActual: 'asc' },
-    });
+    const rows = await prisma.$queryRaw<ProductoBajoStockRow[]>(Prisma.sql`
+      SELECT
+        p.id,
+        p.tipo::text AS tipo,
+        p.nombre,
+        p.descripcion,
+        p.sku,
+        p.marca,
+        p.modelo,
+        p.stock_actual AS "stockActual",
+        p.stock_minimo AS "stockMinimo",
+        p.es_servicio AS "esServicio",
+        p.precio_compra::float8 AS "precioCompra",
+        p.precio_venta::float8 AS "precioVenta",
+        c.nombre AS "categoriaNombre",
+        u.nombre AS "ubicacionNombre"
+      FROM public.productos p
+      LEFT JOIN public.categorias c ON c.id = p.categoria_id
+      LEFT JOIN public.ubicaciones u ON u.id = p.ubicacion_id
+      WHERE p.deleted_at IS NULL
+        AND p.tipo = 'PRODUCTO'::"TipoItem"
+        AND p.es_servicio = false
+        AND p.stock_actual <= p.stock_minimo
+      ORDER BY p.stock_actual ASC
+    `);
+
+    return rows.map((row) => ({
+      id: row.id,
+      tipo: row.tipo,
+      nombre: row.nombre,
+      descripcion: row.descripcion,
+      sku: row.sku,
+      marca: row.marca,
+      modelo: row.modelo,
+      stockActual: Number(row.stockActual),
+      stockMinimo: Number(row.stockMinimo),
+      esServicio: row.esServicio,
+      precioCompra: Number(row.precioCompra),
+      precioVenta: Number(row.precioVenta),
+      categoria: row.categoriaNombre ? { nombre: row.categoriaNombre } : null,
+      ubicacion: row.ubicacionNombre ? { nombre: row.ubicacionNombre } : null,
+    }));
   }
 
   // Productos sin movimiento en X días
-  async obtenerSinMovimiento(dias: number = 90) {
+  async obtenerSinMovimiento(dias: number = 90, limit: number = 50) {
+    const safeDias = Number.isFinite(dias) && dias >= 0 ? Math.trunc(dias) : 90;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(Math.trunc(limit), 1), 100)
+      : 50;
+
     const fechaLimite = new Date();
-    fechaLimite.setDate(fechaLimite.getDate() - dias);
+    fechaLimite.setDate(fechaLimite.getDate() - safeDias);
 
-    const productos = await prisma.producto.findMany({
-      where: {
-        deletedAt: null,
-        tipo: 'PRODUCTO',
-        esServicio: false,
-        detalleVentas: {
-          none: {
-            createdAt: { gte: fechaLimite },
-          },
-        },
-      },
-      include: {
-        categoria: { select: { nombre: true } },
-        detalleVentas: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { createdAt: true },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const rows = await prisma.$queryRaw<ProductoSinMovimientoRow[]>(Prisma.sql`
+      SELECT
+        p.id,
+        p.nombre,
+        p.tipo::text AS tipo,
+        p.stock_actual AS "stockActual",
+        c.nombre AS "categoriaNombre",
+        lv.ultima_venta AS "ultimaVenta",
+        floor(extract(epoch FROM (NOW() - COALESCE(lv.ultima_venta, p.created_at))) / 86400)::int AS "diasSinMovimiento"
+      FROM public.productos p
+      LEFT JOIN public.categorias c ON c.id = p.categoria_id
+      LEFT JOIN LATERAL (
+        SELECT dv2.created_at AS ultima_venta
+        FROM public.detalle_ventas dv2
+        WHERE dv2.producto_id = p.id
+        ORDER BY dv2.created_at DESC
+        LIMIT 1
+      ) lv ON true
+      WHERE p.deleted_at IS NULL
+        AND p.tipo = 'PRODUCTO'::"TipoItem"
+        AND p.es_servicio = false
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.detalle_ventas dv
+          WHERE dv.producto_id = p.id
+            AND dv.created_at >= ${fechaLimite}
+        )
+        AND floor(extract(epoch FROM (NOW() - COALESCE(lv.ultima_venta, p.created_at))) / 86400)::int >= ${safeDias}
+      ORDER BY p.created_at ASC
+      LIMIT ${safeLimit}
+    `);
 
-    const hoy = new Date();
-    const productosConDias = productos.map((producto) => {
-      const ultimaVenta = producto.detalleVentas[0]?.createdAt || producto.createdAt;
-      const diasSinMovimiento = Math.floor(
-        (hoy.getTime() - new Date(ultimaVenta).getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      return {
-        id: producto.id,
-        nombre: producto.nombre,
-        tipo: producto.tipo,
-        stockActual: producto.stockActual,
-        categoria: producto.categoria,
-        ultimaVenta: producto.detalleVentas[0]?.createdAt || null,
-        diasSinMovimiento,
-      };
-    });
-
-    return productosConDias.filter((p) => p.diasSinMovimiento >= dias);
+    return rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      tipo: row.tipo,
+      stockActual: Number(row.stockActual),
+      categoria: row.categoriaNombre ? { nombre: row.categoriaNombre } : null,
+      ultimaVenta: row.ultimaVenta,
+      diasSinMovimiento: Number(row.diasSinMovimiento),
+    }));
   }
 
   // Obtener por ID

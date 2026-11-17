@@ -22,9 +22,12 @@ interface FiltrosVenta {
   desde?: Date;
   hasta?: Date;
   localId?: string;
+  busqueda?: string;
   skip?: number;
   take?: number;
 }
+
+const MAX_PG_INT4 = 2147483647;
 
 class VentaService {
   // Helpers
@@ -45,7 +48,43 @@ class VentaService {
 
   // GET /api/ventas — lista paginada con filtros
   async listar(filtros: FiltrosVenta = {}) {
-    const { desde, hasta, localId, skip = 0, take = 50 } = filtros;
+    const { desde, hasta, localId, busqueda, skip = 0, take = 50 } = filtros;
+    const trimmedBusqueda = busqueda?.trim();
+
+    let busquedaOr: Prisma.VentaWhereInput[] | undefined;
+    if (trimmedBusqueda) {
+      busquedaOr = [
+        { clienteNombre: { contains: trimmedBusqueda, mode: 'insensitive' } },
+        { cliente: { is: { nombre: { contains: trimmedBusqueda, mode: 'insensitive' } } } },
+      ];
+
+      const anioCorrelativoMatch = trimmedBusqueda.match(/(?:^|\D)(\d{4})-(\d+)(?:\D|$)/);
+      if (anioCorrelativoMatch) {
+        const anio = Number.parseInt(anioCorrelativoMatch[1], 10);
+        const correlativo = Number.parseInt(anioCorrelativoMatch[2], 10);
+        if (
+          Number.isFinite(anio) &&
+          Number.isFinite(correlativo) &&
+          anio > 0 &&
+          anio <= MAX_PG_INT4 &&
+          correlativo > 0 &&
+          correlativo <= MAX_PG_INT4
+        ) {
+          busquedaOr.push({
+            anioCorrelativo: anio,
+            codigoCorrelativo: correlativo,
+          });
+        }
+      } else {
+        const digitos = trimmedBusqueda.replace(/\D/g, '');
+        if (digitos) {
+          const numero = Number.parseInt(digitos, 10);
+          if (Number.isFinite(numero) && numero > 0 && numero <= MAX_PG_INT4) {
+            busquedaOr.push({ codigoCorrelativo: numero });
+          }
+        }
+      }
+    }
 
     const where: Prisma.VentaWhereInput = {
       deletedAt: null,
@@ -58,6 +97,7 @@ class VentaService {
             },
           }
         : {}),
+      ...(busquedaOr ? { OR: busquedaOr } : {}),
     };
 
     const [ventas, total] = await Promise.all([

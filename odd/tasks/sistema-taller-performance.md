@@ -25,13 +25,17 @@ Reducir drásticamente los tiempos de carga iniciales y de navegación entre pan
 - [x] **FASE-1** `[route: delegated]` — Infraestructura Backend, Auth Caché e Índices Supabase (`auth.middleware.ts`, `usuario.service.ts`, `index.ts`, `database.ts`, `server/.env`, `schema.prisma`, migración Supabase `add_sistema_taller_performance_indexes`).
   - *Acceptance:* `requireAuth` resuelve usuarios desde caché TTL (invalidada al editar/eliminar/cambiar password), Express sirve respuestas comprimidas (`compression`), `PRISMA_LOG_QUERIES` controla el log de SQL en dev, `connection_limit=15` en `.env`, y los 24 índices nuevos verificados en `pg_indexes`.
   - *Checks:* `npm --prefix server run generate` (exit 0), `npm --prefix server run build` (exit 0), `prisma validate` (exit 0), `pg_indexes` (24 índices `idx_*` nuevos en Supabase), `/browser` smoke check OK (`0` errores HTTP en Dashboard, Compras ~7.5s, Ventas Nueva Venta ~4.4s, Historial ~11.3s — cuello pendiente de Fase 2 y Fase 3).
-- [ ] **FASE-2** `[route: delegated]` — Optimización SQL y Payloads en Servicios Backend (`dashboard.service.ts`, `producto.service.ts`, `producto.controller.ts`, `venta.service.ts`, `venta.controller.ts`).
-  - *Acceptance:* `dashboard.service.ts` ejecuta <= 3 consultas SQL agregadas para métricas + `LIMIT 10` SQL en `obtenerSinMovimiento`; `GET /productos` soporta `limit`/`take` y modo ligero sin `historialCostos`/relaciones pesadas; `GET /ventas` filtra `busqueda` en SQL.
-  - *Checks:* `npm --prefix server run build`, comparación de cantidad de queries en log del servidor y validación funcional en `/browser`.
+- [x] **FASE-2** `[route: delegated]` — Optimización SQL y Payloads en Servicios Backend (`dashboard.service.ts`, `producto.service.ts`, `producto.controller.ts`, `venta.service.ts`, `venta.controller.ts`).
+  - *Acceptance:* `dashboard.service.ts` ejecuta <= 4 consultas paralelas (3 `$queryRaw` agregados + `locales`) para métricas + `LIMIT` SQL en `obtenerSinMovimiento` + `$queryRaw` único en `obtenerBajoStock`; `GET /productos` soporta `limit`/`take` y modo `resumen=true` sin `historialCostos`/relaciones pesadas; `GET /ventas` filtra `busqueda` en SQL.
+  - *Checks:* `npm --prefix server run build` (exit 0), benchmark endpoints (`dashboard/metricas` 626ms, `sin-movimiento?limit=10` 554ms, `productos?resumen=true` 1049ms vs 2345ms full, `ventas?busqueda=Paulo` y `%2398` status 200 total=1), `/browser` verificación visual Dashboard/Ventas/Compras sin errores HTTP.
 - [ ] **FASE-3** `[route: delegated]` — `@tanstack/react-query` + Carga Diferida en Frontend (`client/package.json`, `main.tsx`/`App.tsx`, hooks y páginas principales).
   - *Acceptance:* Cambio entre pestañas instantáneo desde caché; invalidación automática tras mutaciones; sin debounce inicial de 300 ms en POS; catálogos de modales cargan bajo demanda (`enabled`).
   - *Checks:* `npm --prefix client run build`, ESLint en archivos modificados, recorrido cronometrado en `/browser` de las 6 pantallas.
 
 ## Progress & Evidence
 - Documento creado antes de la primera edición en fuente.
-- Iniciando FASE-1.
+- **FASE-1** completada — Commit `182982e` (`perf(server): add auth user cache, compression, and database indexes`) en `feat/supabase-recovery-multilocal`.
+  - Migración Supabase `add_sistema_taller_performance_indexes` aplicada (extensión `pg_trgm` + 24 índices parciales/compuestos/GIN verificados en `pg_indexes`).
+  - Caché TTL 60s en `requireAuth` con invalidación en `UsuarioService`, `compression()` en Express, `PRISMA_LOG_QUERIES` condicional en `database.ts`, `connection_limit=15` en `server/.env`.
+  - Checks: `npm --prefix server run generate` (exit 0), `npm --prefix server run build` (exit 0), `prisma validate` (exit 0), `/browser` smoke test sin errores HTTP.
+- Siguiente paso: validación del usuario y arranque de **FASE-2**.

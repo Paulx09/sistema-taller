@@ -5,7 +5,7 @@ class VentaController {
   // GET /api/ventas
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { desde, hasta, localId, page, limit } = req.query;
+      const { desde, hasta, localId, busqueda, page, limit } = req.query;
 
       const skip = page ? (Number(page) - 1) * (Number(limit) || 50) : 0;
       const take = Number(limit) || 50;
@@ -28,6 +28,7 @@ class VentaController {
         desde: fechaDesde,
         hasta: fechaHasta,
         localId: typeof localId === 'string' && localId.trim() ? localId.trim() : undefined,
+        busqueda: typeof busqueda === 'string' && busqueda.trim() ? busqueda.trim() : undefined,
         skip,
         take,
       };

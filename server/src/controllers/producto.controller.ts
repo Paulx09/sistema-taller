@@ -7,12 +7,28 @@ export class ProductoController {
   // GET /api/productos
   async listar(req: Request, res: Response, next: NextFunction) {
     try {
-      const { busqueda, tipo, categoriaId, esServicio, bajoStock, preciosPendientes, skip, take } = req.query;
+      const {
+        busqueda,
+        tipo,
+        categoriaId,
+        esServicio,
+        bajoStock,
+        preciosPendientes,
+        skip,
+        take,
+        limit,
+        resumen,
+        incluirUltimoCosto,
+      } = req.query;
 
       // Convertir esServicio string a boolean
       let esServicioBool: boolean | undefined;
       if (esServicio === 'true') esServicioBool = true;
       else if (esServicio === 'false') esServicioBool = false;
+
+      const rawTake = take ?? limit;
+      const parsedSkip = skip ? Number.parseInt(skip as string, 10) : undefined;
+      const parsedTake = rawTake ? Number.parseInt(rawTake as string, 10) : undefined;
 
       const filtros = {
         busqueda: busqueda as string | undefined,
@@ -21,8 +37,10 @@ export class ProductoController {
         esServicio: esServicioBool,
         bajoStock: bajoStock === 'true' ? true : undefined,
         preciosPendientes: preciosPendientes === 'true' ? true : undefined,
-        skip: skip ? Number.parseInt(skip as string, 10) : undefined,
-        take: take ? Number.parseInt(take as string, 10) : undefined,
+        skip: parsedSkip !== undefined && Number.isFinite(parsedSkip) ? parsedSkip : undefined,
+        take: parsedTake !== undefined && Number.isFinite(parsedTake) ? parsedTake : undefined,
+        resumen: resumen === 'true',
+        incluirUltimoCosto: incluirUltimoCosto === 'true',
       };
 
       const { productos, total } = await productoService.listar(filtros);
@@ -81,19 +99,24 @@ export class ProductoController {
     }
   }
 
-  // GET /api/productos/sin-movimiento?dias=90
+  // GET /api/productos/sin-movimiento?dias=90&limit=50
   async obtenerSinMovimiento(req: Request, res: Response, next: NextFunction) {
     try {
-      const { dias } = req.query;
-      const diasNum = dias ? Number.parseInt(dias as string, 10) : 90;
+      const { dias, limit } = req.query;
+      const parsedDias = dias ? Number.parseInt(dias as string, 10) : 90;
+      const diasNum = Number.isFinite(parsedDias) && parsedDias >= 0 ? parsedDias : 90;
+      const parsedLimit = limit ? Number.parseInt(limit as string, 10) : 50;
+      const limitNum = Number.isFinite(parsedLimit)
+        ? Math.min(Math.max(parsedLimit, 1), 100)
+        : 50;
 
-      const productos = await productoService.obtenerSinMovimiento(diasNum);
+      const productos = await productoService.obtenerSinMovimiento(diasNum, limitNum);
 
       res.json({
         success: true,
         data: productos,
         total: productos.length,
-        parametros: { dias: diasNum },
+        parametros: { dias: diasNum, limit: limitNum },
       });
     } catch (error) {
       next(error);
